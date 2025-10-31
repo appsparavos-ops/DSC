@@ -1,29 +1,22 @@
 document.addEventListener('DOMContentLoaded', function() {
     // --- PREVENCIÓN DE PARPADEO (FLICKERING) ---
-    // Comprueba si se está cargando un jugador directamente desde la URL.
     const params = new URLSearchParams(window.location.search);
     if (params.has('dni')) {
-        // Si hay un DNI en la URL, pre-configuramos la UI para mostrar 
-        // la vista de detalles directamente y evitar mostrar el login o la lista.
         const loginContainer = document.getElementById('login-container');
         const mainContainer = document.getElementById('main-container');
         const mainContent = document.getElementById('main-content');
         const playerDetailView = document.getElementById('playerDetailView');
-
         if (loginContainer) loginContainer.style.display = 'none';
         if (mainContainer) mainContainer.style.display = 'block';
         if (mainContent) mainContent.classList.add('hidden');
         if (playerDetailView) {
             playerDetailView.classList.remove('hidden');
-            // Mensaje de carga temporal
             playerDetailView.innerHTML = '<div class="text-center p-8 text-white">Cargando jugador...</div>';
         }
     }
 
     let isDeviceReady = false;
-    document.addEventListener('deviceready', () => {
-        isDeviceReady = true;
-    }, false);
+    document.addEventListener('deviceready', () => { isDeviceReady = true; }, false);
 
     const firebaseConfig = {
         apiKey: "AIzaSyANWXQvhHpF0LCYjz4AXi3MkcP798PqRfA",
@@ -41,21 +34,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const IMG_BASE_URL = 'https://firebasestorage.googleapis.com/v0/b/dsc24-aa5a1.appspot.com/o/';
     const PLACEHOLDER_SVG_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2EwYTBhMCI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OS00IDQgNHptMCAyYy0yLjY3IDAtOCA0IDQgNHYyYzAgMS4xLjkgMiAyIDJoMTRjMS4xIDAgMi0uOSAyLTJ2LTJjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PC9zdmc+';
-    const COLUMN_ORDER = [ 'DNI', 'NOMBRE','FM Hasta', 'Numero','EQUIPO','COMPETICION', 'CATEGORIA'];
+    const COLUMN_ORDER = [ 'DNI', 'NOMBRE','FM Hasta', 'Numero','CATEGORIA','COMPETICION','EQUIPO', ];
 
     // --- ELEMENTOS DEL DOM ---
-    // Contenedores principales
     const loginContainer = document.getElementById('login-container');
     const mainContainer = document.getElementById('main-container');
-    
-    // Formulario de login nuevo
     const newLoginForm = document.getElementById('login-form');
     const loginEmailInput = document.getElementById('login-email');
     const loginPasswordInput = document.getElementById('login-password');
     const loginErrorMessage = document.getElementById('login-error-message');
     const logoutButton = document.getElementById('logout-button');
-
-    // Elementos originales de la app
     const toggleSearchButton = document.getElementById('toggleSearchButton');
     const searchBar = document.getElementById('searchBar');
     const nameSearchInput = document.getElementById('nameSearchInput');
@@ -73,59 +61,70 @@ document.addEventListener('DOMContentLoaded', function() {
     const mainContent = document.getElementById('main-content');
     const playerDetailView = document.getElementById('playerDetailView');
     
-    // Variables de estado
-    let allPlayers = [];
-    let originalHeaders = [];
-    let isEditModeActive = false; // Controlado por el rol del usuario
-    let currentUserRole = null; // 'admin', 'user', o null
-    let currentlyDisplayedPlayers = [];
-    let currentPlayerIndex = -1;
-    let currentSeasonListener = null;
+    let allPlayers = [], originalHeaders = [], currentlyDisplayedPlayers = [];
+    let isEditModeActive = false, currentUserRole = null, currentPlayerIndex = -1, currentSeasonListener = null;
 
-    // --- LÓGICA DE AUTENTICACIÓN PRINCIPAL ---
+    // --- LÓGICA DE BITÁCORA ---
+    function getTimestampKey() {
+        const now = new Date();
+        const timestamp = now.getFullYear().toString() +
+               String(now.getMonth() + 1).padStart(2, '0') +
+               String(now.getDate()).padStart(2, '0') +
+               String(now.getHours()).padStart(2, '0') +
+               String(now.getMinutes()).padStart(2, '0') +
+               String(now.getSeconds()).padStart(2, '0');
+        const randomPart = Math.random().toString(36).substring(2, 7); // 5 random chars
+        return `${timestamp}-${randomPart}`;
+    }
 
+    function logAction(action, details) {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const timestampKey = getTimestampKey();
+        const logEntry = {
+            usuario: user.email,
+            uid: user.uid,
+            accion: action,
+            fecha: new Date().toISOString(),
+            detalles: details
+        };
+
+        const logRef = database.ref(`/bitacora/${timestampKey}`);
+        logRef.set(logEntry).catch(error => {
+            console.error("Error al escribir en la bitácora:", error);
+        });
+    }
+
+    // --- LÓGICA DE AUTENTICACIÓN ---
     function initializeAuth() {
-        auth.setPersistence(firebase.auth.Auth.Persistence.SESSION)
-            .then(() => {
-                auth.onAuthStateChanged(user => {
-                    if (user) {
-                        // Usuario logueado, verificar rol
-                        database.ref('admins/' + user.uid).once('value').then(snapshot => {
-                            if (snapshot.exists()) {
-                                currentUserRole = 'admin';
-                                isEditModeActive = true;
-                                showMainContent();
-                            } else {
-                                database.ref('users/' + user.uid).once('value').then(userSnapshot => {
-                                    if (userSnapshot.exists()) {
-                                        currentUserRole = 'user';
-                                        isEditModeActive = false;
-                                        showMainContent();
-                                    } else {
-                                        showToast('Usuario no autorizado.', 'error');
-                                        auth.signOut();
-                                    }
-                                });
-                            }
-                        }).catch(error => {
-                            console.error("Error al verificar rol de admin:", error);
-                            auth.signOut();
-                        });
-                    } else {
-                        // Usuario no logueado
-                        currentUserRole = null;
-                        isEditModeActive = false;
-                        showLoginScreen();
-                    }
-                });
-            })
-            .catch((error) => {
-                console.error("Error al configurar la persistencia de la sesión:", error);
-                if(loginErrorMessage) {
-                    loginErrorMessage.textContent = "Error de configuración de la sesión.";
-                    loginErrorMessage.classList.remove('hidden');
+        auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).then(() => {
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    logAction('login', { email: user.email });
+                    database.ref('admins/' + user.uid).once('value').then(snapshot => {
+                        if (snapshot.exists()) {
+                            currentUserRole = 'admin';
+                            isEditModeActive = true;
+                        } else {
+                            currentUserRole = 'user';
+                            isEditModeActive = false;
+                        }
+                        showMainContent();
+                    }).catch(error => {
+                        console.error("Error al verificar rol de admin:", error);
+                        auth.signOut();
+                    });
+                } else {
+                    currentUserRole = null;
+                    isEditModeActive = false;
+                    showLoginScreen();
                 }
             });
+        }).catch(error => {
+            console.error("Error al configurar la persistencia de la sesión:", error);
+            if(loginErrorMessage) loginErrorMessage.textContent = "Error de configuración de la sesión.";
+        });
     }
 
     function showLoginScreen() {
@@ -142,17 +141,34 @@ document.addEventListener('DOMContentLoaded', function() {
         if(loginContainer) loginContainer.style.display = 'none';
         if(mainContainer) mainContainer.style.display = 'block';
         
-        const oldAdminLoginButton = document.getElementById('toggleEditModeButton');
-        if(oldAdminLoginButton) oldAdminLoginButton.style.display = 'none';
+        const controlsContainer = document.getElementById('resetButton')?.parentNode;
+        if (controlsContainer) {
+            let addButton = document.getElementById('addPlayerButton');
+            if (isEditModeActive) {
+                if (!addButton) {
+                    addButton = document.createElement('button');
+                    addButton.id = 'addPlayerButton';
+                    addButton.textContent = 'Agregar Jugador';
+                    addButton.className = 'ml-2 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500';
+                    addButton.addEventListener('click', showAddPlayerForm);
+                    
+                    const printButton = document.getElementById('printButton');
+                    if (printButton) {
+                        printButton.parentNode.insertBefore(addButton, printButton.nextSibling);
+                    } else {
+                        controlsContainer.appendChild(addButton);
+                    }
+                }
+            } else {
+                if (addButton) addButton.remove();
+            }
+        }
 
-        if (allPlayers.length > 0) {
-            applyFilters();
-        } else {
+        if (allPlayers.length === 0) {
             cargarTemporadasDisponibles();
         }
     }
 
-    // --- NUEVOS EVENT LISTENERS PARA LOGIN/LOGOUT ---
     if(newLoginForm) newLoginForm.addEventListener('submit', (e) => {
         e.preventDefault();
         if(loginErrorMessage) loginErrorMessage.classList.add('hidden');
@@ -173,29 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // --- LÓGICA ORIGINAL DE LA APLICACIÓN (con modificaciones menores) ---
-
-    function normalizeCategoryName(name) {
-        if (!name) return '';
-        let normalized = name.toUpperCase().replace(/\s+/g, ' ').trim();
-        normalized = normalized.replace('FEMENINA', 'FEMENINO').replace('MIXTA', 'MIXTO');
-        return normalized;
-    }
-
-    const categoryProgressionRules = {
-        'U11 MIXTO': ['U12 MIXTO'],
-        'U12 FEMENINO': ['U12 MIXTO', 'U14 FEMENINO'],
-        'U12 MIXTO': ['U14 MIXTO'],
-        'U14 FEMENINO': ['U14 MIXTO', 'U16 FEMENINO'],
-        'U14 MIXTO': ['U16 MASCULINO'],
-        'U16 FEMENINO': ['U19 FEMENINO', 'Liga Femenina de Basquet'],
-        'U16 MASCULINO': ['U18 MASCULINO'],
-        'U18 MASCULINO': ['U20 MASCULINO', 'Liga de Desarrollo' , 'Liga Uruguaya de Basquet'],
-        'U20 MASCULINO': ['Liga de Desarrollo', 'Liga Uruguaya de Basquet'],
-        'Liga de Desarrollo': ['Liga Uruguaya de Basquet'],
-        'U19 FEMENINO': ['Liga Femenina de Basquet'],
-    };
-
+    // --- LÓGICA DE LA APLICACIÓN ---
     function getDniFromUrl() {
         const params = new URLSearchParams(window.location.search);
         return params.get('dni');
@@ -238,11 +232,27 @@ document.addEventListener('DOMContentLoaded', function() {
             const seasons = Object.keys(snapshot.val()).sort().reverse();
             while (seasonFilter.options.length > 1) seasonFilter.remove(1);
             seasons.forEach(season => seasonFilter.appendChild(new Option(season, season)));
-            if (seasons.length > 0) {
+
+            const user = auth.currentUser;
+            if (user) {
+                const userPrefsRef = database.ref('preferenciasUsuarios/' + user.uid + '/ultimaTemporadaSeleccionada');
+                userPrefsRef.once('value').then(prefSnapshot => {
+                    const preferredSeason = prefSnapshot.val();
+                    if (preferredSeason && seasons.includes(preferredSeason)) {
+                        seasonFilter.value = preferredSeason;
+                        conectarTemporada(preferredSeason);
+                    } else if (seasons.length > 0) {
+                        seasonFilter.value = seasons[0];
+                        conectarTemporada(seasons[0]);
+                    } else {
+                        messageEl.textContent = 'No hay datos de jugadores para mostrar.';
+                    }
+                });
+            } else if (seasons.length > 0) {
                 seasonFilter.value = seasons[0];
                 conectarTemporada(seasons[0]);
             } else {
-                 messageEl.textContent = 'No hay datos de jugadores para mostrar.';
+                messageEl.textContent = 'No hay datos de jugadores para mostrar.';
             }
         }).catch(error => {
             console.error("Error cargando temporadas:", error);
@@ -300,8 +310,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 allPlayers = Object.values(seasonalRecords).map(record => ({
-                    ...(datosPersonalesMap.get(record._dni) || {}),
-                    ...record
+                    ...record,
+                    ...(datosPersonalesMap.get(record._dni) || {})
                 }));
 
                 if (allPlayers.length > 0) {
@@ -344,6 +354,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (input.dataset.category) newNumeros[input.dataset.category] = input.value;
             });
             finalData.Numeros = newNumeros;
+
+            const primaryCategory = finalData.CATEGORIA;
+            if (primaryCategory && newNumeros[primaryCategory] !== undefined) {
+                finalData.Numero = newNumeros[primaryCategory];
+            }
         }
 
         if (playerToUpdate.DNI !== finalData.DNI || playerToUpdate.TEMPORADA !== finalData.TEMPORADA) {
@@ -351,31 +366,27 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL'];
-        const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'FM Desde', 'FM Hasta', 'Numero', 'categoriasAutorizadas', 'Numeros', 'TEMPORADA'];
+        const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
+        const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'Numero', 'categoriasAutorizadas', 'Numeros', 'TEMPORADA', 'categoriaOrigen', 'esAutorizado'];
         const personalDataToUpdate = {}, seasonalDataToUpdate = {};
         personalKeys.forEach(k => { if (finalData[k] !== undefined) personalDataToUpdate[k] = finalData[k]; });
         seasonalKeys.forEach(k => { if (finalData[k] !== undefined) seasonalDataToUpdate[k] = finalData[k]; });
 
-        if(seasonalDataToUpdate.Numeros && seasonalDataToUpdate.CATEGORIA){
-            const mainNumInput = document.getElementById(`edit-numero-${seasonalDataToUpdate.CATEGORIA}`);
-            if(mainNumInput) seasonalDataToUpdate.Numero = mainNumInput.value;
-            if(seasonalDataToUpdate.Numero) seasonalDataToUpdate.Numeros[seasonalDataToUpdate.CATEGORIA] = seasonalDataToUpdate.Numero;
-        }
+        const { _tipo: tipoValor, _dni: dni, TEMPORADA: season, _pushId: pushId } = finalData;
+        const dbNode = (tipoValor === 'JUGADOR/A' || tipoValor === 'jugadores') ? 'jugadores' : 'entrenadores';
 
-        const { _tipo: rootNode, _dni: dni, TEMPORADA: season, _pushId: pushId } = finalData;
-        const combinedDataForIndex = { ...seasonalDataToUpdate, _firebaseKey: finalData._firebaseKey, _tipo: rootNode, _dni: dni, _pushId: pushId };
+        const combinedDataForIndex = { ...finalData };
 
-        const updates = {
-            [`/${rootNode}/${dni}/datosPersonales`]: personalDataToUpdate,
-            [`/${rootNode}/${dni}/temporadas/${season}/${pushId}`]: seasonalDataToUpdate,
-            [`/registrosPorTemporada/${season}/${pushId}`]: combinedDataForIndex,
-            [`/temporadas/${season}`]: true
-        };
+        const updates = {};
+        updates[`/${dbNode}/${dni}/datosPersonales`] = personalDataToUpdate;
+        updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}`] = seasonalDataToUpdate;
+        updates[`/registrosPorTemporada/${season}/${pushId}`] = combinedDataForIndex;
+        updates[`/temporadas/${season}`] = true;
 
         database.ref().update(updates)
             .then(() => {
                 showToast("¡Cambios guardados con éxito!");
+                logAction('modificacion', { dni: finalData.DNI, nombre: finalData.NOMBRE, datos: finalData });
                 hidePlayerDetails();
             })
             .catch((error) => {
@@ -384,7 +395,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    // --- EVENT LISTENERS ORIGINALES ---
     if(toggleSearchButton) toggleSearchButton.addEventListener('click', () => searchBar.classList.toggle('hidden'));
     if(nameSearchInput) nameSearchInput.addEventListener('input', applyFilters);
     if(dniSearchInput) dniSearchInput.addEventListener('input', applyFilters);
@@ -393,7 +403,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if(seasonFilter) seasonFilter.addEventListener('change', () => {
         if(nameSearchInput) nameSearchInput.value = '';
         if(dniSearchInput) dniSearchInput.value = '';
-        conectarTemporada(seasonFilter.value);
+        if(categoryFilter) categoryFilter.selectedIndex = 0;
+        if(equipoFilter) equipoFilter.selectedIndex = 0;
+        
+        const newSeason = seasonFilter.value;
+        conectarTemporada(newSeason);
+
+        const user = auth.currentUser;
+        if (user && newSeason) {
+            database.ref('preferenciasUsuarios/' + user.uid).update({ ultimaTemporadaSeleccionada: newSeason });
+        }
     });
     if(resetButton) resetButton.addEventListener('click', resetAll);
     if(expiringButton) expiringButton.addEventListener('click', showExpiring);
@@ -413,13 +432,10 @@ document.addEventListener('DOMContentLoaded', function() {
         let filteredPlayers = allPlayers.filter(p => 
             (!nameTerm || (p.NOMBRE && p.NOMBRE.toLowerCase().includes(nameTerm))) &&
             (!dniTerm || (p.DNI && String(p.DNI).toLowerCase().includes(dniTerm))) &&
-            (!selectedCategory || p.CATEGORIA === selectedCategory || (Array.isArray(p.categoriasAutorizadas) && p.categoriasAutorizadas.includes(selectedCategory))) &&
+            (!selectedCategory || p.CATEGORIA === selectedCategory || (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) || (p.esAutorizado && p.CATEGORIA === selectedCategory)) &&
             (!selectedEquipo || p.EQUIPO === selectedEquipo)
         );
 
-        if (auth.currentUser && seasonFilter && seasonFilter.value) {
-            database.ref('preferenciasUsuarios/' + auth.currentUser.uid).update({ ultimaTemporadaSeleccionada: seasonFilter.value });
-        }
         displayPlayers(filteredPlayers);
     }
     
@@ -489,7 +505,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const currentColumns = columns || COLUMN_ORDER;
         currentlyDisplayedPlayers = players;
 
-        // Helper para crear una fila, usado por ambas lógicas de renderizado
         const createPlayerRow = (player, categoryContext) => {
             const row = document.createElement('tr');
             row.className = 'clickable-row';
@@ -518,15 +533,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 if ( colName === 'DNI' ||colName === 'FM Hasta' || colName === 'Numero' || colName === 'EQUIPO' || colName === 'CATEGORIA' || colName === 'COMPETICION') {
                     td.classList.add('text-center');
                 }
-                let cellValue = (colName === 'Numero') ? ((player.Numeros && player.Numeros[categoryContext || player.CATEGORIA]) || player.Numero || '-') : (player[colName] || '-');
+                
+                let cellValue;
+                if (colName === 'CATEGORIA' && player.esAutorizado) {
+                    cellValue = player.categoriaOrigen || player.CATEGORIA;
+                } else {
+                    cellValue = (colName === 'Numero') ? ((player.Numeros && player.Numeros[categoryContext || player.CATEGORIA]) || player.Numero || '-') : (player[colName] || '-');
+                }
+
                 if ((colName === 'FM Hasta' || colName === 'FM DESDE') && cellValue === '1/1/1900') cellValue = '-';
-                td.textContent = cellValue;
+                td.textContent = cellValue || '-';
                 row.appendChild(td);
             });
             return row;
         };
 
-        // Helper para crear una tabla completa (header + body)
         const createTable = (players, categoryContext) => {
             const table = document.createElement('table');
             table.className = 'min-w-full divide-y divide-gray-200';
@@ -554,33 +575,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         messageEl.style.display = 'none';
 
-        // LÓGICA DE RENDERIZADO PRINCIPAL
         if (customTitle) {
-            const titleEl = document.createElement('h3');
-            titleEl.className = 'text-lg font-semibold mb-4 text-gray-800';
-            titleEl.textContent = customTitle;
-            tableContainer.appendChild(titleEl);
             tableContainer.appendChild(createTable(players, selectedCategory));
-
         } else if (selectedCategory) {
-            // --- NUEVA LÓGICA DE GRUPOS --- 
             const playersInCategory = players
-                .filter(p => p.CATEGORIA === selectedCategory && p.TIPO !== 'ENTRENADOR/A')
+                .filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A')
                 .sort((a, b) => {
                     const numA = parseInt((a.Numeros && a.Numeros[selectedCategory]) || a.Numero, 10) || Infinity;
                     const numB = parseInt((b.Numeros && b.Numeros[selectedCategory]) || b.Numero, 10) || Infinity;
                     return numA - numB;
                 });
 
-            const coaches = players
-                .filter(p => p.TIPO === 'ENTRENADOR/A');
-                // No se especifica orden para entrenadores, se mantiene el orden por defecto
+            const coaches = players.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A');
 
             const authorizedPlayers = players
-                .filter(p => p.CATEGORIA !== selectedCategory && Array.isArray(p.categoriasAutorizadas) && p.categoriasAutorizadas.includes(selectedCategory))
+                .filter(p => {
+                    const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) && p.CATEGORIA !== selectedCategory;
+                    const isCrossSeasonAuth = p.esAutorizado && p.CATEGORIA === selectedCategory;
+                    return isSameSeasonAuth || isCrossSeasonAuth;
+                })
                 .sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
 
-            // Renderizar tabla principal con jugadores y entrenadores
             const mainTable = createTable(playersInCategory, selectedCategory);
             const tbody = mainTable.querySelector('tbody');
             if (coaches.length > 0) {
@@ -594,39 +609,58 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             tableContainer.appendChild(mainTable);
 
-            // Renderizar sección colapsable para autorizados
             if (authorizedPlayers.length > 0) {
                 const details = document.createElement('details');
                 details.className = 'mt-6 bg-gray-50 rounded-lg shadow';
-                
                 const summary = document.createElement('summary');
                 summary.className = 'px-6 py-3 text-md font-medium text-gray-800 cursor-pointer focus:outline-none';
                 summary.textContent = `Jugadores Autorizados (${authorizedPlayers.length})`;
                 details.appendChild(summary);
-
                 const authorizedContainer = document.createElement('div');
                 authorizedContainer.className = 'p-4';
                 authorizedContainer.appendChild(createTable(authorizedPlayers, selectedCategory));
                 details.appendChild(authorizedContainer);
-                
                 tableContainer.appendChild(details);
             }
 
         } else {
-            // Lógica original para cuando no hay categoría seleccionada
             tableContainer.appendChild(createTable(players, selectedCategory));
         }
     }
     
     function populateCategoryFilter(players) {
         if (!categoryFilter) return;
+
         const currentValue = categoryFilter.value;
-        const categories = [...new Set(players.flatMap(p => [p.CATEGORIA, ...(p.categoriasAutorizadas || [])]).filter(Boolean))].sort();
-        const existingOptions = new Set(Array.from(categoryFilter.options).map(o => o.value));
+
+        // Get all unique, sorted categories from the current season's players
+        const categories = [...new Set(
+            players.flatMap(p => [p.CATEGORIA, p.categoriaOrigen, ...(p.categoriasAutorizadas || [])])
+                   .filter(Boolean)
+        )].sort();
+
+        // Preserve the placeholder option (the first option)
+        const placeholderText = categoryFilter.options[0].text;
+        const placeholderValue = categoryFilter.options[0].value;
+
+        // Clear dropdown
+        categoryFilter.innerHTML = '';
+
+        // Add placeholder back
+        categoryFilter.appendChild(new Option(placeholderText, placeholderValue));
+
+        // Add sorted categories
         categories.forEach(cat => {
-            if (!existingOptions.has(cat)) categoryFilter.appendChild(new Option(cat, cat));
+            categoryFilter.appendChild(new Option(cat, cat));
         });
-        categoryFilter.value = currentValue;
+
+        // Restore selection if possible
+        try {
+            categoryFilter.value = currentValue;
+        } catch (e) {
+            // This can happen if the previously selected category doesn't exist in the new season
+            // The dropdown will safely default to the placeholder.
+        }
     }
 
     function populateEquipoFilter(players) {
@@ -643,13 +677,14 @@ document.addEventListener('DOMContentLoaded', function() {
     function createDetailHtml(key, value, fmHastaFrameClass) {
         let displayValue = (value === '1/1/1900') ? '-' : (value || '-');
         if (key === 'FM Hasta' && fmHastaFrameClass) {
-            return `<div class="border-b border-gray-200 pb-2"><p class="text-xs font-medium text-gray-500 uppercase">${key}</p><div class="${fmHastaFrameClass}"><p class="text-md text-gray-900 font-bold">${displayValue}</p></div></div>`;
+            return `<div class="border-b border-gray-200 pb-2"><p class="text-xs font-medium text-gray-500 uppercase">${key}</p><div class="border-2 rounded-lg p-1 ${fmHastaFrameClass}"><p class="text-md text-gray-900 font-bold text-center">${displayValue}</p></div></div>`;
         }
         return `<div class="border-b border-gray-200 pb-2"><p class="text-xs font-medium text-gray-500 uppercase">${key}</p><p class="text-md text-gray-900 font-bold">${displayValue}</p></div>`;
     }
 
     function showPlayerDetails(player, canEdit, playerIndex = -1, isEditing = false) {
         if (!mainContent || !playerDetailView) return;
+        logAction('Consulta de ficha', { dni: player.DNI, nombre: player.NOMBRE });
         if (playerIndex !== -1) currentPlayerIndex = playerIndex;
         mainContent.classList.add('hidden');
         playerDetailView.classList.remove('hidden');
@@ -658,19 +693,60 @@ document.addEventListener('DOMContentLoaded', function() {
         const photoUrl = `${IMG_BASE_URL}${encodeURIComponent(player.DNI)}.jpg?alt=media`;
         const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
         let borderColor = 'border-gray-200', backgroundColor = 'bg-white', fmHastaFrameClass = '';
+        
         if (expirationDate) {
             const hoy = new Date(); hoy.setHours(0,0,0,0);
             const thirtyDays = new Date(hoy); thirtyDays.setDate(hoy.getDate() + 30);
             const sixtyDays = new Date(hoy); sixtyDays.setDate(hoy.getDate() + 60);
             const endOfYear = new Date(hoy.getFullYear(), 11, 23);
-            if (expirationDate < hoy) { borderColor = 'border-red-500'; backgroundColor = 'bg-red-100'; fmHastaFrameClass = 'bg-red-100 border-red-500'; }
-            else if (expirationDate < thirtyDays) { borderColor = 'border-orange-500'; backgroundColor = 'bg-orange-100'; fmHastaFrameClass = 'bg-orange-100 border-orange-500'; }
-            else if (expirationDate < sixtyDays) { borderColor = 'border-yellow-500'; backgroundColor = 'bg-yellow-100'; fmHastaFrameClass = 'bg-yellow-100 border-yellow-500'; }
-            else if (expirationDate > endOfYear) { borderColor = 'border-green-500'; backgroundColor = 'bg-green-100'; fmHastaFrameClass = 'bg-green-100 border-green-500'; }
+
+            let isGreen = false;
+
+            // New special logic for intermediate seasons
+            const season = player.TEMPORADA;
+            const category = player.CATEGORIA;
+            if (season && season.includes('-')) {
+                const years = season.split('-');
+                if (years.length === 2 && years[1].length === 4) {
+                    const endYear = parseInt(years[1], 10);
+                    let targetDate;
+                    if (category === 'Liga de Desarrollo') {
+                        targetDate = new Date(endYear, 3, 1); // April 1st
+                    } else if (category === 'Liga Uruguaya de Basquet') {
+                        targetDate = new Date(endYear, 6, 15); // July 15th
+                    }
+                    if (targetDate && expirationDate > targetDate) {
+                        isGreen = true;
+                    }
+                }
+            }
+
+            // Old "end of year" green rule for other categories
+            if (!isGreen && expirationDate > endOfYear) {
+                isGreen = true;
+            }
+
+            // --- Main Color Logic ---
+            if (isGreen) {
+                borderColor = 'border-green-500'; backgroundColor = 'bg-green-100'; fmHastaFrameClass = 'bg-green-100 border-green-500';
+            } else if (expirationDate < hoy) {
+                borderColor = 'border-red-500'; backgroundColor = 'bg-red-100'; fmHastaFrameClass = 'bg-red-100 border-red-500';
+            } else if (expirationDate <= thirtyDays) { // 30 days = orange
+                borderColor = 'border-orange-500'; backgroundColor = 'bg-orange-100'; fmHastaFrameClass = 'bg-orange-100 border-orange-500';
+            } else if (expirationDate <= sixtyDays) { // 60 days = yellow
+                borderColor = 'border-yellow-500'; backgroundColor = 'bg-yellow-100'; fmHastaFrameClass = 'bg-yellow-100 border-yellow-500';
+            }
         }
 
         const primaryNumberForHeader = (player.Numeros && player.Numeros[player.CATEGORIA]) || player.Numero || 'S/N';
-        const saveButtonHtml = isEditing ? `<div class="mt-4"><button id="saveChangesButton" class="w-full justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Guardar Cambios</button></div>` : '';
+        const saveButtonHtml = isEditing ? `
+            <div class="mt-4 flex gap-2">
+                <button id="importPlayerButton" class="flex-1 justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-400 hover:bg-red-400">Importar</button>
+                <button id="authorizePlayerButton" class="flex-1 justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700">Autorizar+</button>
+                <button id="saveChangesButton" class="flex-1 justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Guardar Cambios</button>
+
+            </div>
+        ` : '';
         
         const toggleButtonHtml = canEdit ? `<button id="toggle-view-btn" class="py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">${isEditing ? 'Ver Ficha' : 'Editar'}</button>` : '';
 
@@ -687,7 +763,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="md:col-span-1 flex flex-col items-center text-center">
                         <img src="${photoUrl}" alt="Foto de ${player.NOMBRE}" class="h-48 w-36 sm:h-64 sm:w-48 object-cover shadow-lg border-4 ${borderColor}" style="border-width: 4px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_SVG_URL}';">
                         <h2 class="text-2xl font-bold text-gray-900 mt-4">${player.NOMBRE || 'Sin Nombre'}</h2>
-                        <p class="text-lg text-gray-600">${player.CATEGORIA || 'Sin Categoría'}</p>
+                        <p class="text-lg text-gray-600">${(player.esAutorizado && player.categoriaOrigen) ? player.categoriaOrigen : (player.CATEGORIA || 'Sin Categoría')}</p>
                         <p class="text-lg text-gray-600">Número: ${primaryNumberForHeader}</p>
                         <div class="mt-4 flex items-center justify-center space-x-2">
                             <button id="prevButton" class="py-2 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">&lt; Ant</button>
@@ -702,10 +778,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div id="player-data-list" class="space-y-4">
                             ${detailRows.map(row => `
                                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                                    ${row.map(key => isEditing ?
-                                        `<div><label for="edit-${key}" class="block text-sm font-medium text-gray-600">${key}</label><input type="text" id="edit-${key}" data-key="${key}" value="${player[key] || ''}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm"></div>` :
-                                        createDetailHtml(key, player[key], fmHastaFrameClass)
-                                    ).join('')}
+                                    ${row.map(key => {
+                                        let val = player[key] || '';
+                                        if (key === 'CATEGORIA' && player.esAutorizado) {
+                                            val = player.categoriaOrigen || val;
+                                        }
+                                        return isEditing ?
+                                        `<div><label for="edit-${key}" class="block text-sm font-medium text-gray-600">${key}</label><input type="text" id="edit-${key}" data-key="${key}" value="${val}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm"></div>` :
+                                        createDetailHtml(key, val, fmHastaFrameClass)
+                                    }).join('')}
                                 </div>
                             `).join('')}
                         </div>
@@ -715,10 +796,10 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <h4 id="toggle-numeros" class="text-md font-semibold text-gray-700 border-b pb-1 mb-2 cursor-pointer">Gestión de Números <span id="toggle-numeros-icon">►</span></h4>
                                 <div id="numeros-content" class="hidden"></div>
                             </div>
-                            <div class="w-full md:w-1/2">
+                            <div class="w-full md:w-1/2" id="categorias-autorizadas-container">
                                 <h4 id="toggle-categorias" class="text-md font-semibold text-gray-700 border-b pb-1 mb-2 cursor-pointer">Categorías Autorizadas <span id="toggle-categorias-icon">►</span></h4>
                                 <div id="categorias-content" class="hidden">
-                                    <select multiple id="edit-categoriasAutorizadas" class="mt-1 block w-full h-32 px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm"></select>
+                                    <select multiple id="edit-categoriasAutorizadas" class="mt-1 block w-full h-24 px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm"></select>
                                     <p class="mt-1 text-xs text-gray-500">Mantén Ctrl (o Cmd) para seleccionar varias.</p>
                                 </div>
                             </div>
@@ -732,12 +813,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isEditing) {
             const categoriasSelect = document.getElementById('edit-categoriasAutorizadas');
             if (categoriasSelect) {
-                const categoriasDeLaTemporada = [...new Set(allPlayers.map(p => p.CATEGORIA).filter(Boolean))].sort();
-                categoriasDeLaTemporada.forEach(cat => {
-                    const isSelected = player.categoriasAutorizadas && player.categoriasAutorizadas.includes(cat);
-                    categoriasSelect.add(new Option(cat, cat, isSelected, isSelected));
-                });
-                
                 const updateNumerosUI = () => {
                     const numerosContent = document.getElementById('numeros-content');
                     if(!numerosContent) return;
@@ -750,12 +825,57 @@ document.addEventListener('DOMContentLoaded', function() {
                         numerosHtml += `<h5 class="text-sm font-semibold text-gray-600 mt-3 mb-1">Nºs en Categorías Autorizadas</h5>`;
                         selectedCategories.forEach(cat => {
                             if (cat === primaryCategory) return;
-                            const authorizedNumber = (player.Numeros && player.Numeros[cat]) || '';
+                            const authorizedNumber = (player.Numeros && player.Numeros[cat]) || primaryNumber;
                             numerosHtml += `<div class="mt-2"><label class="block text-sm font-medium text-gray-600">Nº en ${cat}</label><input type="number" data-category="${cat}" value="${authorizedNumber}" class="numero-input mt-1 block w-full ..."></div>`;
                         });
                     }
                     numerosContent.innerHTML = numerosHtml;
                 };
+
+                const categoryProgressionRules = {
+                    'U11 Mixta': ['U12 Mixta'],
+                    'U12 Femenino': ['U12 Mixta', 'U14 Femenino'],
+                    'U12 Mixta': ['U14 Mixto'],
+                    'U14 Femenino': ['U14 Mixto', 'U16 Femenino'],
+                    'U14 Mixto': ['U16 Masculino'],
+                    'U16 Femenino': ['U19 Femenina', 'Liga Femenina de Basquet'],
+                    'U16 Masculino': ['U18 Masculino'],
+                    'U18 Masculino': ['U20 Masculino', 'Liga de Desarrollo' , 'Liga Uruguaya de Basquet'],
+                    'U20 Masculino': ['Liga de Desarrollo', 'Liga Uruguaya de Basquet'],
+                    'Liga de Desarrollo': ['Liga Uruguaya de Basquet'],
+                    'U19 Femenina': ['Liga Femenina de Basquet'],
+                };
+
+                const primaryCategory = player.CATEGORIA;
+                // FIX: Convertir a mayúsculas para que coincida con las claves de las reglas (ej: "U14 Mixto" vs "U14 Mixto")
+                const suggestedCategories = categoryProgressionRules[primaryCategory] || [];
+                const existingAuthorizations = player.categoriasAutorizadas || [];
+
+                let categoriesToShow = [...new Set([...suggestedCategories, ...existingAuthorizations])];
+                
+                const specialLeagues = ["Liga de Desarrollo", "Liga Uruguaya de Basquet"];
+                categoriesToShow = categoriesToShow.filter(cat => !specialLeagues.includes(cat));
+
+                const categoriasContainer = document.getElementById('categorias-autorizadas-container');
+
+                if (categoriesToShow.length === 0) {
+                    if (categoriasContainer) {
+                        categoriasContainer.style.display = 'none';
+                    }
+                } else {
+                    if (categoriasContainer) {
+                        // Restaurar la visibilidad por defecto, sin forzar 'block'
+                        categoriasContainer.style.display = ''; 
+                    }
+                    categoriesToShow.sort();
+                    categoriasSelect.innerHTML = '';
+                    categoriesToShow.forEach(cat => {
+                        const isAlreadyAuthorized = existingAuthorizations.includes(cat);
+                        const shouldBeSelected = isAlreadyAuthorized;
+                        categoriasSelect.add(new Option(cat, cat, shouldBeSelected, shouldBeSelected));
+                    });
+                }
+
                 categoriasSelect.addEventListener('change', updateNumerosUI);
                 updateNumerosUI();
             }
@@ -774,6 +894,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (isEditing) {
             document.getElementById('saveChangesButton').addEventListener('click', () => applyPlayerChanges(player));
+            const importBtn = document.getElementById('importPlayerButton');
+            if (importBtn) importBtn.addEventListener('click', () => showImportPlayerForm(player));
+            const authBtn = document.getElementById('authorizePlayerButton');
+            if (authBtn) authBtn.addEventListener('click', () => showAuthorizeForm(player));
         } else {
             const statsButton = document.getElementById('statsButton');
             if (statsButton) statsButton.addEventListener('click', () => {
@@ -793,6 +917,447 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         applyFilters();
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function showAddPlayerForm() {
+        if (!mainContent || !playerDetailView) return;
+
+        mainContent.classList.add('hidden');
+        playerDetailView.classList.remove('hidden');
+        playerDetailView.innerHTML = '';
+
+        const currentSeason = seasonFilter ? seasonFilter.value : new Date().getFullYear().toString();
+
+        const allFields = {
+            'DNI': '', 'NOMBRE': '', 'FECHA NACIMIENTO': '', 'NACIONALIDAD': 'Uruguaya',
+            'TELEFONO': '', 'EMAIL': '', 'TIPO': 'JUGADOR/A', 'CATEGORIA': '', 'EQUIPO': '',
+            'COMPETICION': '', 'ESTADO LICENCIA': 'Habilitada', 'FECHA_ALTA': '', 'BAJA': '',
+            'FM Desde': '', 'FM Hasta': '', 'Numero': ''
+        };
+
+        const getUniqueValues = (players, field) => [...new Set(players.map(p => p[field]).filter(Boolean))].sort();
+        const categorias = getUniqueValues(allPlayers, 'CATEGORIA');
+        const equipos = getUniqueValues(allPlayers, 'EQUIPO');
+        const competiciones = getUniqueValues(allPlayers, 'COMPETICION');
+
+        let formHtml = `
+            <div class="bg-white p-6 rounded-xl shadow-md relative">
+                <div class="flex justify-between items-end mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">Agregar Nuevo Jugador</h2>
+                    <div>
+                        <label for="add-TEMPORADA" class="block text-sm font-medium text-gray-600">Temporada</label>
+                        <input type="text" id="add-TEMPORADA" data-key="TEMPORADA" value="${currentSeason}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                    </div>
+                </div>
+                <div id="add-player-form" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        ${Object.keys(allFields).map(key => {
+                            if (key === 'TIPO') {
+                                return `<div>
+                                    <label for="add-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
+                                    <select id="add-${key}" data-key="${key}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                                        <option value="JUGADOR/A" selected>JUGADOR/A</option>
+                                        <option value="ENTRENADOR/A">ENTRENADOR/A</option>
+                                    </select>
+                                </div>`;
+                            }
+                            if (key === 'CATEGORIA' || key === 'EQUIPO' || key === 'COMPETICION') {
+                                const options = key === 'CATEGORIA' ? categorias : (key === 'EQUIPO' ? equipos : competiciones);
+                                if (options.length > 0) {
+                                    return `<div>
+                                        <label for="add-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
+                                        <select id="add-${key}" data-key="${key}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                                            <option value="">Seleccione...</option>
+                                            ${options.map(o => `<option value="${o}">${o}</option>`).join('')}
+                                        </select>
+                                    </div>`;
+                                }
+                                return `<div>
+                                    <label for="add-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
+                                    <input type="text" id="add-${key}" data-key="${key}" value="${allFields[key]}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                                </div>`;
+                            }
+                            return `<div>
+                                <label for="add-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
+                                <input type="text" id="add-${key}" data-key="${key}" value="${allFields[key]}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+                <div class="mt-6 flex items-center justify-end space-x-4">
+                    <button id="cancelAddPlayer" class="py-2 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Cancelar</button>
+                    <button id="saveNewPlayerButton" class="py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Guardar Jugador</button>
+                </div>
+            </div>
+        `;
+
+        playerDetailView.innerHTML = formHtml;
+
+        document.getElementById('cancelAddPlayer').addEventListener('click', hidePlayerDetails);
+        document.getElementById('saveNewPlayerButton').addEventListener('click', guardarNuevoJugador);
+    }
+
+    async function guardarNuevoJugador() {
+        const dniInput = document.getElementById('add-DNI');
+        const dni = dniInput ? dniInput.value.trim() : '';
+        if (!dni) {
+            showToast("El campo DNI es obligatorio.", "error");
+            return;
+        }
+
+        const tipoInput = document.getElementById('add-TIPO');
+        const tipo = tipoInput ? tipoInput.value : 'JUGADOR/A';
+        const dbNode = tipo === 'JUGADOR/A' ? 'jugadores' : 'entrenadores';
+        const pathToCheck = `/${dbNode}/${dni}`;
+
+        try {
+            const snapshot = await database.ref(pathToCheck).once('value');
+            if (snapshot.exists()) {
+                showToast("Ya existe un jugador o entrenador con este DNI.", "error");
+                return;
+            }
+
+            const newPlayerData = {};
+            document.querySelectorAll('#add-player-form [data-key]').forEach(input => {
+                newPlayerData[input.dataset.key] = input.value.trim();
+            });
+
+            const seasonInput = document.getElementById('add-TEMPORADA');
+            const season = seasonInput ? seasonInput.value.trim() : '';
+            if (!season) {
+                showToast("El campo Temporada es obligatorio.", "error");
+                return;
+            }
+            const pushId = database.ref().push().key;
+
+            const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
+            const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'Numero'];
+
+            const personalDataToSave = {};
+            personalKeys.forEach(k => { if (newPlayerData[k] !== undefined) personalDataToSave[k] = newPlayerData[k]; });
+
+            const seasonalDataToSave = {};
+            seasonalKeys.forEach(k => { if (newPlayerData[k] !== undefined) seasonalDataToSave[k] = newPlayerData[k]; });
+            seasonalDataToSave.TEMPORADA = season;
+            if (seasonalDataToSave.CATEGORIA && seasonalDataToSave.Numero) {
+                 seasonalDataToSave.Numeros = { [seasonalDataToSave.CATEGORIA]: seasonalDataToSave.Numero };
+            } else {
+                 seasonalDataToSave.Numeros = {};
+            }
+
+
+            const combinedDataForIndex = {
+                ...seasonalDataToSave,
+                _firebaseKey: pushId,
+                _tipo: dbNode,
+                _dni: dni,
+                _pushId: pushId
+            };
+            Object.keys(combinedDataForIndex).forEach(key => combinedDataForIndex[key] === undefined && delete combinedDataForIndex[key]);
+
+
+            const updates = {};
+            updates[`/${dbNode}/${dni}/datosPersonales`] = personalDataToSave;
+            updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}`] = seasonalDataToSave;
+            updates[`/registrosPorTemporada/${season}/${pushId}`] = combinedDataForIndex;
+            updates[`/temporadas/${season}`] = true;
+
+            const newCategory = seasonalDataToSave.CATEGORIA;
+            if (newCategory) {
+                updates[`/todasLasCategorias/${newCategory}`] = true;
+            }
+
+            await database.ref().update(updates);
+
+            showToast("¡Jugador agregado con éxito!", "success");
+            logAction('creacion', { dni: dni, nombre: newPlayerData.NOMBRE, datos: newPlayerData });
+            hidePlayerDetails();
+
+        } catch (error) {
+            console.error("Error al guardar nuevo jugador:", error);
+            showToast(`Error al guardar: ${error.message}`, "error");
+        }
+    }
+
+    function showImportPlayerForm(player) {
+        if (!mainContent || !playerDetailView) return;
+
+        mainContent.classList.add('hidden');
+        playerDetailView.classList.remove('hidden');
+        playerDetailView.innerHTML = '';
+
+        const nextSeason = new Date().getFullYear() + 1;
+        const suggestedSeason = player.TEMPORADA === String(new Date().getFullYear()) ? nextSeason.toString() : new Date().getFullYear().toString();
+
+        const currentNumber = (player.Numeros && player.Numeros[player.CATEGORIA]) || player.Numero || '';
+
+        const seasonalFields = {
+            'CATEGORIA': player.CATEGORIA || '',
+            'EQUIPO': player.EQUIPO || '',
+            'COMPETICION': player.COMPETICION || '',
+            'ESTADO LICENCIA': player['ESTADO LICENCIA'] || 'Habilitada',
+            'TIPO': player.TIPO || 'JUGADOR/A',
+            'Numero': currentNumber,
+            'FECHA_ALTA': new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            'BAJA': ''
+        };
+
+        const getUniqueValues = (players, field) => [...new Set(players.map(p => p[field]).filter(Boolean))].sort();
+        const categorias = getUniqueValues(allPlayers, 'CATEGORIA');
+        const equipos = getUniqueValues(allPlayers, 'EQUIPO');
+        const competiciones = getUniqueValues(allPlayers, 'COMPETICION');
+
+        let formHtml = `
+            <div class="bg-white p-6 rounded-xl shadow-md relative">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">Importar a ${player.NOMBRE}</h2>
+                        <p class="text-sm text-gray-600">Creando un nuevo registro para una nueva temporada.</p>
+                    </div>
+                    <div>
+                        <label for="import-TEMPORADA" class="block text-sm font-medium text-gray-700 text-right">Nueva Temporada</label>
+                        <input type="text" id="import-TEMPORADA" value="${suggestedSeason}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                    </div>
+                </div>
+                <div id="import-player-form" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        ${Object.keys(seasonalFields).map(key => {
+                            const value = seasonalFields[key];
+                            if (key === 'TIPO') {
+                                return `<div>
+                                    <label for="import-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
+                                    <select id="import-${key}" data-key="${key}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                                        <option value="JUGADOR/A" ${value === 'JUGADOR/A' ? 'selected' : ''}>JUGADOR/A</option>
+                                        <option value="ENTRENADOR/A" ${value === 'ENTRENADOR/A' ? 'selected' : ''}>ENTRENADOR/A</option>
+                                    </select>
+                                </div>`;
+                            }
+                            if (key === 'CATEGORIA' || key === 'EQUIPO' || key === 'COMPETICION') {
+                                const options = key === 'CATEGORIA' ? categorias : (key === 'EQUIPO' ? equipos : competiciones);
+                                return `<div>
+                                    <label for="import-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
+                                    <select id="import-${key}" data-key="${key}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                                        <option value="">Seleccione...</option>
+                                        ${options.map(o => `<option value="${o}" ${o === value ? 'selected' : ''}>${o}</option>`).join('')}
+                                    </select>
+                                </div>`;
+                            }
+                            return `<div>
+                                <label for="import-${key}" class="block text-sm font-medium text-gray-600">${key.replace('_', ' ')}</label>
+                                <input type="text" id="import-${key}" data-key="${key}" value="${value}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+                <div class="mt-6 flex items-center justify-end space-x-4">
+                    <button id="cancelImport" class="py-2 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Cancelar</button>
+                    <button id="saveImportButton" class="py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700">Guardar Importación</button>
+                </div>
+            </div>
+        `;
+
+        playerDetailView.innerHTML = formHtml;
+
+        document.getElementById('cancelImport').addEventListener('click', () => showPlayerDetails(player, true, currentPlayerIndex, false));
+        document.getElementById('saveImportButton').addEventListener('click', () => importPlayer(player));
+    }
+
+    async function importPlayer(originalPlayer) {
+        const newSeasonInput = document.getElementById('import-TEMPORADA');
+        const newSeason = newSeasonInput ? newSeasonInput.value.trim() : '';
+        if (!newSeason) {
+            showToast("El campo Nueva Temporada es obligatorio.", "error");
+            return;
+        }
+
+        const newSeasonalData = {};
+        document.querySelectorAll('#import-player-form [data-key]').forEach(input => {
+            newSeasonalData[input.dataset.key] = input.value.trim();
+        });
+        newSeasonalData.TEMPORADA = newSeason;
+
+        const dni = originalPlayer.DNI;
+        const tipo = newSeasonalData.TIPO || originalPlayer.TIPO;
+        const dbNode = (tipo === 'JUGADOR/A' || tipo === 'jugadores') ? 'jugadores' : 'entrenadores';
+
+        const pushId = database.ref().push().key;
+
+        if (newSeasonalData.CATEGORIA && newSeasonalData.Numero) {
+            newSeasonalData.Numeros = { [newSeasonalData.CATEGORIA]: newSeasonalData.Numero };
+        } else {
+            newSeasonalData.Numeros = {};
+        }
+
+        const combinedDataForIndex = {
+            ...newSeasonalData,
+            _firebaseKey: pushId,
+            _tipo: dbNode,
+            _dni: dni,
+            _pushId: pushId
+        };
+        Object.keys(combinedDataForIndex).forEach(key => combinedDataForIndex[key] === undefined && delete combinedDataForIndex[key]);
+
+        const updates = {};
+        updates[`/${dbNode}/${dni}/temporadas/${newSeason}/${pushId}`] = newSeasonalData;
+        updates[`/registrosPorTemporada/${newSeason}/${pushId}`] = combinedDataForIndex;
+        updates[`/temporadas/${newSeason}`] = true;
+
+        const importedCategory = newSeasonalData.CATEGORIA;
+        if (importedCategory) {
+            updates[`/todasLasCategorias/${importedCategory}`] = true;
+        }
+
+        try {
+            await database.ref().update(updates);
+            showToast(`${originalPlayer.NOMBRE} importado a la temporada ${newSeason} con éxito!`, "success");
+            logAction('importacion', { dni: originalPlayer.DNI, nombre: originalPlayer.NOMBRE, nuevaTemporada: newSeason, datos: newSeasonalData });
+            hidePlayerDetails();
+            if (seasonFilter.value !== newSeason) {
+                if (![...seasonFilter.options].some(option => option.value === newSeason)) {
+                    seasonFilter.appendChild(new Option(newSeason, newSeason));
+                }
+                seasonFilter.value = newSeason;
+                conectarTemporada(newSeason);
+            }
+        } catch (error) {
+            console.error("Error al importar jugador:", error);
+            showToast(`Error al importar: ${error.message}`, "error");
+        }
+    }
+
+    function showAuthorizeForm(player) {
+        if (!mainContent || !playerDetailView) return;
+
+        mainContent.classList.add('hidden');
+        playerDetailView.classList.remove('hidden');
+        playerDetailView.innerHTML = '';
+
+        let suggestedSeason = '';
+        const baseSeason = player.TEMPORADA;
+        const baseYear = parseInt(baseSeason, 10);
+
+        if (!isNaN(baseYear) && String(baseYear).length === 4) {
+            suggestedSeason = `${baseYear}-${baseYear + 1}`;
+        } else {
+            const currentYear = new Date().getFullYear();
+            suggestedSeason = (baseSeason === String(currentYear)) ? `${currentYear}-${currentYear + 1}` : `${currentYear}-${currentYear + 1}`;
+        }
+
+        const specialCategories = ["Liga Uruguaya de Basquet", "Liga de Desarrollo"];
+
+        let formHtml = `
+            <div class="bg-white p-6 rounded-xl shadow-md relative max-w-lg mx-auto">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Autorizar a ${player.NOMBRE}</h2>
+                <p class="text-sm text-gray-600 mb-6">Creando un registro de autorización simplificado.</p>
+                
+                <div id="auth-player-form" class="space-y-4">
+                    <div>
+                        <label for="auth-TEMPORADA" class="block text-sm font-medium text-gray-700">Nueva Temporada</label>
+                        <input type="text" id="auth-TEMPORADA" value="${suggestedSeason}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                    </div>
+                    <div>
+                        <label for="auth-CATEGORIA" class="block text-sm font-medium text-gray-700">Autorizar en Categoría</label>
+                        <select id="auth-CATEGORIA" data-key="CATEGORIA" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                            <option value="">Seleccione una liga...</option>
+                            ${specialCategories.map(o => `<option value="${o}">${o}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="auth-Numero" class="block text-sm font-medium text-gray-700">Número en esta categoría (Opcional)</label>
+                        <input type="number" id="auth-Numero" data-key="Numero" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                    </div>
+                </div>
+
+                <div class="mt-8 flex items-center justify-end space-x-4">
+                    <button id="cancelAuthorize" class="py-2 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Cancelar</button>
+                    <button id="saveAuthorizeButton" class="py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700">Confirmar Autorización</button>
+                </div>
+            </div>
+        `;
+
+        playerDetailView.innerHTML = formHtml;
+
+        document.getElementById('cancelAuthorize').addEventListener('click', () => showPlayerDetails(player, true, currentPlayerIndex, true));
+        document.getElementById('saveAuthorizeButton').addEventListener('click', () => authorizePlayerInNewSeason(player));
+    }
+
+    async function authorizePlayerInNewSeason(originalPlayer) {
+        const newSeasonInput = document.getElementById('auth-TEMPORADA');
+        const newCategoryInput = document.getElementById('auth-CATEGORIA');
+        const newNumberInput = document.getElementById('auth-Numero');
+
+        const newSeason = newSeasonInput ? newSeasonInput.value.trim() : '';
+        const newCategory = newCategoryInput ? newCategoryInput.value.trim() : '';
+        const newNumber = newNumberInput ? newNumberInput.value.trim() : '';
+
+        if (!newSeason) {
+            showToast("El campo Nueva Temporada es obligatorio.", "error");
+            return;
+        }
+        if (!newCategory) {
+            showToast("Debe seleccionar una categoría para autorizar.", "error");
+            return;
+        }
+
+        const newSeasonalData = { ...originalPlayer };
+
+        newSeasonalData.categoriaOrigen = originalPlayer.CATEGORIA;
+        newSeasonalData.CATEGORIA = newCategory;
+        newSeasonalData.TEMPORADA = newSeason;
+        newSeasonalData.Numero = newNumber;
+        newSeasonalData.esAutorizado = true;
+        newSeasonalData.FECHA_ALTA = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        newSeasonalData.BAJA = '';
+        
+        delete newSeasonalData._firebaseKey;
+        delete newSeasonalData._pushId;
+        delete newSeasonalData._tipo;
+        delete newSeasonalData._dni;
+        delete newSeasonalData['FM Desde'];
+        delete newSeasonalData['FM Hasta'];
+
+        const dni = originalPlayer.DNI;
+        const tipo = newSeasonalData.TIPO || originalPlayer.TIPO;
+        const dbNode = (tipo === 'JUGADOR/A' || tipo === 'jugadores') ? 'jugadores' : 'entrenadores';
+
+        const pushId = database.ref().push().key;
+
+        newSeasonalData.Numeros = { ...originalPlayer.Numeros };
+        if (newCategory && newNumber) {
+            newSeasonalData.Numeros[newCategory] = newNumber;
+        }
+
+        const combinedDataForIndex = {
+            ...newSeasonalData,
+            _firebaseKey: pushId,
+            _tipo: dbNode,
+            _dni: dni,
+            _pushId: pushId
+        };
+        Object.keys(combinedDataForIndex).forEach(key => combinedDataForIndex[key] === undefined && delete combinedDataForIndex[key]);
+
+        const updates = {};
+        updates[`/${dbNode}/${dni}/temporadas/${newSeason}/${pushId}`] = newSeasonalData;
+        updates[`/registrosPorTemporada/${newSeason}/${pushId}`] = combinedDataForIndex;
+        updates[`/temporadas/${newSeason}`] = true;
+        updates[`/todasLasCategorias/${newCategory}`] = true;
+
+        try {
+            await database.ref().update(updates);
+            showToast(`${originalPlayer.NOMBRE} autorizado en ${newCategory} para la temporada ${newSeason}!`, "success");
+            logAction('autorizacion', { dni: originalPlayer.DNI, nombre: originalPlayer.NOMBRE, nuevaTemporada: newSeason, nuevaCategoria: newCategory });
+            hidePlayerDetails();
+            if (seasonFilter.value !== newSeason) {
+                if (![...seasonFilter.options].some(option => option.value === newSeason)) {
+                    seasonFilter.appendChild(new Option(newSeason, newSeason));
+                }
+                seasonFilter.value = newSeason;
+                conectarTemporada(newSeason);
+            }
+        } catch (error) {
+            console.error("Error al autorizar jugador:", error);
+            showToast(`Error al autorizar: ${error.message}`, "error");
+        }
     }
     
     function generatePDF() {
