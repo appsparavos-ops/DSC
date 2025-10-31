@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estadísticas del Jugador</title>
+    <!-- Librerías Externas -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+
+    <!-- Enlace a tu hoja de estilos CSS principal -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-blue-900 text-gray-800">
+    <div class="container mx-auto p-4 sm:p-6 md:p-8">
+        <h1 class="text-3xl font-bold text-white mb-6">Estadísticas del Jugador</h1>
+        <div id="stats-content" class="bg-white p-6 rounded-xl shadow-md">
+            <div class="text-center mb-4">
+                <h2 id="player-name" class="text-3xl font-bold text-blue-800">Cargando...</h2>
+                <p id="player-games-played" class="text-lg text-gray-600"></p>
+            </div>
+
+            <div class="text-center mb-4">
+                <button id="toggleSearchButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Mostrar/Ocultar Filtros
+                </button>
+            </div>
+
+            <!-- Contenedor de Filtros -->
+            <div id="searchBar" class="hidden flex-wrap gap-4 items-end mb-4">
+                <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
+                    <label for="season-selector" class="block text-sm font-medium text-gray-700">Temporada</label>
+                    <select id="season-selector" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="all">Todas</option>
+                    </select>
+                </div>
+                <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
+                    <label for="category-selector" class="block text-sm font-medium text-gray-700">Categoría</label>
+                    <select id="category-selector" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" disabled>
+                        <option value="all">Todas</option>
+                    </select>
+                </div>
+                <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
+                    <label for="opponent-selector" class="block text-sm font-medium text-gray-700">Oponente</label>
+                    <select id="opponent-selector" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" disabled>
+                        <option value="all">Todos</option>
+                    </select>
+                </div>
+                <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
+                    <label for="date-selector" class="block text-sm font-medium text-gray-700">Fecha</label>
+                    <select id="date-selector" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" disabled>
+                        <option value="all">Todas</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="match-result-display" class="hidden text-center mb-4">
+                <h3 class="text-xl font-semibold text-gray-700">Resultado del Partido</h3>
+                <p id="result-value" class="text-2xl font-bold text-blue-800"></p>
+            </div>
+
+            <!-- Pestañas para cambiar entre Acumulado y Promedios -->
+            <div id="tabs-nav" class="hidden mb-4 border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                    <a href="#" id="tab-totales" class="border-blue-500 text-blue-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" aria-current="page">
+                        Acumulado
+                    </a>
+                    <a href="#" id="tab-promedios" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        Promedios
+                    </a>
+                    <a href="#" id="tab-equipo-totales" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        Acumuladas Equipo
+                    </a>
+                    <a href="#" id="tab-equipo-promedios" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                        Promedios Equipo
+                    </a>
+                </nav>
+            </div>
+
+            <!-- Contenedor para las tablas de estadísticas -->
+            <div id="stats-tables" class="hidden">
+                <!-- Tabla de Totales (inicialmente visible) -->
+                <div id="tabla-totales">
+                    <h3 class="text-xl font-semibold mb-2 text-gray-700">Estadísticas Acumuladas</h3>
+                    <div id="stats-totales-container" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-4">
+                        <!-- Los datos se insertarán aquí dinámicamente -->
+                    </div>
+                </div>
+                <!-- Tabla de Promedios (inicialmente oculta) -->
+                <div id="tabla-promedios" class="hidden">
+                    <h3 class="text-xl font-semibold mb-2 text-gray-700">Estadísticas por Partido</h3>
+                    <div id="stats-promedios-container" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-4">
+                        <!-- Los datos se insertarán aquí dinámicamente -->
+                    </div>
+                </div>
+                <!-- Tabla de Totales Equipo (inicialmente oculta) -->
+                <div id="tabla-equipo-totales" class="hidden">
+                    <h3 class="text-xl font-semibold mb-2 text-gray-700">Estadísticas Acumuladas del Equipo</h3>
+                    <div id="stats-equipo-totales-container" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-4">
+                        <!-- Los datos se insertarán aquí dinámicamente -->
+                    </div>
+                </div>
+                <!-- Tabla de Promedios Equipo (inicialmente oculta) -->
+                <div id="tabla-equipo-promedios" class="hidden">
+                    <h3 class="text-xl font-semibold mb-2 text-gray-700">Estadísticas Promedio del Equipo</h3>
+                    <div id="stats-equipo-promedios-container" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-4">
+                        <!-- Los datos se insertarán aquí dinámicamente -->
+                    </div>
+                </div>
+            </div>
+
+            <p id="no-stats-message" class="hidden mt-4 text-gray-500">No hay estadísticas disponibles para este jugador.</p>
+            <button id="backToPlayerDetail" class="mt-4 py-2 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Volver a la Ficha del Jugador</button>
+        </div>
+    </div>
+
+    <!-- Modal para la Gráfica de Evolución -->
+    <div id="chart-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+        <div class="relative top-20 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900" id="chart-modal-title">Evolución de la Estadística</h3>
+                <div class="mt-2 px-7 py-3">
+                    <canvas id="stat-chart"></canvas>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="close-chart-modal" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Gráficas de Comparación (Radar y Barras) -->
+    <div id="comparison-chart-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+        <div class="relative top-10 mx-auto p-5 border w-full max-w-5xl shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900" id="comparison-chart-modal-title">Comparación de Partidos</h3>
+                <div class="mt-2 px-7 py-3" style="height: 70vh;">
+                    <canvas id="comparison-stat-chart"></canvas>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="close-comparison-chart-modal" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="estadisticas.js"></script>
+</body>
+</html>

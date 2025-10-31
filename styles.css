@@ -1,0 +1,209 @@
+body { 
+    font-family: 'Inter', sans-serif; 
+}
+
+.clickable-row { 
+    cursor: pointer; 
+}
+
+.clickable-row:hover { 
+    transition: background-color 0.2s ease-in-out; 
+}
+
+.category-separator {
+    display: none; /* Oculto en la vista normal */
+}
+
+/* Por defecto, los elementos de impresión están ocultos */
+#print-footer { 
+    display: none; 
+}
+
+/* --- ESTILOS PARA IMPRESIÓN MEJORADOS --- */
+@media print {
+    header, footer.no-print, .no-print {
+        display: none !important;
+    }
+    body {
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+    }
+    #main-content, #resultsArea, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        background: none !important;
+    }
+    #tableContainer {
+        overflow: visible;
+        box-shadow: none;
+    }
+    #tableContainer table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 9pt;
+        table-layout: fixed;
+    }
+    #tableContainer th,
+    #tableContainer td {
+        border: 1px solid #ccc;
+        padding: 3px 5px;
+        white-space: normal !important;
+        word-break: break-word;
+        display: none;
+    }
+    #tableContainer .col-categoria,
+    #tableContainer .col-dni,
+    #tableContainer .col-nombre,
+    #tableContainer .col-fm-hasta {
+        display: table-cell;
+    }
+    #tableContainer .col-nombre { width: 40%; }
+    #tableContainer .col-categoria { width: 30%; }
+    #tableContainer .col-dni { width: 15%; }
+    #tableContainer .col-fm-hasta { width: 15%; }
+    #tableContainer h3 { display: none; }
+
+    .category-separator {
+        display: table-row;
+    }
+    .category-separator td {
+        display: table-cell !important; /* Asegurarse de que la celda se muestre */
+        border-bottom: 2px solid #000 !important;
+        height: 1px;
+        padding: 0 !important;
+    }
+
+    #print-header {
+        position: relative;
+        display: flex !important;
+        align-items: center;
+        height: 60px;
+        padding-bottom: 15px;
+        margin-bottom: 15px;
+        border-bottom: 2px solid #333;
+    }
+    #print-header-title {
+        position: absolute;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-size: 16pt;
+        font-weight: bold;
+        color: #000;
+    }
+    #print-header-logo {
+        margin-left: auto;
+        height: 50px;
+        width: auto;
+    }
+    #print-footer {
+        display: block;
+        position: fixed;
+        bottom: 5mm;
+        left: 10mm;
+        right: 10mm;
+        width: calc(100% - 20mm);
+        text-align: center;
+        font-size: 8pt;
+        color: #555;
+        border-top: 1px solid #ccc;
+        padding-top: 5px;
+    }
+    @page {
+        size: A4;
+        margin: 15mm 10mm 15mm 10mm;
+    }
+}
+
+#searchBar {
+    max-height: 500px; /* Adjust based on content height */
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out, opacity 0.5s ease-in-out;
+    opacity: 1;
+}
+
+#searchBar.collapsed {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* Agregado para mejorar la vista en móviles */
+@media (max-width: 640px) {
+    #tableContainer th,
+    #tableContainer td {
+        font-size: 0.5rem; /* Un poco más pequeño que el actual */
+        padding: 2px 5px; /* Reduce el espaciado interno */
+    }
+}
+
+/* Agregado para mejorar la vista de la ficha en móviles */
+@media (max-width: 640px) {
+    /* Reduce el tamaño de la foto del jugador */
+    #playerDetailView img {
+        height: 8rem; /* 192px */
+        width: 6rem;  /* 144px */
+    }
+
+    /* Reduce el nombre del jugador */
+    #playerDetailView h2 {
+        font-size: 1rem; /* text-xl */
+    }
+
+    /* Reduce el texto de categoría/número */
+    #playerDetailView h2 + p {
+        font-size: 0.75rem; /* text-base */
+    }
+
+    /* Reduce el título "Detalles del Jugador" */
+    #playerDetailView h3 {
+        font-size: 1rem; /* text-lg */
+    }
+
+    /* Reduce el texto de los datos (DNI, FECHA NAC, etc.) */
+    #player-data-list .text-xs { /* La etiqueta */
+        font-size: 0.5rem; 
+    }
+    #player-data-list .text-md { /* El valor */
+        font-size: 0.75rem; /* text-sm */
+    }
+
+    /* Reduce el espaciado en la grilla de datos */
+    #player-data-list {
+        gap: 0.3rem 0.5rem;
+    }
+}
+
+/* Estilos para la notificación toast */
+.toast-notification {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #28a745; /* Verde éxito */
+    color: white;
+    padding: 16px;
+    border-radius: 8px;
+    z-index: 1000;
+    font-size: 1rem;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out, bottom 0.3s ease-in-out;
+}
+
+.toast-notification.show {
+    bottom: 40px;
+    opacity: 1;
+}
+
+.table-cell-style {
+    padding: 0px 1px;
+    font-size: 0.2rem;
+    white-space: nowrap; /* Keep text on single line for now, can adjust later */
+    word-break: keep-all;
+}
