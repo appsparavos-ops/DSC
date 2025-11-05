@@ -313,7 +313,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     ...record,
                     ...(datosPersonalesMap.get(record._dni) || {})
                 }));
-
                 if (allPlayers.length > 0) {
                     originalHeaders = Object.keys(allPlayers[0]);
                     populateCategoryFilter(allPlayers);
@@ -1315,7 +1314,6 @@ document.addEventListener('DOMContentLoaded', function() {
         delete newSeasonalData._dni;
         delete newSeasonalData['FM Desde'];
         delete newSeasonalData['FM Hasta'];
-
         const dni = originalPlayer.DNI;
         const tipo = newSeasonalData.TIPO || originalPlayer.TIPO;
         const dbNode = (tipo === 'JUGADOR/A' || tipo === 'jugadores') ? 'jugadores' : 'entrenadores';
