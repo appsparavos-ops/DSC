@@ -97,6 +97,8 @@
                 loginSection.classList.remove('hidden');
                 uploadSection.classList.add('hidden');
                 choiceSection.classList.add('hidden');
+                emailInput.value = '';
+                passwordInput.value = '';
             }
         });
 
@@ -219,7 +221,7 @@
             showMessage('Procesando y actualizando datos personales...', '');
             const allUpdates = {};
             let processedCount = 0;
-            const personalKeys = [' NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
+            const personalKeys = ['NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
 
             data.forEach(row => {
                 const dni = row.DNI.trim();
