@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Actualización de Datos</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); max-width: 600px; margin: 50px auto; text-align: center; }
+        h1, h2 { color: #0056b3; margin-bottom: 20px; }
+        input[type="file"], input[type="email"], input[type="password"] { display: block; margin: 10px auto; padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: calc(100% - 22px); }
+        button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background-color 0.3s ease; margin: 5px; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        #message { margin-top: 20px; padding: 10px; border-radius: 4px; background-color: #e9ecef; color: #333; min-height: 30px; text-align: left; word-wrap: break-word; }
+        .success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Actualización de Datos</h1>
+
+        <div id="loginSection">
+            <h2>Login para Continuar</h2>
+            <input type="email" id="emailInput" placeholder="Email">
+            <input type="password" id="passwordInput" placeholder="Password">
+            <button id="loginButton">Login</button>
+            <p id="loginMessage" class="error"></p>
+        </div>
+
+        <div id="choiceSection" class="hidden">
+            <h2>Selecciona una acción</h2>
+            <button id="choiceUploadButton">Subir Registros de Temporada</button>
+            <button id="choiceReplaceButton">Actualizar Datos Personales</button>
+            <button id="logoutButton">Logout</button>
+        </div>
+
+        <div id="uploadSection" class="hidden">
+            <h2 id="uploadTitle"></h2>
+            <input type="file" id="csvFile" accept=".csv">
+            <button id="performActionButton" disabled>Ejecutar</button>
+            <button id="backButton">Volver</button>
+            <div id="message"></div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyANWXQvhHpF0LCYjz4AXi3MkcP798PqRfA",
+            authDomain: "dsc24-aa5a1.firebaseapp.com",
+            databaseURL: "https://dsc24-aa5a1-default-rtdb.firebaseio.com",
+            projectId: "dsc24-aa5a1",
+            storageBucket: "dsc24-aa5a1.appspot.com",
+            messagingSenderId: "798100493177",
+            appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const database = firebase.database();
+
+        const loginSection = document.getElementById('loginSection');
+        const emailInput = document.getElementById('emailInput');
+        const passwordInput = document.getElementById('passwordInput');
+        const loginButton = document.getElementById('loginButton');
+        const loginMessage = document.getElementById('loginMessage');
+        
+        const choiceSection = document.getElementById('choiceSection');
+        const choiceUploadButton = document.getElementById('choiceUploadButton');
+        const choiceReplaceButton = document.getElementById('choiceReplaceButton');
+        const logoutButton = document.querySelector('#choiceSection #logoutButton');
+
+        const uploadSection = document.getElementById('uploadSection');
+        const uploadTitle = document.getElementById('uploadTitle');
+        const csvFile = document.getElementById('csvFile');
+        const performActionButton = document.getElementById('performActionButton');
+        const backButton = document.getElementById('backButton');
+        const messageDiv = document.getElementById('message');
+
+        let parsedData = [];
+        let currentAction = null;
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                loginSection.classList.add('hidden');
+                uploadSection.classList.add('hidden');
+                choiceSection.classList.remove('hidden');
+                messageDiv.textContent = '';
+                messageDiv.className = '';
+            } else {
+                loginSection.classList.remove('hidden');
+                uploadSection.classList.add('hidden');
+                choiceSection.classList.add('hidden');
+                emailInput.value = '';
+                passwordInput.value = '';
+            }
+        });
+
+        loginButton.addEventListener('click', () => {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            if (!email || !password) {
+                loginMessage.textContent = 'Por favor, introduce email y contraseña.';
+                return;
+            }
+            auth.signInWithEmailAndPassword(email, password)
+                .then(() => {
+                    loginMessage.textContent = '';
+                })
+                .catch(error => {
+                    loginMessage.textContent = `Error de inicio de sesión: ${error.message}`;
+                });
+        });
+
+        logoutButton.addEventListener('click', () => {
+            auth.signOut();
+        });
+
+        choiceUploadButton.addEventListener('click', () => {
+            currentAction = 'upload';
+            choiceSection.classList.add('hidden');
+            uploadSection.classList.remove('hidden');
+            uploadTitle.textContent = 'Subir Registros de Temporada';
+            performActionButton.textContent = 'Subir a Firebase';
+            showMessage('Sube un CSV para añadir nuevos registros de temporada (altas, bajas, etc.). Esto creará nuevas entradas.', '');
+        });
+
+        choiceReplaceButton.addEventListener('click', () => {
+            currentAction = 'replace';
+            choiceSection.classList.add('hidden');
+            uploadSection.classList.remove('hidden');
+            uploadTitle.textContent = 'Actualizar Datos Personales';
+            performActionButton.textContent = 'Actualizar Datos';
+            showMessage('Sube un CSV con DNI y los datos personales a actualizar. Esto NO afectará los datos de temporada.', '');
+        });
+
+        backButton.addEventListener('click', () => {
+            uploadSection.classList.add('hidden');
+            choiceSection.classList.remove('hidden');
+            csvFile.value = '';
+            performActionButton.disabled = true;
+            parsedData = [];
+            currentAction = null;
+            showMessage('', '');
+        });
+
+        csvFile.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                performActionButton.disabled = false;
+                showMessage('Archivo seleccionado. Haz clic en el botón para proceder.', '');
+                readCSV(file);
+            } else {
+                performActionButton.disabled = true;
+            }
+        });
+
+        performActionButton.addEventListener('click', () => {
+            if (parsedData.length === 0) {
+                showMessage('Por favor, selecciona un archivo CSV primero.', 'error');
+                return;
+            }
+            performActionButton.disabled = true;
+            if (currentAction === 'upload') {
+                uploadToFirebase(parsedData);
+            } else if (currentAction === 'replace') {
+                replacePersonalData(parsedData);
+            }
+        });
+
+        function readCSV(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    parsedData = parseCSV(e.target.result);
+                    showMessage(`Archivo CSV cargado. Se encontraron ${parsedData.length} filas válidas.`, 'success');
+                } catch (error) {
+                    showMessage(`Error al procesar el CSV: ${error.message}`, 'error');
+                    parsedData = [];
+                    performActionButton.disabled = true;
+                }
+            };
+            reader.onerror = () => showMessage('Error al leer el archivo.', 'error');
+            reader.readAsText(file);
+        }
+
+        function parseCSV(csvText) {
+            const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+            if (lines.length < 2) throw new Error('El archivo CSV está vacío o no tiene datos.');
+            const headers = lines[0].split(';').map(header => header.trim());
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(';').map(value => value.trim());
+                if (values.length > headers.length) {
+                    values.length = headers.length;
+                }
+                const rowObject = headers.reduce((obj, header, index) => {
+                    if(header) obj[header] = values[index] || '';
+                    return obj;
+                }, {});
+                
+                if (!rowObject.DNI) continue; // DNI is always mandatory
+
+                if (currentAction === 'upload' && (!rowObject.TEMPORADA || !rowObject.TIPO)) {
+                   console.warn('Skipping row for upload action due to missing TEMPORADA or TIPO:', rowObject);
+                   continue;
+                }
+                
+                data.push(rowObject);
+            }
+            return data;
+        }
+
+        function replacePersonalData(data) {
+            showMessage('Procesando y actualizando datos personales...', '');
+            const allUpdates = {};
+            let processedCount = 0;
+            const personalKeys = ['NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
+
+            data.forEach(row => {
+                const dni = row.DNI.trim();
+                const tipo = row.TIPO ? row.TIPO.trim().toUpperCase() : 'JUGADOR';
+                const rootNode = tipo === 'ENTRENADOR/A' ? 'entrenadores' : 'jugadores';
+
+                let hasDataToUpdate = false;
+                personalKeys.forEach(key => {
+                    if (row[key] !== undefined && row[key] !== null) {
+                        const path = `/${rootNode}/${dni}/datosPersonales/${key}`;
+                        allUpdates[path] = row[key];
+                        hasDataToUpdate = true;
+                    }
+                });
+                if(hasDataToUpdate) {
+                    processedCount++;
+                }
+            });
+
+            if (Object.keys(allUpdates).length === 0) {
+                showMessage('No se encontraron datos para actualizar. Revisa que el CSV tenga DNI y columnas con datos personales.', 'error');
+                performActionButton.disabled = false;
+                return;
+            }
+
+            database.ref().update(allUpdates)
+                .then(() => {
+                    showMessage(`¡Datos personales de ${processedCount} registros procesados correctamente!`, 'success');
+                    performActionButton.disabled = false;
+                })
+                .catch((error) => {
+                    showMessage(`Error al actualizar los datos: ${error.message}`, 'error');
+                    console.error("Error during Firebase bulk update: ", error);
+                    performActionButton.disabled = false;
+                });
+        }
+
+        function uploadToFirebase(data) {
+            showMessage('Procesando y subiendo datos a Firebase...', '');
+            
+            const allUpdates = {};
+            let processedCount = 0;
+
+            const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
+            const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'TEMPORADA', 'Numero', 'Numeros', 'categoriasAutorizadas'];
+
+            data.forEach(row => {
+                const rootNode = row.TIPO.trim().toUpperCase() === 'ENTRENADOR/A' ? 'entrenadores' : 'jugadores';
+                const dni = row.DNI.trim();
+                const temporada = row.TEMPORADA.trim();
+
+                const personalData = {};
+                const seasonalData = {};
+
+                personalKeys.forEach(key => { if (row[key] !== undefined) personalData[key] = row[key]; });
+                seasonalKeys.forEach(key => { if (row[key] !== undefined) seasonalData[key] = row[key]; });
+                
+                if (seasonalData.Numero && seasonalData.CATEGORIA) {
+                    if (!seasonalData.Numeros) seasonalData.Numeros = {};
+                    seasonalData.Numeros[seasonalData.CATEGORIA] = seasonalData.Numero;
+                }
+                delete seasonalData.Numero;
+
+                const newPushKey = database.ref().child(rootNode).child(dni).child('temporadas').child(temporada).push().key;
+                const firebaseKey = `${dni}|${newPushKey}`;
+
+                const combinedDataForIndex = {
+                    ...seasonalData,
+                    _firebaseKey: firebaseKey,
+                    _tipo: rootNode,
+                    _dni: dni,
+                    _pushId: newPushKey
+                };
+
+                allUpdates[`/${rootNode}/${dni}/datosPersonales`] = personalData;
+                allUpdates[`/${rootNode}/${dni}/temporadas/${temporada}/${newPushKey}`] = seasonalData;
+                allUpdates[`/registrosPorTemporada/${temporada}/${newPushKey}`] = combinedDataForIndex;
+                allUpdates[`/temporadas/${temporada}`] = true;
+                
+                processedCount++;
+            });
+
+            if (Object.keys(allUpdates).length === 0) {
+                showMessage('No se procesó ningún dato. Revisa que las filas del CSV tengan DNI, TEMPORADA y TIPO.', 'error');
+                performActionButton.disabled = false;
+                return;
+            }
+
+            database.ref().update(allUpdates)
+                .then(() => {
+                    showMessage(`¡${processedCount} registros se han procesado y subido correctamente a Firebase!`, 'success');
+                })
+                .catch((error) => {
+                    showMessage(`Error al subir los datos: ${error.message}`, 'error');
+                    console.error("Error during Firebase bulk update: ", error);
+                });
+        }
+
+        function showMessage(msg, type = '') {
+            messageDiv.textContent = msg;
+            messageDiv.className = type;
+        }
+    </script>
+</body>
+</html>
