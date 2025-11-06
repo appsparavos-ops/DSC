@@ -309,10 +309,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
 
-                allPlayers = Object.values(seasonalRecords).map(record => ({
-                    ...record,
-                    ...(datosPersonalesMap.get(record._dni) || {})
-                }));
+                allPlayers = Object.values(seasonalRecords).map(record => {
+                    const personalData = datosPersonalesMap.get(record._dni) || {};
+                    // Nos aseguramos que los datos de FM vengan exclusivamente de datosPersonales
+                    delete record['FM Hasta'];
+                    delete record['FM Desde'];
+                    return { ...record, ...personalData };
+                });
                 if (allPlayers.length > 0) {
                     originalHeaders = Object.keys(allPlayers[0]);
                     populateCategoryFilter(allPlayers);
@@ -1298,34 +1301,29 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const newSeasonalData = { ...originalPlayer };
+        const newSeasonalData = {
+            categoriaOrigen: originalPlayer.CATEGORIA,
+            CATEGORIA: newCategory,
+            TEMPORADA: newSeason,
+            Numero: newNumber,
+            esAutorizado: true,
+            FECHA_ALTA: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            BAJA: '',
+            TIPO: originalPlayer.TIPO,
+            Numeros: { ...originalPlayer.Numeros }
+        };
 
-        newSeasonalData.categoriaOrigen = originalPlayer.CATEGORIA;
-        newSeasonalData.CATEGORIA = newCategory;
-        newSeasonalData.TEMPORADA = newSeason;
-        newSeasonalData.Numero = newNumber;
-        newSeasonalData.esAutorizado = true;
-        newSeasonalData.FECHA_ALTA = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        newSeasonalData.BAJA = '';
-        
-        delete newSeasonalData._firebaseKey;
-        delete newSeasonalData._pushId;
-        delete newSeasonalData._tipo;
-        delete newSeasonalData._dni;
-        delete newSeasonalData['FM Desde'];
-        delete newSeasonalData['FM Hasta'];
-        const dni = originalPlayer.DNI;
-        const tipo = newSeasonalData.TIPO || originalPlayer.TIPO;
-        const dbNode = (tipo === 'JUGADOR/A' || tipo === 'jugadores') ? 'jugadores' : 'entrenadores';
-
-        const pushId = database.ref().push().key;
-
-        newSeasonalData.Numeros = { ...originalPlayer.Numeros };
         if (newCategory && newNumber) {
             newSeasonalData.Numeros[newCategory] = newNumber;
         }
 
+        const dni = originalPlayer.DNI;
+        const tipo = originalPlayer.TIPO;
+        const dbNode = (tipo === 'JUGADOR/A' || tipo === 'jugadores') ? 'jugadores' : 'entrenadores';
+        const pushId = database.ref().push().key;
+
         const combinedDataForIndex = {
+            NOMBRE: originalPlayer.NOMBRE,
             ...newSeasonalData,
             _firebaseKey: pushId,
             _tipo: dbNode,
