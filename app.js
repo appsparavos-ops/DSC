@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 allPlayers = Object.values(seasonalRecords).map(record => {
-                    const personalData = datosPersonalesMap.get(record._dni) || {};
+                    const personalData = datosPersonalesMap.get(String(record._dni)) || {};
                     // Nos aseguramos que los datos de FM vengan exclusivamente de datosPersonales
                     delete record['FM Hasta'];
                     delete record['FM Desde'];
@@ -346,49 +346,84 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const finalData = { ...playerToUpdate };
-        if(playerDetailView) {
-            playerDetailView.querySelectorAll('#player-data-list input[type="text"]').forEach(input => finalData[input.dataset.key] = input.value);
-            const selectElement = document.getElementById('edit-categoriasAutorizadas');
-            finalData.categoriasAutorizadas = selectElement ? Array.from(selectElement.selectedOptions).map(o => o.value) : (playerToUpdate.categoriasAutorizadas || []);
-            const newNumeros = { ...(playerToUpdate.Numeros || {}) };
+        const { _tipo: tipoValor, _dni: dni, TEMPORADA: season, _pushId: pushId } = playerToUpdate;
+        const dbNode = (tipoValor === 'JUGADOR/A' || tipoValor === 'jugadores') ? 'jugadores' : 'entrenadores';
+        const updates = {};
+        let datosParaBitacora;
+
+        // Extraer los números del formulario
+        const newNumeros = { ...(playerToUpdate.Numeros || {}) };
+        if (playerDetailView) {
             playerDetailView.querySelectorAll('.numero-input').forEach(input => {
                 if (input.dataset.category) newNumeros[input.dataset.category] = input.value;
             });
-            finalData.Numeros = newNumeros;
+        }
+        const primaryCategory = playerToUpdate.CATEGORIA;
+        const newPrimaryNumber = (primaryCategory && newNumeros[primaryCategory] !== undefined) ? newNumeros[primaryCategory] : playerToUpdate.Numero;
 
-            const primaryCategory = finalData.CATEGORIA;
-            if (primaryCategory && newNumeros[primaryCategory] !== undefined) {
-                finalData.Numero = newNumeros[primaryCategory];
+
+        if (playerToUpdate.esAutorizado) {
+            // --- LÓGICA PARA JUGADORES AUTORIZADOS ---
+            // Solo se actualiza el número, no se tocan otros datos para mantener el estado 'autorizado'.
+            updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}/Numero`] = newPrimaryNumber;
+            updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}/Numeros`] = newNumeros;
+            updates[`/registrosPorTemporada/${season}/${pushId}/Numero`] = newPrimaryNumber;
+            updates[`/registrosPorTemporada/${season}/${pushId}/Numeros`] = newNumeros;
+
+            // Preparamos un objeto limpio para la bitácora, sin rutas de Firebase como claves.
+            datosParaBitacora = {
+                Numero: newPrimaryNumber,
+                Numeros: newNumeros,
+                esAutorizado: true,
+                contexto: {
+                    dni: dni,
+                    temporada: season,
+                    pushId: pushId
+                }
+            };
+
+        } else {
+            // --- LÓGICA ORIGINAL PARA JUGADORES NO AUTORIZADOS ---
+            const finalData = { ...playerToUpdate };
+            if(playerDetailView) {
+                playerDetailView.querySelectorAll('#player-data-list input[type="text"]').forEach(input => finalData[input.dataset.key] = input.value);
+                const selectElement = document.getElementById('edit-categoriasAutorizadas');
+                finalData.categoriasAutorizadas = selectElement ? Array.from(selectElement.selectedOptions).map(o => o.value) : (playerToUpdate.categoriasAutorizadas || []);
+                finalData.Numeros = newNumeros;
+                finalData.Numero = newPrimaryNumber;
             }
+
+            if (playerToUpdate.DNI !== finalData.DNI || playerToUpdate.TEMPORADA !== finalData.TEMPORADA) {
+                showToast("No se puede cambiar el DNI ni la TEMPORADA.", "error");
+                return;
+            }
+
+            const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
+            const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'Numero', 'categoriasAutorizadas', 'Numeros', 'TEMPORADA'];
+            const personalDataToUpdate = {}, seasonalDataToUpdate = {};
+            personalKeys.forEach(k => { if (finalData[k] !== undefined) personalDataToUpdate[k] = finalData[k]; });
+            seasonalKeys.forEach(k => { if (finalData[k] !== undefined) seasonalDataToUpdate[k] = finalData[k]; });
+            
+            const combinedDataForIndex = { ...finalData };
+
+            updates[`/${dbNode}/${dni}/datosPersonales`] = personalDataToUpdate;
+            updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}`] = seasonalDataToUpdate;
+            updates[`/registrosPorTemporada/${season}/${pushId}`] = combinedDataForIndex;
+            updates[`/temporadas/${season}`] = true;
+
+            // Para la bitácora, registramos los objetos de datos que se van a guardar.
+            datosParaBitacora = {
+                personal: personalDataToUpdate,
+                seasonal: seasonalDataToUpdate,
+                registro: combinedDataForIndex
+            };
         }
-
-        if (playerToUpdate.DNI !== finalData.DNI || playerToUpdate.TEMPORADA !== finalData.TEMPORADA) {
-            showToast("No se puede cambiar el DNI ni la TEMPORADA.", "error");
-            return;
-        }
-
-        const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
-        const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'Numero', 'categoriasAutorizadas', 'Numeros', 'TEMPORADA', 'categoriaOrigen', 'esAutorizado'];
-        const personalDataToUpdate = {}, seasonalDataToUpdate = {};
-        personalKeys.forEach(k => { if (finalData[k] !== undefined) personalDataToUpdate[k] = finalData[k]; });
-        seasonalKeys.forEach(k => { if (finalData[k] !== undefined) seasonalDataToUpdate[k] = finalData[k]; });
-
-        const { _tipo: tipoValor, _dni: dni, TEMPORADA: season, _pushId: pushId } = finalData;
-        const dbNode = (tipoValor === 'JUGADOR/A' || tipoValor === 'jugadores') ? 'jugadores' : 'entrenadores';
-
-        const combinedDataForIndex = { ...finalData };
-
-        const updates = {};
-        updates[`/${dbNode}/${dni}/datosPersonales`] = personalDataToUpdate;
-        updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}`] = seasonalDataToUpdate;
-        updates[`/registrosPorTemporada/${season}/${pushId}`] = combinedDataForIndex;
-        updates[`/temporadas/${season}`] = true;
 
         database.ref().update(updates)
             .then(() => {
                 showToast("¡Cambios guardados con éxito!");
-                logAction('modificacion', { dni: finalData.DNI, nombre: finalData.NOMBRE, datos: finalData });
+                // Usamos el objeto 'datosParaBitacora' que no contiene claves inválidas.
+                logAction('modificacion', { dni: playerToUpdate.DNI, nombre: playerToUpdate.NOMBRE, datos: datosParaBitacora });
                 hidePlayerDetails();
             })
             .catch((error) => {
@@ -686,6 +721,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function showPlayerDetails(player, canEdit, playerIndex = -1, isEditing = false) {
         if (!mainContent || !playerDetailView) return;
+
+        const isReadOnlyForAuth = player.esAutorizado && isEditing;
+
+        // Ya no se fuerza isEditing = false, se maneja en la UI.
+        if (isReadOnlyForAuth) {
+            showToast("Modo de edición limitado para jugador autorizado.", "info");
+        }
+
         logAction('Consulta de ficha', { dni: player.DNI, nombre: player.NOMBRE });
         if (playerIndex !== -1) currentPlayerIndex = playerIndex;
         mainContent.classList.add('hidden');
@@ -1246,6 +1289,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const specialCategories = ["Liga Uruguaya de Basquet", "Liga de Desarrollo"];
+        const equipos = [...new Set(allPlayers.map(p => p.EQUIPO).filter(Boolean))].sort();
+
 
         let formHtml = `
             <div class="bg-white p-6 rounded-xl shadow-md relative max-w-lg mx-auto">
@@ -1263,6 +1308,17 @@ document.addEventListener('DOMContentLoaded', function() {
                             <option value="">Seleccione una liga...</option>
                             ${specialCategories.map(o => `<option value="${o}">${o}</option>`).join('')}
                         </select>
+                    </div>
+                    <div>
+                        <label for="auth-EQUIPO" class="block text-sm font-medium text-gray-700">Equipo</label>
+                        <select id="auth-EQUIPO" data-key="EQUIPO" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                            <option value="">Seleccione un equipo...</option>
+                            ${equipos.map(o => `<option value="${o}" ${o === player.EQUIPO ? 'selected' : ''}>${o}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="auth-ESTADO-LICENCIA" class="block text-sm font-medium text-gray-700">Estado Licencia</label>
+                        <input type="text" id="auth-ESTADO-LICENCIA" data-key="ESTADO LICENCIA" value="${player['ESTADO LICENCIA'] || 'Habilitada'}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
                     </div>
                     <div>
                         <label for="auth-Numero" class="block text-sm font-medium text-gray-700">Número en esta categoría (Opcional)</label>
@@ -1287,10 +1343,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const newSeasonInput = document.getElementById('auth-TEMPORADA');
         const newCategoryInput = document.getElementById('auth-CATEGORIA');
         const newNumberInput = document.getElementById('auth-Numero');
+        const newEquipoInput = document.getElementById('auth-EQUIPO');
+        const newEstadoLicenciaInput = document.getElementById('auth-ESTADO-LICENCIA');
+
 
         const newSeason = newSeasonInput ? newSeasonInput.value.trim() : '';
         const newCategory = newCategoryInput ? newCategoryInput.value.trim() : '';
         const newNumber = newNumberInput ? newNumberInput.value.trim() : '';
+        const newEquipo = newEquipoInput ? newEquipoInput.value.trim() : '';
+        const newEstadoLicencia = newEstadoLicenciaInput ? newEstadoLicenciaInput.value.trim() : '';
 
         if (!newSeason) {
             showToast("El campo Nueva Temporada es obligatorio.", "error");
@@ -1310,7 +1371,10 @@ document.addEventListener('DOMContentLoaded', function() {
             FECHA_ALTA: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
             BAJA: '',
             TIPO: originalPlayer.TIPO,
-            Numeros: { ...originalPlayer.Numeros }
+            Numeros: { ...originalPlayer.Numeros },
+            EQUIPO: newEquipo,
+            'ESTADO LICENCIA': newEstadoLicencia,
+            COMPETICION: newCategory === 'Liga de Desarrollo' ? 'LDD' : (newCategory === 'Liga Uruguaya de Basquet' ? 'LUB' : '')
         };
 
         if (newCategory && newNumber) {
@@ -1324,6 +1388,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const combinedDataForIndex = {
             NOMBRE: originalPlayer.NOMBRE,
+            DNI: originalPlayer.DNI,
+            'FM Desde': originalPlayer['FM Desde'],
+            'FM Hasta': originalPlayer['FM Hasta'],
             ...newSeasonalData,
             _firebaseKey: pushId,
             _tipo: dbNode,
