@@ -187,13 +187,25 @@
                 }
             };
             reader.onerror = () => showMessage('Error al leer el archivo.', 'error');
-            reader.readAsText(file);
+            reader.readAsText(file, 'ISO-8859-1');
+        }
+
+        function normalizeHeaders(headers) {
+            return headers.map(header => {
+                const normalized = header.trim().toUpperCase();
+                // Normalizar variantes de columnas
+                if (normalized === 'NIF') return 'DNI';
+                if (normalized === 'CATEGORÍA') return 'CATEGORIA';
+                if (normalized === 'COMPETICIÓN') return 'COMPETICION';
+                return normalized;
+            });
         }
 
         function parseCSV(csvText) {
             const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
             if (lines.length < 2) throw new Error('El archivo CSV está vacío o no tiene datos.');
-            const headers = lines[0].split(';').map(header => header.trim());
+            const rawHeaders = lines[0].split(';').map(header => header.trim());
+            const headers = normalizeHeaders(rawHeaders);
             const data = [];
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split(';').map(value => value.trim());
@@ -230,9 +242,10 @@
 
                 let hasDataToUpdate = false;
                 personalKeys.forEach(key => {
-                    if (row[key] !== undefined && row[key] !== null) {
+                    // Solo actualizar si el campo tiene valor no vacío
+                    if (row[key] !== undefined && row[key] !== null && row[key].trim() !== '') {
                         const path = `/${rootNode}/${dni}/datosPersonales/${key}`;
-                        allUpdates[path] = row[key];
+                        allUpdates[path] = row[key].trim();
                         hasDataToUpdate = true;
                     }
                 });
