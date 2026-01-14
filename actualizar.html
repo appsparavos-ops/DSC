@@ -43,7 +43,7 @@
 
         <div id="uploadSection" class="hidden">
             <h2 id="uploadTitle"></h2>
-            <input type="text" id="temporadaInput" placeholder="Temporada (ej: 2025, 2025-2026, 2026)">
+            <input type="text" id="temporadaInput" placeholder="Temporada (ej: 2025-2026)">
             <input type="file" id="csvFile" accept=".csv">
             <button id="performActionButton" disabled>Ejecutar</button>
             <button id="backButton">Volver</button>
@@ -132,7 +132,7 @@
             uploadTitle.textContent = 'Subir Registros de Temporada';
             performActionButton.textContent = 'Subir a Firebase';
             temporadaInput.style.display = 'block';
-            temporadaInput.placeholder = 'Temporada (ej: 2024-2025)';
+            temporadaInput.placeholder = 'Temporada (ej: 2025-2026)';
             showMessage('Sube un CSV para añadir nuevos registros de temporada (altas, bajas, etc.). Esto creará nuevas entradas.', '');
         });
 
@@ -239,8 +239,8 @@
                 // Validar que el DNI no esté vacío (obligatorio)
                 if (!rowObject.DNI || rowObject.DNI.trim() === '') continue;
 
-                if (currentAction === 'upload' && (!rowObject.TEMPORADA || !rowObject.TIPO)) {
-                   console.warn('Skipping row for upload action due to missing TEMPORADA or TIPO:', rowObject);
+                if (currentAction === 'upload' && !rowObject.TIPO) {
+                   console.warn('Skipping row for upload action due to missing TIPO:', rowObject);
                    continue;
                 }
                 
@@ -299,12 +299,12 @@
             let processedCount = 0;
 
             const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
-            const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'TEMPORADA', 'Numero', 'Numeros', 'categoriasAutorizadas'];
+            const seasonalKeys = ['DNI', 'COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'TEMPORADA', 'Numero', 'Numeros', 'categoriasAutorizadas'];
 
             data.forEach(row => {
                 const rootNode = row.TIPO.trim().toUpperCase() === 'ENTRENADOR/A' ? 'entrenadores' : 'jugadores';
                 const dni = row.DNI.trim();
-                const temporada = row.TEMPORADA.trim();
+                const temporada = (row.TEMPORADA && row.TEMPORADA.trim()) || currentTemporada;
 
                 const personalData = {};
                 const seasonalData = {};
