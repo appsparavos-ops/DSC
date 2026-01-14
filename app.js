@@ -579,7 +579,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 if ((colName === 'FM Hasta' || colName === 'FM DESDE') && cellValue === '1/1/1900') cellValue = '-';
-                td.textContent = cellValue || '-';
+                if (colName === 'NOMBRE' && player['ESTADO LICENCIA'] === 'Baja') {
+                    td.innerHTML = `<span class="text-red-600 font-bold mr-1">X</span>${cellValue || '-'}`;
+                } else {
+                    td.textContent = cellValue || '-';
+                }
                 row.appendChild(td);
             });
             return row;
