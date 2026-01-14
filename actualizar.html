@@ -43,6 +43,7 @@
 
         <div id="uploadSection" class="hidden">
             <h2 id="uploadTitle"></h2>
+            <input type="text" id="temporadaInput" placeholder="Temporada (ej: 2024-2025)">
             <input type="file" id="csvFile" accept=".csv">
             <button id="performActionButton" disabled>Ejecutar</button>
             <button id="backButton">Volver</button>
@@ -78,6 +79,7 @@
 
         const uploadSection = document.getElementById('uploadSection');
         const uploadTitle = document.getElementById('uploadTitle');
+        const temporadaInput = document.getElementById('temporadaInput');
         const csvFile = document.getElementById('csvFile');
         const performActionButton = document.getElementById('performActionButton');
         const backButton = document.getElementById('backButton');
@@ -85,6 +87,7 @@
 
         let parsedData = [];
         let currentAction = null;
+        let currentTemporada = null;
 
         auth.onAuthStateChanged(user => {
             if (user) {
@@ -128,6 +131,8 @@
             uploadSection.classList.remove('hidden');
             uploadTitle.textContent = 'Subir Registros de Temporada';
             performActionButton.textContent = 'Subir a Firebase';
+            temporadaInput.style.display = 'block';
+            temporadaInput.placeholder = 'Temporada (ej: 2024-2025)';
             showMessage('Sube un CSV para añadir nuevos registros de temporada (altas, bajas, etc.). Esto creará nuevas entradas.', '');
         });
 
@@ -137,6 +142,7 @@
             uploadSection.classList.remove('hidden');
             uploadTitle.textContent = 'Actualizar Datos Personales';
             performActionButton.textContent = 'Actualizar Datos';
+            temporadaInput.style.display = 'none';
             showMessage('Sube un CSV con DNI y los datos personales a actualizar. Esto NO afectará los datos de temporada.', '');
         });
 
@@ -144,9 +150,11 @@
             uploadSection.classList.add('hidden');
             choiceSection.classList.remove('hidden');
             csvFile.value = '';
+            temporadaInput.value = '';
             performActionButton.disabled = true;
             parsedData = [];
             currentAction = null;
+            currentTemporada = null;
             showMessage('', '');
         });
 
@@ -166,6 +174,11 @@
                 showMessage('Por favor, selecciona un archivo CSV primero.', 'error');
                 return;
             }
+            if (currentAction === 'upload' && !temporadaInput.value.trim()) {
+                showMessage('Por favor, ingresa la temporada.', 'error');
+                return;
+            }
+            currentTemporada = temporadaInput.value.trim() || null;
             performActionButton.disabled = true;
             if (currentAction === 'upload') {
                 uploadToFirebase(parsedData);
