@@ -219,6 +219,12 @@
             if (lines.length < 2) throw new Error('El archivo CSV está vacío o no tiene datos.');
             const rawHeaders = lines[0].split(';').map(header => header.trim());
             const headers = normalizeHeaders(rawHeaders);
+            
+            // Validar que existe la columna DNI (normalizada desde NIF o DNI)
+            if (!headers.includes('DNI')) {
+                throw new Error('El archivo CSV debe contener una columna DNI o NIF.');
+            }
+            
             const data = [];
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split(';').map(value => value.trim());
@@ -230,7 +236,8 @@
                     return obj;
                 }, {});
                 
-                if (!rowObject.DNI) continue; // DNI is always mandatory
+                // Validar que el DNI no esté vacío (obligatorio)
+                if (!rowObject.DNI || rowObject.DNI.trim() === '') continue;
 
                 if (currentAction === 'upload' && (!rowObject.TEMPORADA || !rowObject.TIPO)) {
                    console.warn('Skipping row for upload action due to missing TEMPORADA or TIPO:', rowObject);
