@@ -12,7 +12,7 @@
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
         .container { background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); max-width: 600px; margin: 50px auto; text-align: center; }
         h1, h2 { color: #0056b3; margin-bottom: 20px; }
-        input[type="file"], input[type="email"], input[type="password"] { display: block; margin: 10px auto; padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: calc(100% - 22px); }
+        input[type="file"], input[type="email"], input[type="password"], input[type="text"] { display: block; margin: 10px auto; padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: calc(100% - 22px); }
         button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background-color 0.3s ease; margin: 5px; }
         button:hover { background-color: #0056b3; }
         button:disabled { background-color: #cccccc; cursor: not-allowed; }
@@ -43,7 +43,7 @@
 
         <div id="uploadSection" class="hidden">
             <h2 id="uploadTitle"></h2>
-            <input type="text" id="temporadaInput" placeholder="Temporada (ej: 2025-2026)">
+            <input type="text" id="seasonInput" placeholder="Temporada (ej. 2025)" class="hidden">
             <input type="file" id="csvFile" accept=".csv">
             <button id="performActionButton" disabled>Ejecutar</button>
             <button id="backButton">Volver</button>
@@ -79,7 +79,7 @@
 
         const uploadSection = document.getElementById('uploadSection');
         const uploadTitle = document.getElementById('uploadTitle');
-        const temporadaInput = document.getElementById('temporadaInput');
+        const seasonInput = document.getElementById('seasonInput');
         const csvFile = document.getElementById('csvFile');
         const performActionButton = document.getElementById('performActionButton');
         const backButton = document.getElementById('backButton');
@@ -87,7 +87,6 @@
 
         let parsedData = [];
         let currentAction = null;
-        let currentTemporada = null;
 
         auth.onAuthStateChanged(user => {
             if (user) {
@@ -129,10 +128,9 @@
             currentAction = 'upload';
             choiceSection.classList.add('hidden');
             uploadSection.classList.remove('hidden');
+            seasonInput.classList.remove('hidden');
             uploadTitle.textContent = 'Subir Registros de Temporada';
             performActionButton.textContent = 'Subir a Firebase';
-            temporadaInput.style.display = 'block';
-            temporadaInput.placeholder = 'Temporada (ej: 2025-2026)';
             showMessage('Sube un CSV para añadir nuevos registros de temporada (altas, bajas, etc.). Esto creará nuevas entradas.', '');
         });
 
@@ -140,9 +138,9 @@
             currentAction = 'replace';
             choiceSection.classList.add('hidden');
             uploadSection.classList.remove('hidden');
+            seasonInput.classList.add('hidden');
             uploadTitle.textContent = 'Actualizar Datos Personales';
             performActionButton.textContent = 'Actualizar Datos';
-            temporadaInput.style.display = 'none';
             showMessage('Sube un CSV con DNI y los datos personales a actualizar. Esto NO afectará los datos de temporada.', '');
         });
 
@@ -150,11 +148,11 @@
             uploadSection.classList.add('hidden');
             choiceSection.classList.remove('hidden');
             csvFile.value = '';
-            temporadaInput.value = '';
+            seasonInput.value = '';
+            seasonInput.classList.add('hidden');
             performActionButton.disabled = true;
             parsedData = [];
             currentAction = null;
-            currentTemporada = null;
             showMessage('', '');
         });
 
@@ -174,15 +172,16 @@
                 showMessage('Por favor, selecciona un archivo CSV primero.', 'error');
                 return;
             }
-            if (currentAction === 'upload' && !temporadaInput.value.trim()) {
-                showMessage('Por favor, ingresa la temporada.', 'error');
-                return;
-            }
-            currentTemporada = temporadaInput.value.trim() || null;
-            performActionButton.disabled = true;
             if (currentAction === 'upload') {
-                uploadToFirebase(parsedData);
+                const season = seasonInput.value.trim();
+                if (!season) {
+                    showMessage('Por favor, ingresa la temporada.', 'error');
+                    return;
+                }
+                performActionButton.disabled = true;
+                uploadToFirebase(parsedData, season);
             } else if (currentAction === 'replace') {
+                performActionButton.disabled = true;
                 replacePersonalData(parsedData);
             }
         });
@@ -203,28 +202,10 @@
             reader.readAsText(file, 'ISO-8859-1');
         }
 
-        function normalizeHeaders(headers) {
-            return headers.map(header => {
-                const normalized = header.trim().toUpperCase();
-                // Normalizar variantes de columnas
-                if (normalized === 'NIF') return 'DNI';
-                if (normalized === 'CATEGORÍA') return 'CATEGORIA';
-                if (normalized === 'COMPETICIÓN') return 'COMPETICION';
-                return normalized;
-            });
-        }
-
         function parseCSV(csvText) {
             const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
             if (lines.length < 2) throw new Error('El archivo CSV está vacío o no tiene datos.');
-            const rawHeaders = lines[0].split(';').map(header => header.trim());
-            const headers = normalizeHeaders(rawHeaders);
-            
-            // Validar que existe la columna DNI (normalizada desde NIF o DNI)
-            if (!headers.includes('DNI')) {
-                throw new Error('El archivo CSV debe contener una columna DNI o NIF.');
-            }
-            
+            const headers = lines[0].split(';').map(header => header.trim());
             const data = [];
             for (let i = 1; i < lines.length; i++) {
                 const values = lines[i].split(';').map(value => value.trim());
@@ -236,8 +217,21 @@
                     return obj;
                 }, {});
                 
-                // Validar que el DNI no esté vacío (obligatorio)
-                if (!rowObject.DNI || rowObject.DNI.trim() === '') continue;
+                // Normalizar nombres de columnas para DNI/NIF, CATEGORIA/CATEGORÍA, etc.
+                if (rowObject.NIF && !rowObject.DNI) {
+                    rowObject.DNI = rowObject.NIF;
+                }
+                if (rowObject['CATEGORÍA'] && !rowObject.CATEGORIA) {
+                    rowObject.CATEGORIA = rowObject['CATEGORÍA'];
+                }
+                if (rowObject['COMPETICIÓN'] && !rowObject.COMPETICION) {
+                    rowObject.COMPETICION = rowObject['COMPETICIÓN'];
+                }
+                if (rowObject[' NOMBRE'] && !rowObject.NOMBRE) {
+                    rowObject.NOMBRE = rowObject[' NOMBRE'];
+                }
+
+                if (!rowObject.DNI) continue; // DNI is always mandatory
 
                 if (currentAction === 'upload' && !rowObject.TIPO) {
                    console.warn('Skipping row for upload action due to missing TIPO:', rowObject);
@@ -262,10 +256,9 @@
 
                 let hasDataToUpdate = false;
                 personalKeys.forEach(key => {
-                    // Solo actualizar si el campo tiene valor no vacío
-                    if (row[key] !== undefined && row[key] !== null && row[key].trim() !== '') {
+                    if (row[key] !== undefined && row[key] !== null) {
                         const path = `/${rootNode}/${dni}/datosPersonales/${key}`;
-                        allUpdates[path] = row[key].trim();
+                        allUpdates[path] = row[key];
                         hasDataToUpdate = true;
                     }
                 });
@@ -292,25 +285,71 @@
                 });
         }
 
-        function uploadToFirebase(data) {
+        async function uploadToFirebase(data, manualSeason) {
+            showMessage('Verificando duplicados en Firebase...', '');
+            
+            const temporadaRef = database.ref(`registrosPorTemporada/${manualSeason}`);
+            let existingRecords = {};
+            
+            try {
+                const snapshot = await temporadaRef.once('value');
+                if (snapshot.exists()) {
+                    const val = snapshot.val();
+                    Object.values(val).forEach(record => {
+                        const dni = record._dni || record.DNI;
+                        if (dni) {
+                            if (!existingRecords[dni]) existingRecords[dni] = [];
+                            existingRecords[dni].push(record);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error("Error fetching existing records:", error);
+                showMessage(`Error al verificar duplicados: ${error.message}`, 'error');
+                performActionButton.disabled = false;
+                return;
+            }
+
             showMessage('Procesando y subiendo datos a Firebase...', '');
             
             const allUpdates = {};
             let processedCount = 0;
+            let skippedCount = 0;
 
             const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
-            const seasonalKeys = ['DNI', 'COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'TEMPORADA', 'Numero', 'Numeros', 'categoriasAutorizadas'];
+            const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'TEMPORADA', 'Numero', 'Numeros', 'categoriasAutorizadas'];
 
             data.forEach(row => {
                 const rootNode = row.TIPO.trim().toUpperCase() === 'ENTRENADOR/A' ? 'entrenadores' : 'jugadores';
                 const dni = row.DNI.trim();
-                const temporada = (row.TEMPORADA && row.TEMPORADA.trim()) || currentTemporada;
+                const temporada = manualSeason;
+                const categoria = row.CATEGORIA ? row.CATEGORIA.trim() : '';
+                const estadoLicencia = row['ESTADO LICENCIA'] ? row['ESTADO LICENCIA'].trim() : '';
 
-                const personalData = {};
+                // Verificar duplicados
+                if (existingRecords[dni]) {
+                    const isDuplicate = existingRecords[dni].some(record => {
+                        const recCategoria = record.CATEGORIA || '';
+                        const recEstado = record['ESTADO LICENCIA'] || '';
+                        return recCategoria === categoria && recEstado === estadoLicencia;
+                    });
+
+                    if (isDuplicate) {
+                        console.log(`Omitiendo duplicado para DNI ${dni}, Temporada ${temporada}, Cat ${categoria}, Estado ${estadoLicencia}`);
+                        skippedCount++;
+                        return; // Saltar esta fila
+                    }
+                }
+
                 const seasonalData = {};
 
-                personalKeys.forEach(key => { if (row[key] !== undefined) personalData[key] = row[key]; });
+                personalKeys.forEach(key => {
+                    if (row[key] !== undefined) {
+                        allUpdates[`/${rootNode}/${dni}/datosPersonales/${key}`] = row[key];
+                    }
+                });
                 seasonalKeys.forEach(key => { if (row[key] !== undefined) seasonalData[key] = row[key]; });
+                seasonalData.TEMPORADA = temporada;
                 
                 if (seasonalData.Numero && seasonalData.CATEGORIA) {
                     if (!seasonalData.Numeros) seasonalData.Numeros = {};
@@ -329,7 +368,6 @@
                     _pushId: newPushKey
                 };
 
-                allUpdates[`/${rootNode}/${dni}/datosPersonales`] = personalData;
                 allUpdates[`/${rootNode}/${dni}/temporadas/${temporada}/${newPushKey}`] = seasonalData;
                 allUpdates[`/registrosPorTemporada/${temporada}/${newPushKey}`] = combinedDataForIndex;
                 allUpdates[`/temporadas/${temporada}`] = true;
@@ -338,18 +376,26 @@
             });
 
             if (Object.keys(allUpdates).length === 0) {
-                showMessage('No se procesó ningún dato. Revisa que las filas del CSV tengan DNI, TEMPORADA y TIPO.', 'error');
+                if (skippedCount > 0) {
+                    showMessage(`No se procesaron datos nuevos. ${skippedCount} registros ya existían en la temporada.`, 'success');
+                } else {
+                    showMessage('No se procesó ningún dato. Revisa que las filas del CSV tengan DNI y TIPO.', 'error');
+                }
                 performActionButton.disabled = false;
                 return;
             }
 
             database.ref().update(allUpdates)
                 .then(() => {
-                    showMessage(`¡${processedCount} registros se han procesado y subido correctamente a Firebase!`, 'success');
+                    let msg = `¡${processedCount} registros se han procesado y subido correctamente a Firebase!`;
+                    if (skippedCount > 0) msg += ` Se omitieron ${skippedCount} registros duplicados.`;
+                    showMessage(msg, 'success');
+                    performActionButton.disabled = false;
                 })
                 .catch((error) => {
                     showMessage(`Error al subir los datos: ${error.message}`, 'error');
                     console.error("Error during Firebase bulk update: ", error);
+                    performActionButton.disabled = false;
                 });
         }
 
