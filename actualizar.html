@@ -230,6 +230,9 @@
                 if (rowObject[' NOMBRE'] && !rowObject.NOMBRE) {
                     rowObject.NOMBRE = rowObject[' NOMBRE'];
                 }
+                if (rowObject.FECHA_LIC && !rowObject.FECHA_ALTA) {
+                    rowObject.FECHA_ALTA = rowObject.FECHA_LIC;
+                }
 
                 if (!rowObject.DNI) continue; // DNI is always mandatory
 
