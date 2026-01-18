@@ -20,6 +20,8 @@
         .success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
         .error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
         .hidden { display: none; }
+        .btn-danger { background-color: #dc3545; }
+        .btn-danger:hover { background-color: #c82333; }
     </style>
 </head>
 <body>
@@ -38,6 +40,7 @@
             <h2>Selecciona una acción</h2>
             <button id="choiceUploadButton">Subir Registros de Temporada</button>
             <button id="choiceReplaceButton">Actualizar Datos Personales</button>
+            <button id="choiceDeleteButton" class="btn-danger">Borrar Registro</button>
             <button id="logoutButton">Logout</button>
         </div>
 
@@ -48,6 +51,16 @@
             <button id="performActionButton" disabled>Ejecutar</button>
             <button id="backButton">Volver</button>
             <div id="message"></div>
+        </div>
+
+        <div id="deleteSection" class="hidden">
+            <h2>Borrar Registro de Temporada</h2>
+            <input type="text" id="deleteSeasonInput" placeholder="Temporada (ej. 2025)">
+            <input type="text" id="deleteDniInput" placeholder="DNI">
+            <button id="searchRecordsButton">Buscar Registros</button>
+            <div id="recordsList" style="margin-top: 20px; text-align: left;"></div>
+            <button id="backFromDeleteButton">Volver</button>
+            <div id="deleteMessage" style="margin-top: 20px; padding: 10px; border-radius: 4px;"></div>
         </div>
     </div>
 
@@ -75,6 +88,7 @@
         const choiceSection = document.getElementById('choiceSection');
         const choiceUploadButton = document.getElementById('choiceUploadButton');
         const choiceReplaceButton = document.getElementById('choiceReplaceButton');
+        const choiceDeleteButton = document.getElementById('choiceDeleteButton');
         const logoutButton = document.querySelector('#choiceSection #logoutButton');
 
         const uploadSection = document.getElementById('uploadSection');
@@ -85,6 +99,14 @@
         const backButton = document.getElementById('backButton');
         const messageDiv = document.getElementById('message');
 
+        const deleteSection = document.getElementById('deleteSection');
+        const deleteSeasonInput = document.getElementById('deleteSeasonInput');
+        const deleteDniInput = document.getElementById('deleteDniInput');
+        const searchRecordsButton = document.getElementById('searchRecordsButton');
+        const recordsList = document.getElementById('recordsList');
+        const backFromDeleteButton = document.getElementById('backFromDeleteButton');
+        const deleteMessageDiv = document.getElementById('deleteMessage');
+
         let parsedData = [];
         let currentAction = null;
 
@@ -92,12 +114,14 @@
             if (user) {
                 loginSection.classList.add('hidden');
                 uploadSection.classList.add('hidden');
+                deleteSection.classList.add('hidden');
                 choiceSection.classList.remove('hidden');
                 messageDiv.textContent = '';
                 messageDiv.className = '';
             } else {
                 loginSection.classList.remove('hidden');
                 uploadSection.classList.add('hidden');
+                deleteSection.classList.add('hidden');
                 choiceSection.classList.add('hidden');
                 emailInput.value = '';
                 passwordInput.value = '';
@@ -144,6 +168,15 @@
             showMessage('Sube un CSV con DNI y los datos personales a actualizar. Esto NO afectará los datos de temporada.', '');
         });
 
+        choiceDeleteButton.addEventListener('click', () => {
+            choiceSection.classList.add('hidden');
+            deleteSection.classList.remove('hidden');
+            deleteSeasonInput.value = '';
+            deleteDniInput.value = '';
+            recordsList.innerHTML = '';
+            deleteMessageDiv.textContent = '';
+        });
+
         backButton.addEventListener('click', () => {
             uploadSection.classList.add('hidden');
             choiceSection.classList.remove('hidden');
@@ -154,6 +187,11 @@
             parsedData = [];
             currentAction = null;
             showMessage('', '');
+        });
+
+        backFromDeleteButton.addEventListener('click', () => {
+            deleteSection.classList.add('hidden');
+            choiceSection.classList.remove('hidden');
         });
 
         csvFile.addEventListener('change', (event) => {
@@ -288,7 +326,57 @@
                 });
         }
 
+        function parseDate(dateStr) {
+            if (!dateStr) return null;
+            const parts = dateStr.split('/');
+            if (parts.length !== 3) return null;
+            return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        }
+
         async function uploadToFirebase(data, manualSeason) {
+            showMessage('Filtrando registros del CSV para obtener el más reciente...', '');
+
+            const latestRecordsMap = new Map();
+            data.forEach(row => {
+                const dni = row.DNI ? row.DNI.trim() : null;
+                const categoria = row.CATEGORIA ? row.CATEGORIA.trim() : '';
+                if (!dni) return;
+
+                const key = `${dni}|${categoria}`;
+                const existingRecord = latestRecordsMap.get(key);
+
+                if (!existingRecord) {
+                    latestRecordsMap.set(key, row);
+                    return;
+                }
+
+                const currentDate = parseDate(row.FECHA_ALTA);
+                const storedDate = parseDate(existingRecord.FECHA_ALTA);
+
+                if (currentDate && storedDate) {
+                    if (currentDate.getTime() > storedDate.getTime()) {
+                        latestRecordsMap.set(key, row);
+                    } else if (currentDate.getTime() === storedDate.getTime()) {
+                        const currentBajaDate = parseDate(row.BAJA);
+                        const storedBajaDate = parseDate(existingRecord.BAJA);
+
+                        if (currentBajaDate && !storedBajaDate) {
+                            latestRecordsMap.set(key, row);
+                        } else if (currentBajaDate && storedBajaDate && currentBajaDate.getTime() > storedBajaDate.getTime()) {
+                            latestRecordsMap.set(key, row);
+                        }
+                    }
+                } else if (currentDate) {
+                    latestRecordsMap.set(key, row);
+                }
+            });
+
+            const filteredData = Array.from(latestRecordsMap.values());
+            showMessage(`CSV filtrado. ${filteredData.length} registros únicos para procesar.`, 'success');
+            
+            // Re-utilizar el nombre 'data' para el resto de la función
+            data = filteredData;
+
             showMessage('Verificando duplicados en Firebase...', '');
             
             const temporadaRef = database.ref(`registrosPorTemporada/${manualSeason}`);
@@ -328,19 +416,44 @@
                 const temporada = manualSeason;
                 const categoria = row.CATEGORIA ? row.CATEGORIA.trim() : '';
                 const estadoLicencia = row['ESTADO LICENCIA'] ? row['ESTADO LICENCIA'].trim() : '';
+                const fechaAltaStr = row.FECHA_ALTA ? row.FECHA_ALTA.trim() : '';
+                const fechaAlta = parseDate(fechaAltaStr);
 
-                // Verificar duplicados
+                let targetPushId = null;
+                let isUpdate = false;
+                let accumulatedNumeros = {};
+
                 if (existingRecords[dni]) {
-                    const isDuplicate = existingRecords[dni].some(record => {
-                        const recCategoria = record.CATEGORIA || '';
-                        const recEstado = record['ESTADO LICENCIA'] || '';
-                        return recCategoria === categoria && recEstado === estadoLicencia;
+                    // 1. Recolectar números existentes de todas las categorías de este jugador en esta temporada
+                    existingRecords[dni].forEach(r => {
+                        if (r.Numeros) {
+                            Object.assign(accumulatedNumeros, r.Numeros);
+                        } else if (r.Numero && r.CATEGORIA) {
+                            accumulatedNumeros[r.CATEGORIA] = r.Numero;
+                        }
                     });
 
-                    if (isDuplicate) {
-                        console.log(`Omitiendo duplicado para DNI ${dni}, Temporada ${temporada}, Cat ${categoria}, Estado ${estadoLicencia}`);
-                        skippedCount++;
-                        return; // Saltar esta fila
+                    // 2. Buscar si ya existe un registro para esta categoría
+                    const match = existingRecords[dni].find(r => r.CATEGORIA === categoria);
+
+                    if (match) {
+                        const oldFechaStr = match.FECHA_ALTA || '';
+                        const oldFecha = parseDate(oldFechaStr);
+
+                        // Lógica: Si la fecha del CSV es mayor a la de Firebase, actualizamos.
+                        if (fechaAlta && oldFecha && fechaAlta > oldFecha) {
+                            isUpdate = true;
+                            targetPushId = match._pushId;
+                            console.log(`Actualizando registro para DNI ${dni}, Cat ${categoria} (Nueva fecha: ${fechaAltaStr} > ${oldFechaStr})`);
+                        } else {
+                            // Si no es más reciente, verificamos si es un duplicado exacto para omitir
+                            const recEstado = match['ESTADO LICENCIA'] || '';
+                            if (recEstado === estadoLicencia) {
+                                console.log(`Omitiendo duplicado para DNI ${dni}, Temporada ${temporada}, Cat ${categoria}, Estado ${estadoLicencia}`);
+                                skippedCount++;
+                                return; // Saltar esta fila
+                            }
+                        }
                     }
                 }
 
@@ -353,14 +466,18 @@
                 });
                 seasonalKeys.forEach(key => { if (row[key] !== undefined) seasonalData[key] = row[key]; });
                 seasonalData.TEMPORADA = temporada;
-                
-                if (seasonalData.Numero && seasonalData.CATEGORIA) {
-                    if (!seasonalData.Numeros) seasonalData.Numeros = {};
-                    seasonalData.Numeros[seasonalData.CATEGORIA] = seasonalData.Numero;
+
+                // 3. Gestionar Números (Mezclar nuevos con existentes)
+                if (seasonalData.Numero) {
+                    accumulatedNumeros[categoria] = seasonalData.Numero;
+                }
+                if (Object.keys(accumulatedNumeros).length > 0) {
+                    seasonalData.Numeros = accumulatedNumeros;
                 }
                 delete seasonalData.Numero;
 
-                const newPushKey = database.ref().child(rootNode).child(dni).child('temporadas').child(temporada).push().key;
+                // 4. Definir ID (Nuevo o Existente)
+                const newPushKey = targetPushId || database.ref().child(rootNode).child(dni).child('temporadas').child(temporada).push().key;
                 const firebaseKey = `${dni}|${newPushKey}`;
 
                 const combinedDataForIndex = {
@@ -405,6 +522,90 @@
         function showMessage(msg, type = '') {
             messageDiv.textContent = msg;
             messageDiv.className = type;
+        }
+
+        searchRecordsButton.addEventListener('click', () => {
+            const season = deleteSeasonInput.value.trim();
+            const dni = deleteDniInput.value.trim();
+            
+            if (!season || !dni) {
+                showDeleteMessage('Por favor, ingresa Temporada y DNI.', 'error');
+                return;
+            }
+            
+            searchRecords(season, dni);
+        });
+
+        function showDeleteMessage(msg, type) {
+            deleteMessageDiv.textContent = msg;
+            deleteMessageDiv.className = type;
+        }
+
+        async function searchRecords(season, dni) {
+            showDeleteMessage('Buscando...', '');
+            recordsList.innerHTML = '';
+
+            let type = 'jugadores';
+            let snapshot = await database.ref(`jugadores/${dni}/temporadas/${season}`).once('value');
+            
+            if (!snapshot.exists()) {
+                type = 'entrenadores';
+                snapshot = await database.ref(`entrenadores/${dni}/temporadas/${season}`).once('value');
+            }
+
+            if (!snapshot.exists()) {
+                showDeleteMessage('No se encontraron registros para ese DNI en esa temporada.', 'error');
+                return;
+            }
+
+            showDeleteMessage(`Se encontraron registros en ${type}.`, 'success');
+            const records = snapshot.val();
+            
+            Object.keys(records).forEach(key => {
+                const record = records[key];
+                const div = document.createElement('div');
+                div.style.border = '1px solid #ddd';
+                div.style.padding = '10px';
+                div.style.marginBottom = '10px';
+                div.style.borderRadius = '4px';
+                div.style.backgroundColor = '#f9f9f9';
+                
+                let info = `<strong>ID:</strong> ${key}<br>`;
+                info += `<strong>Categoría:</strong> ${record.CATEGORIA || 'N/A'}<br>`;
+                info += `<strong>Equipo:</strong> ${record.EQUIPO || 'N/A'}<br>`;
+                info += `<strong>Estado:</strong> ${record['ESTADO LICENCIA'] || 'N/A'}<br>`;
+                
+                div.innerHTML = info;
+
+                const delBtn = document.createElement('button');
+                delBtn.textContent = 'Eliminar este registro';
+                delBtn.className = 'btn-danger';
+                delBtn.style.marginTop = '10px';
+                delBtn.onclick = () => deleteRecord(season, dni, type, key, div);
+                
+                div.appendChild(delBtn);
+                recordsList.appendChild(div);
+            });
+        }
+
+        function deleteRecord(season, dni, type, pushId, elementToRemove) {
+            if(!confirm('¿Estás seguro de que quieres eliminar este registro? Esta acción no se puede deshacer.')) return;
+
+            const updates = {};
+            updates[`/registrosPorTemporada/${season}/${pushId}`] = null;
+            updates[`/${type}/${dni}/temporadas/${season}/${pushId}`] = null;
+
+            database.ref().update(updates)
+                .then(() => {
+                    elementToRemove.remove();
+                    showDeleteMessage('Registro eliminado correctamente.', 'success');
+                    if (recordsList.children.length === 0) {
+                         showDeleteMessage('No quedan registros para mostrar.', '');
+                    }
+                })
+                .catch(error => {
+                    showDeleteMessage(`Error al eliminar: ${error.message}`, 'error');
+                });
         }
     </script>
 </body>
