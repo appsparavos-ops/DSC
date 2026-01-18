@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const database = firebase.database();
     const auth = firebase.auth();
 
-    const IMG_BASE_URL = 'https://firebasestorage.googleapis.com/v0/b/dsc24-aa5a1.appspot.com/o/';
+    const IMG_BASE_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/';
     const PLACEHOLDER_SVG_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2EwYTBhMCI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OS00IDQgNHptMCAyYy0yLjY3IDAtOCA0IDQgNHYyYzAgMS4xLjkgMiAyIDJoMTRjMS4xIDAgMi0uOSAyLTJ2LTJjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PC9zdmc+';
     const COLUMN_ORDER = [ 'DNI', 'NOMBRE','FM Hasta', 'Numero','CATEGORIA','COMPETICION','EQUIPO', ];
 
@@ -739,7 +739,7 @@ document.addEventListener('DOMContentLoaded', function() {
         playerDetailView.classList.remove('hidden');
         playerDetailView.innerHTML = '';
 
-        const photoUrl = `${IMG_BASE_URL}${encodeURIComponent(player.DNI)}.jpg?alt=media`;
+        const photoUrl = `${IMG_BASE_URL}${encodeURIComponent(player.DNI)}.jpg`;
         const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
         let borderColor = 'border-gray-200', backgroundColor = 'bg-white', fmHastaFrameClass = '';
         
