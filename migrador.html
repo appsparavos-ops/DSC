@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente de Migración de Fotos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase App (requerido) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <!-- Firebase Storage -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+    <!-- Octokit (para la API de GitHub) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/octokit/3.1.2/octokit-rest.min.js"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <div class="container mx-auto max-w-2xl bg-white p-8 rounded-xl shadow-lg">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Asistente de Migración de Fotos</h1>
+            <p class="text-gray-500 mt-2">Mueve fotos de Firebase Storage a un repositorio de GitHub.</p>
+        </div>
+
+        <!-- Formulario de Configuración -->
+        <div id="config-form" class="space-y-4">
+            <div>
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2">Configuración de GitHub</h2>
+            </div>
+            <div>
+                <label for="github-user" class="block text-sm font-medium text-gray-700">Nombre de Usuario de GitHub</label>
+                <input type="text" id="github-user" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="tu-usuario">
+            </div>
+            <div>
+                <label for="github-repo" class="block text-sm font-medium text-gray-700">Nombre del Repositorio</label>
+                <input type="text" id="github-repo" value="DSC" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label for="github-branch" class="block text-sm font-medium text-gray-700">Rama de Destino</label>
+                <input type="text" id="github-branch" value="fotos" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label for="github-token" class="block text-sm font-medium text-gray-700">Token de Acceso Personal (PAT)</label>
+                <input type="password" id="github-token" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                <p class="text-xs text-gray-500 mt-1">El token debe tener permisos de `repo`. Se usa solo para esta migración y no se guarda.</p>
+            </div>
+            <div class="pt-4">
+                <button id="start-migration-btn" class="w-full justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Iniciar Migración
+                </button>
+            </div>
+        </div>
+
+        <!-- Área de Progreso y Logs -->
+        <div id="progress-log" class="hidden mt-6">
+            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2">Progreso de la Migración</h2>
+            <pre id="log-output" class="mt-4 bg-gray-800 text-white text-sm rounded-md p-4 h-64 overflow-y-auto whitespace-pre-wrap"></pre>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN DE FIREBASE (extraída de tu app.js) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyANWXQvhHpF0LCYjz4AXi3MkcP798PqRfA",
+            authDomain: "dsc24-aa5a1.firebaseapp.com",
+            databaseURL: "https://dsc24-aa5a1-default-rtdb.firebaseio.com",
+            projectId: "dsc24-aa5a1",
+            storageBucket: "dsc24-aa5a1.appspot.com",
+            messagingSenderId: "798100493177",
+            appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
+        };
+
+        // --- LÓGICA DEL SCRIPT ---
+        const startBtn = document.getElementById('start-migration-btn');
+        const logOutput = document.getElementById('log-output');
+        const configForm = document.getElementById('config-form');
+        const progressLog = document.getElementById('progress-log');
+
+        // Función para añadir mensajes al log
+        function log(message, isError = false) {
+            const prefix = isError ? '[ERROR] ' : '[INFO] ';
+            console.log(prefix + message);
+            logOutput.textContent += prefix + message + '\n';
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+
+        // Función para convertir ArrayBuffer a Base64
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        }
+
+        startBtn.addEventListener('click', async () => {
+            // Deshabilitar botón y mostrar logs
+            startBtn.disabled = true;
+            startBtn.textContent = 'Migrando...';
+            configForm.classList.add('hidden');
+            progressLog.classList.remove('hidden');
+
+            // --- 1. Recopilar datos del formulario ---
+            const GITHUB_USER = document.getElementById('github-user').value.trim();
+            const GITHUB_REPO = document.getElementById('github-repo').value.trim();
+            const GITHUB_BRANCH = document.getElementById('github-branch').value.trim();
+            const GITHUB_TOKEN = document.getElementById('github-token').value.trim();
+
+            if (!GITHUB_USER || !GITHUB_REPO || !GITHUB_BRANCH || !GITHUB_TOKEN) {
+                log('Todos los campos son obligatorios.', true);
+                startBtn.disabled = false;
+                startBtn.textContent = 'Iniciar Migración';
+                return;
+            }
+
+            try {
+                // --- 2. Inicializar Firebase y GitHub ---
+                log('Inicializando Firebase...');
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                const storage = firebase.storage();
+                
+                log('Inicializando cliente de GitHub (Octokit)...');
+                const octokit = new Octokit({ auth: GITHUB_TOKEN });
+
+                // --- 3. Listar archivos de Firebase ---
+                log('Obteniendo lista de archivos de Firebase Storage...');
+                const storageRef = storage.ref();
+                const listResult = await storageRef.listAll();
+                const firebaseFiles = listResult.items;
+
+                if (firebaseFiles.length === 0) {
+                    log('No se encontraron archivos en Firebase Storage. Nada que migrar.', false);
+                    startBtn.textContent = 'Migración Completa';
+                    return;
+                }
+                log(`Se encontraron ${firebaseFiles.length} archivos.`);
+
+                // --- 4. Obtener información de la rama de GitHub ---
+                log(`Obteniendo información de la rama '${GITHUB_BRANCH}'...`);
+                const { data: refData } = await octokit.rest.git.getRef({
+                    owner: GITHUB_USER,
+                    repo: GITHUB_REPO,
+                    ref: `heads/${GITHUB_BRANCH}`,
+                });
+                const parentCommitSha = refData.object.sha;
+                
+                const { data: commitData } = await octokit.rest.git.getCommit({
+                    owner: GITHUB_USER,
+                    repo: GITHUB_REPO,
+                    commit_sha: parentCommitSha,
+                });
+                const baseTreeSha = commitData.tree.sha;
+                log(`Rama base y commit obtenidos. SHA del commit padre: ${parentCommitSha.substring(0,7)}`);
+
+                // --- 5. Procesar y subir archivos a GitHub ---
+                log('Procesando archivos para subir a GitHub...');
+                const newTree = [];
+                let filesProcessed = 0;
+
+                for (const fileRef of firebaseFiles) {
+                    try {
+                        filesProcessed++;
+                        log(`[${filesProcessed}/${firebaseFiles.length}] Procesando: ${fileRef.name}`);
+                        
+                        // Descargar contenido del archivo como ArrayBuffer
+                        const arrayBuffer = await fileRef.getArrayBuffer();
+                        
+                        // Crear un "blob" en GitHub (subir el contenido del archivo)
+                        const { data: blobData } = await octokit.rest.git.createBlob({
+                            owner: GITHUB_USER,
+                            repo: GITHUB_REPO,
+                            content: arrayBufferToBase64(arrayBuffer),
+                            encoding: 'base64',
+                        });
+                        
+                        // Añadir el archivo al nuevo árbol que crearemos
+                        newTree.push({
+                            path: fileRef.name,
+                            mode: '100644', // 100644 para archivo, 100755 para ejecutable
+                            type: 'blob',
+                            sha: blobData.sha,
+                        });
+
+                    } catch(fileError) {
+                        log(`Error procesando el archivo ${fileRef.name}: ${fileError.message}`, true);
+                    }
+                }
+                
+                if (newTree.length === 0) {
+                    log('No se procesaron archivos con éxito. Abortando.', true);
+                    return;
+                }
+
+                // --- 6. Crear nuevo árbol y commit en GitHub ---
+                log('Creando nuevo árbol de archivos en GitHub...');
+                const { data: newTreeData } = await octokit.rest.git.createTree({
+                    owner: GITHUB_USER,
+                    repo: GITHUB_REPO,
+                    base_tree: baseTreeSha,
+                    tree: newTree,
+                });
+                log(`Nuevo árbol creado. SHA: ${newTreeData.sha.substring(0,7)}`);
+                
+                const commitMessage = `Migración de ${newTree.length} fotos desde Firebase`;
+                log(`Creando nuevo commit con el mensaje: "${commitMessage}"...`);
+                const { data: newCommitData } = await octokit.rest.git.createCommit({
+                    owner: GITHUB_USER,
+                    repo: GITHUB_REPO,
+                    message: commitMessage,
+                    tree: newTreeData.sha,
+                    parents: [parentCommitSha],
+                });
+                log(`Nuevo commit creado. SHA: ${newCommitData.sha.substring(0,7)}`);
+
+                // --- 7. Actualizar la rama para apuntar al nuevo commit ---
+                log(`Actualizando la rama '${GITHUB_BRANCH}' para apuntar al nuevo commit...`);
+                await octokit.rest.git.updateRef({
+                    owner: GITHUB_USER,
+                    repo: GITHUB_REPO,
+                    ref: `heads/${GITHUB_BRANCH}`,
+                    sha: newCommitData.sha,
+                });
+
+                log('¡Rama actualizada!', false);
+                log('🎉 ¡Migración completada con éxito! 🎉', false);
+                startBtn.textContent = 'Completado';
+
+            } catch (error) {
+                log(`Ocurrió un error general durante la migración: ${error.message}`, true);
+                log(`Detalles: ${error.stack}`, true);
+                startBtn.disabled = false;
+                startBtn.textContent = 'Reintentar Migración';
+            }
+        });
+
+    </script>
+</body>
+</html>
