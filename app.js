@@ -1593,6 +1593,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     let cellValue;
                     if (colName === 'DNI') {
                         cellValue = maskDNI(player[colName]);
+                    } else if (colName === 'NOMBRE' && player['ESTADO LICENCIA'] === 'Baja') {
+                        cellValue = `${player[colName] || '-'} (Baja)`;
                     } else {
                         cellValue = player[colName] || '-';
                     }
