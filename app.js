@@ -373,6 +373,13 @@ document.addEventListener('DOMContentLoaded', function() {
             updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}/Numeros`] = newNumeros;
             updates[`/registrosPorTemporada/${season}/${pushId}/Numero`] = newPrimaryNumber;
             updates[`/registrosPorTemporada/${season}/${pushId}/Numeros`] = newNumeros;
+            // Asegurar que FM Hasta está disponible en registrosPorTemporada para la verdad absoluta
+            if (playerToUpdate['FM Hasta']) {
+                updates[`/registrosPorTemporada/${season}/${pushId}/FM Hasta`] = playerToUpdate['FM Hasta'];
+            }
+            if (playerToUpdate['FM Desde']) {
+                updates[`/registrosPorTemporada/${season}/${pushId}/FM Desde`] = playerToUpdate['FM Desde'];
+            }
 
             // Preparamos un objeto limpio para la bitácora, sin rutas de Firebase como claves.
             datosParaBitacora = {
