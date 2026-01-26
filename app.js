@@ -1279,6 +1279,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const combinedDataForIndex = {
+            NOMBRE: originalPlayer.NOMBRE,
+            DNI: originalPlayer.DNI,
+            'FM Desde': originalPlayer['FM Desde'],
+            'FM Hasta': originalPlayer['FM Hasta'],
             ...newSeasonalData,
             _firebaseKey: pushId,
             _tipo: dbNode,
