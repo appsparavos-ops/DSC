@@ -1478,9 +1478,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        const selectedSeason = seasonFilter ? seasonFilter.value : "";
-        const title = `Vencimientos para la Temporada ${selectedSeason}`;
+        const today = new Date();
+        const formattedDate = today.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const title = `Vencimientos al ${formattedDate}`;
         const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
         const logoSize = 15;
         const pageMargin = 15;
 
@@ -1501,8 +1503,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Añadir logos si se cargaron
         if (logoImage) {
-            doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoSize, logoSize);
-            doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoSize, pageMargin, logoSize, logoSize);
+            const logoWidth = 10;
+            doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoWidth, logoSize);
+            doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
         }
 
         // Título centrado
@@ -1516,24 +1519,84 @@ document.addEventListener('DOMContentLoaded', function() {
             return dniStr.length > 4 ? '****' + dniStr.substring(4) : dniStr;
         };
 
-        const head = [currentColumnsForPDF];
-        const body = currentlyDisplayedPlayers.map(player => {
-            return currentColumnsForPDF.map(colName => {
-                if (colName === 'DNI') {
-                    return maskDNI(player[colName]);
+        try {
+            // Crear tabla manualmente sin autoTable
+            const columns = currentColumnsForPDF;
+            
+            // Definir anchos personalizados por columna
+            const columnWidths = {};
+            const baseWidth = (pageWidth - 2 * pageMargin);
+            
+            // Columnas: EQUIPO 25%, CATEGORIA 25%, DNI 10%, NOMBRE 30%, FM Hasta 10% = 100%
+            columns.forEach(col => {
+                if (col === 'DNI' || col === 'FM Hasta') {
+                    columnWidths[col] = baseWidth * 0.1; // 10% para DNI y FM Hasta
+                } else if (col === 'NOMBRE') {
+                    columnWidths[col] = baseWidth * 0.3; // 30% para NOMBRE
+                } else if (col === 'EQUIPO' || col === 'CATEGORIA') {
+                    columnWidths[col] = baseWidth * 0.25; // 25% para EQUIPO y CATEGORIA
+                } else {
+                    columnWidths[col] = baseWidth * 0.1; // 10% por defecto
                 }
-                return player[colName] || '-';
             });
-        });
-
-        doc.autoTable({
-            head: head,
-            body: body,
-            startY: pageMargin + logoSize + 5,
-        });
-
-        doc.save(`vencimientos_${selectedSeason}.pdf`);
-        showToast("PDF generado.", "success");
+            
+            let yPosition = pageMargin + logoSize + 8;
+            const rowHeight = 5;
+            const fontSize = 8;
+            let xPosition = pageMargin;
+            
+            // Dibujar encabezados
+            doc.setFontSize(fontSize);
+            doc.setFont(undefined, 'bold');
+            columns.forEach((col) => {
+                const colWidth = columnWidths[col];
+                doc.setFillColor(25, 50, 100); // Fondo blanco para cada celda
+                doc.setDrawColor(25, 50, 100); // Borde azul oscuro
+                doc.setTextColor(255, 255, 255); // Texto azul oscuro
+                doc.rect(xPosition, yPosition, colWidth, rowHeight, 'FD');
+                doc.text(col, xPosition + 0.5, yPosition + 3.5, { maxWidth: colWidth - 1, overflow: 'hidden', align: 'left' });
+                xPosition += colWidth;
+            });
+            
+            // Reset font, color y draw color para las filas
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(0, 0, 0);
+            doc.setDrawColor(0, 0, 0);
+            
+            yPosition += rowHeight;
+            
+            // Dibujar filas
+            currentlyDisplayedPlayers.forEach((player) => {
+                // Verificar si necesita nueva página
+                if (yPosition > pageHeight - pageMargin) {
+                    doc.addPage();
+                    yPosition = pageMargin;
+                }
+                
+                xPosition = pageMargin;
+                columns.forEach((colName) => {
+                    const colWidth = columnWidths[colName];
+                    let cellValue;
+                    if (colName === 'DNI') {
+                        cellValue = maskDNI(player[colName]);
+                    } else {
+                        cellValue = player[colName] || '-';
+                    }
+                    
+                    doc.rect(xPosition, yPosition, colWidth, rowHeight);
+                    doc.text(String(cellValue), xPosition + 0.5, yPosition + 3.5, { maxWidth: colWidth - 1, overflow: 'hidden' });
+                    xPosition += colWidth;
+                });
+                
+                yPosition += rowHeight;
+            });
+            
+            doc.save(`vencimientos_${formattedDate}.pdf`);
+            showToast("PDF generado.", "success");
+        } catch (error) {
+            console.error("Error al generar PDF:", error);
+            showToast(`Error al generar PDF: ${error.message}`, "error");
+        }
     }
 
     // --- INICIALIZACIÓN ---
