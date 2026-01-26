@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const auth = firebase.auth();
 
     const IMG_BASE_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/';
+    const LOGO_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png';
     const PLACEHOLDER_SVG_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2EwYTBhMCI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OS00IDQgNHptMCAyYy0yLjY3IDAtOCA0IDQgNHYyYzAgMS4xLjkgMiAyIDJoMTRjMS4xIDAgMi0uOSAyLTJ2LTJjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PC9zdmc+';
     const COLUMN_ORDER = [ 'DNI', 'NOMBRE','FM Hasta', 'Numero','CATEGORIA','COMPETICION','EQUIPO', ];
 
@@ -61,7 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const mainContent = document.getElementById('main-content');
     const playerDetailView = document.getElementById('playerDetailView');
     
-    let allPlayers = [], originalHeaders = [], currentlyDisplayedPlayers = [];
+    let allPlayers = [], originalHeaders = [], currentlyDisplayedPlayers = [], currentColumnsForPDF = [];
     let isEditModeActive = false, currentUserRole = null, currentPlayerIndex = -1, currentSeasonListener = null;
 
     // --- LÓGICA DE BITÁCORA ---
@@ -492,19 +493,55 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast("Por favor, selecciona una temporada para ver los vencimientos.");
             return;
         }
+
+        const selectedEquipo = equipoFilter ? equipoFilter.value : '';
+        const selectedCategory = categoryFilter ? categoryFilter.value : '';
+
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const limitDate = new Date(); limitDate.setDate(today.getDate() + 60);
         
-        let expiringPlayers = allPlayers
-            .filter(p => p.TIPO !== 'ENTRENADOR/A' && p['FM Hasta'] && parseDateDDMMYYYY(p['FM Hasta']) <= limitDate)
-            .sort((a, b) => {
+        let expiringPlayers = allPlayers.filter(p => p.TIPO !== 'ENTRENADOR/A' && p['FM Hasta'] && parseDateDDMMYYYY(p['FM Hasta']) <= limitDate);
+        const displayColumns = ['EQUIPO', 'CATEGORIA', 'DNI', 'NOMBRE', 'FM Hasta'];
+        let title = `Vencimientos para la Temporada ${selectedSeason}`;
+
+        const sortByDate = (a, b) => {
+            const dateA = parseDateDDMMYYYY(a['FM Hasta']);
+            const dateB = parseDateDDMMYYYY(b['FM Hasta']);
+            return dateA && dateB ? dateA - dateB : !dateA ? 1 : -1;
+        };
+
+        if (selectedEquipo && selectedCategory) {
+            title += ` del Equipo: ${selectedEquipo} y Cat: ${selectedCategory}`;
+            expiringPlayers = expiringPlayers.filter(p => p.EQUIPO === selectedEquipo && p.CATEGORIA === selectedCategory);
+            expiringPlayers.sort(sortByDate);
+        } else if (selectedEquipo) {
+            title += ` del Equipo: ${selectedEquipo}`;
+            expiringPlayers = expiringPlayers.filter(p => p.EQUIPO === selectedEquipo);
+            expiringPlayers.sort((a, b) => {
                 const catComp = (a.CATEGORIA || '').localeCompare(b.CATEGORIA || '');
                 if (catComp !== 0) return catComp;
-                const dateA = parseDateDDMMYYYY(a['FM Hasta']);
-                const dateB = parseDateDDMMYYYY(b['FM Hasta']);
-                return dateA && dateB ? dateA - dateB : !dateA ? 1 : -1;
+                return sortByDate(a, b);
             });
-        displayPlayers(expiringPlayers, `Vencimientos para la Temporada ${selectedSeason}`, ['CATEGORIA', 'DNI', 'NOMBRE', 'FM Hasta']);
+        } else if (selectedCategory) {
+            title += ` de la Categoría: ${selectedCategory}`;
+            expiringPlayers = expiringPlayers.filter(p => p.CATEGORIA === selectedCategory);
+            expiringPlayers.sort((a, b) => {
+                const equipoComp = (a.EQUIPO || '').localeCompare(b.EQUIPO || '');
+                if (equipoComp !== 0) return equipoComp;
+                return sortByDate(a, b);
+            });
+        } else {
+            // "Todos los equipos"
+            expiringPlayers.sort((a, b) => {
+                const equipoComp = (a.EQUIPO || '').localeCompare(b.EQUIPO || '');
+                if (equipoComp !== 0) return equipoComp;
+                const catComp = (a.CATEGORIA || '').localeCompare(b.CATEGORIA || '');
+                if (catComp !== 0) return catComp;
+                return sortByDate(a, b);
+            });
+        }
+
+        displayPlayers(expiringPlayers, title, displayColumns);
     }
 
     function resetAll() {
@@ -537,6 +574,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function displayPlayers(players, customTitle = '', columns) {
         if (!tableContainer || !messageEl) return;
+
+        if (customTitle && columns) {
+            currentColumnsForPDF = columns;
+        }
 
         const selectedCategory = categoryFilter ? categoryFilter.value : '';
         const currentColumns = columns || COLUMN_ORDER;
@@ -1427,32 +1468,68 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function generatePDF() {
-        if (currentlyDisplayedPlayers.length === 0) return showToast("No hay datos para PDF.", "error");
-        if (typeof window.jspdf === 'undefined') return showToast("Librería PDF no disponible.", "error");
-        
+    async function generatePDF() {
+        if (currentlyDisplayedPlayers.length === 0 || currentColumnsForPDF.length === 0) {
+            return showToast("No hay datos para generar el PDF.", "error");
+        }
+        if (typeof window.jspdf === 'undefined') {
+            return showToast("Librería PDF no disponible.", "error");
+        }
+
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         const selectedSeason = seasonFilter ? seasonFilter.value : "";
-        doc.text(`Vencimientos para la Temporada ${selectedSeason}`, 14, 22);
+        const title = `Vencimientos para la Temporada ${selectedSeason}`;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const logoSize = 15;
+        const pageMargin = 15;
+
+        // Cargar el logo de forma asíncrona
+        let logoImage = null;
+        try {
+            logoImage = await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = (err) => reject(err);
+                img.src = LOGO_URL;
+            });
+        } catch (e) {
+            console.error("No se pudo cargar el logo para el PDF:", e);
+            showToast("Advertencia: No se pudo cargar el logo, se generará sin él.", "info");
+        }
+
+        // Añadir logos si se cargaron
+        if (logoImage) {
+            doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoSize, logoSize);
+            doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoSize, pageMargin, logoSize, logoSize);
+        }
+
+        // Título centrado
+        doc.setFontSize(16);
+        const titleWidth = doc.getStringUnitWidth(title) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+        const titleX = (pageWidth - titleWidth) / 2;
+        doc.text(title, titleX, pageMargin + (logoSize / 2) + 3);
 
         const maskDNI = (dni) => {
             const dniStr = String(dni || '');
-            if (dniStr.length > 4) {
-                return '****' + dniStr.substring(4);
-            }
-            return dniStr;
+            return dniStr.length > 4 ? '****' + dniStr.substring(4) : dniStr;
         };
 
+        const head = [currentColumnsForPDF];
+        const body = currentlyDisplayedPlayers.map(player => {
+            return currentColumnsForPDF.map(colName => {
+                if (colName === 'DNI') {
+                    return maskDNI(player[colName]);
+                }
+                return player[colName] || '-';
+            });
+        });
+
         doc.autoTable({
-            head: [['CATEGORIA', 'DNI', 'NOMBRE', 'FM Hasta']],
-            body: currentlyDisplayedPlayers.map(p => [
-                p.CATEGORIA || '-',
-                maskDNI(p.DNI),
-                p.NOMBRE || '-',
-                p['FM Hasta'] || '-'
-            ]),
-            startY: 30,
+            head: head,
+            body: body,
+            startY: pageMargin + logoSize + 5,
         });
 
         doc.save(`vencimientos_${selectedSeason}.pdf`);
