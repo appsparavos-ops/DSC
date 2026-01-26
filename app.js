@@ -312,10 +312,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 allPlayers = Object.values(seasonalRecords).map(record => {
                     const personalData = datosPersonalesMap.get(String(record._dni)) || {};
-                    // Nos aseguramos que los datos de FM vengan exclusivamente de datosPersonales
-                    delete record['FM Hasta'];
-                    delete record['FM Desde'];
-                    return { ...record, ...personalData };
+                    // Nos aseguramos que los datos de FM vengan de datosPersonales, pero respetamos si ya existen en el registro
+                    const fmHasta = record['FM Hasta'] || personalData['FM Hasta'];
+                    const fmDesde = record['FM Desde'] || personalData['FM Desde'];
+                    const combined = { ...record, ...personalData };
+                    if (fmHasta) combined['FM Hasta'] = fmHasta;
+                    if (fmDesde) combined['FM Desde'] = fmDesde;
+                    return combined;
                 });
                 if (allPlayers.length > 0) {
                     originalHeaders = Object.keys(allPlayers[0]);
