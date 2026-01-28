@@ -79,6 +79,39 @@
         const auth = firebase.auth();
         const database = firebase.database();
 
+        // --- LÓGICA DE BITÁCORA ---
+        function getTimestampKey() {
+            const now = new Date();
+            const timestamp = now.getFullYear().toString() +
+                   String(now.getMonth() + 1).padStart(2, '0') +
+                   String(now.getDate()).padStart(2, '0') +
+                   String(now.getHours()).padStart(2, '0') +
+                   String(now.getMinutes()).padStart(2, '0') +
+                   String(now.getSeconds()).padStart(2, '0');
+            const randomPart = Math.random().toString(36).substring(2, 7); // 5 random chars
+            return `${timestamp}-${randomPart}`;
+        }
+
+        function logAction(action, details) {
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const timestampKey = getTimestampKey();
+            const logEntry = {
+                usuario: user.email,
+                uid: user.uid,
+                accion: action,
+                fecha: new Date().toISOString(),
+                detalles: details
+            };
+
+            const logRef = database.ref(`/bitacora/${timestampKey}`);
+            logRef.set(logEntry).catch(error => {
+                console.error("Error al escribir en la bitácora:", error);
+            });
+        }
+
+
         const loginSection = document.getElementById('loginSection');
         const emailInput = document.getElementById('emailInput');
         const passwordInput = document.getElementById('passwordInput');
@@ -136,7 +169,8 @@
                 return;
             }
             auth.signInWithEmailAndPassword(email, password)
-                .then(() => {
+                .then((userCredential) => {
+                    logAction('login', { email: userCredential.user.email, origin: 'actualizar.html' });
                     loginMessage.textContent = '';
                 })
                 .catch(error => {
@@ -316,7 +350,9 @@
 
             database.ref().update(allUpdates)
                 .then(() => {
-                    showMessage(`¡Datos personales de ${processedCount} registros procesados correctamente!`, 'success');
+                    const message = `¡Datos personales de ${processedCount} registros procesados correctamente!`;
+                    showMessage(message, 'success');
+                    logAction('replace_personal_data', { count: processedCount, message: message });
                     performActionButton.disabled = false;
                 })
                 .catch((error) => {
@@ -510,6 +546,12 @@
                     let msg = `¡${processedCount} registros se han procesado y subido correctamente a Firebase!`;
                     if (skippedCount > 0) msg += ` Se omitieron ${skippedCount} registros duplicados.`;
                     showMessage(msg, 'success');
+                    logAction('upload_season_data', { 
+                        season: manualSeason, 
+                        processed: processedCount, 
+                        skipped: skippedCount,
+                        message: msg 
+                    });
                     performActionButton.disabled = false;
                 })
                 .catch((error) => {
@@ -598,7 +640,15 @@
             database.ref().update(updates)
                 .then(() => {
                     elementToRemove.remove();
-                    showDeleteMessage('Registro eliminado correctamente.', 'success');
+                    const message = 'Registro eliminado correctamente.';
+                    showDeleteMessage(message, 'success');
+                    logAction('delete_record', { 
+                        season: season, 
+                        dni: dni, 
+                        type: type, 
+                        pushId: pushId,
+                        message: message
+                    });
                     if (recordsList.children.length === 0) {
                          showDeleteMessage('No quedan registros para mostrar.', '');
                     }
