@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subir Estadísticas de Partido</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase Libraries -->
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-8">
+        <div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
+            
+            <!-- Login Form -->
+            <div id="login-form">
+                <h1 class="text-2xl font-bold mb-6 text-gray-800">Iniciar Sesión</h1>
+                <div class="space-y-4">
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+                        <input type="email" id="email" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-gray-700">Contraseña</label>
+                        <input type="password" id="password" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <button id="login-button" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Iniciar Sesión
+                    </button>
+                </div>
+                <div id="login-status-message" class="mt-6 text-center"></div>
+            </div>
+
+            <!-- Uploader Content (hidden by default) -->
+            <div id="uploader-container" style="display: none;">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-2xl font-bold text-gray-800">Cargar Estadísticas desde CSV</h1>
+                    <div>
+                        <span id="user-email" class="text-sm text-gray-600 mr-4"></span>
+                        <button id="logout-button" class="py-1 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700">
+                            Cerrar Sesión
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label for="game-date" class="block text-sm font-medium text-gray-700">Fecha del Partido</label>
+                        <input type="date" id="game-date" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="opponent-name" class="block text-sm font-medium text-gray-700">Nombre del Oponente</label>
+                        <input type="text" id="opponent-name" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Ej: Equipo Rival">
+                    </div>
+                    <div>
+                        <label for="season" class="block text-sm font-medium text-gray-700">Temporada</label>
+                        <input type="text" id="season" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Ej: 2024-2025">
+                    </div>
+                    <div>
+                        <label for="category-selector" class="block text-sm font-medium text-gray-700">Categoría</label>
+                        <select id="category-selector" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" disabled>
+                            <option value="">-- Primero ingresa una temporada --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="match-result" class="block text-sm font-medium text-gray-700">Resultado del Partido</label>
+                        <input type="text" id="match-result" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Ej: 101-98">
+                    </div>
+                    <div>
+                        <label for="csv-file" class="block text-sm font-medium text-gray-700">Archivo CSV del Partido</label>
+                        <input type="file" id="csv-file" accept=".csv" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <button id="upload-button" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Subir Estadísticas
+                    </button>
+                </div>
+
+                <div id="status-message" class="mt-6 text-center"></div>
+            </div>
+
+        </div>
+    </div>
+    <script src="uploader.js"></script>
+</body>
+</html>
