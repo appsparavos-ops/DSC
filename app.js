@@ -673,9 +673,26 @@ document.addEventListener('DOMContentLoaded', function() {
             const playersInCategory = players
                 .filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A')
                 .sort((a, b) => {
-                    const numA = parseInt((a.Numeros && a.Numeros[selectedCategory]) || a.Numero, 10) || Infinity;
-                    const numB = parseInt((b.Numeros && b.Numeros[selectedCategory]) || b.Numero, 10) || Infinity;
-                    return numA - numB;
+                    const aIsBaja = a['ESTADO LICENCIA'] === 'Baja';
+                    const bIsBaja = b['ESTADO LICENCIA'] === 'Baja';
+
+                    if (aIsBaja && !bIsBaja) {
+                        return 1;
+                    }
+                    if (!aIsBaja && bIsBaja) {
+                        return -1;
+                    }
+
+                    const getSortVal = (p) => {
+                        const raw = (p.Numeros && p.Numeros[selectedCategory]) || p.Numero;
+                        if (raw === undefined || raw === null || raw === '') return Infinity;
+                        const s = String(raw).trim();
+                        if (s === '0') return -2;
+                        if (s === '00') return -1;
+                        const n = parseInt(s, 10);
+                        return isNaN(n) ? Infinity : n;
+                    };
+                    return getSortVal(a) - getSortVal(b);
                 });
 
             const coaches = players.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A');
@@ -686,7 +703,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     const isCrossSeasonAuth = p.esAutorizado && p.CATEGORIA === selectedCategory;
                     return isSameSeasonAuth || isCrossSeasonAuth;
                 })
-                .sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
+                .sort((a, b) => {
+                    const aIsBaja = a['ESTADO LICENCIA'] === 'Baja';
+                    const bIsBaja = b['ESTADO LICENCIA'] === 'Baja';
+
+                    if (aIsBaja && !bIsBaja) {
+                        return 1;
+                    }
+                    if (!aIsBaja && bIsBaja) {
+                        return -1;
+                    }
+                    return (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
+                });
 
             const mainTable = createTable(playersInCategory, selectedCategory);
             const tbody = mainTable.querySelector('tbody');
