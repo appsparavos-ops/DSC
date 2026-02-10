@@ -670,6 +670,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (customTitle) {
             tableContainer.appendChild(createTable(players, selectedCategory));
         } else if (selectedCategory) {
+            if(printButton) printButton.classList.remove('hidden');
             const playersInCategory = players
                 .filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A')
                 .sort((a, b) => {
@@ -1511,6 +1512,117 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     async function generatePDF() {
+        const selectedCategory = categoryFilter ? categoryFilter.value : '';
+
+        if (selectedCategory) {
+            await generateCategoryPDF(selectedCategory);
+        } else if (currentlyDisplayedPlayers.length > 0 && currentColumnsForPDF.length > 0) {
+            // This is the "Vencimientos" case
+            await generateExpiringPDF();
+        } else {
+            showToast("No hay datos para generar el PDF.", "error");
+        }
+    }
+
+    async function generateCategoryPDF(selectedCategory) {
+        if (typeof window.jspdf === 'undefined') {
+            return showToast("Librería PDF no disponible.", "error");
+        }
+
+        // 1. Get the data, same as displayPlayers
+        const playersInCategory = currentlyDisplayedPlayers
+            .filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A')
+            .sort((a, b) => {
+                const aIsBaja = a['ESTADO LICENCIA'] === 'Baja';
+                const bIsBaja = b['ESTADO LICENCIA'] === 'Baja';
+                if (aIsBaja && !bIsBaja) return 1;
+                if (!aIsBaja && bIsBaja) return -1;
+                const getSortVal = (p) => {
+                    const raw = (p.Numeros && p.Numeros[selectedCategory]) || p.Numero;
+                    if (raw === undefined || raw === null || raw === '') return Infinity;
+                    const s = String(raw).trim();
+                    if (s === '0') return -2;
+                    if (s === '00') return -1;
+                    const n = parseInt(s, 10);
+                    return isNaN(n) ? Infinity : n;
+                };
+                return getSortVal(a) - getSortVal(b);
+            });
+
+        const coaches = currentlyDisplayedPlayers.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A');
+
+        const authorizedPlayers = currentlyDisplayedPlayers
+            .filter(p => {
+                const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) && p.CATEGORIA !== selectedCategory;
+                const isCrossSeasonAuth = p.esAutorizado && p.CATEGORIA === selectedCategory;
+                return isSameSeasonAuth || isCrossSeasonAuth;
+            })
+            .sort((a, b) => {
+                const aIsBaja = a['ESTADO LICENCIA'] === 'Baja';
+                const bIsBaja = b['ESTADO LICENCIA'] === 'Baja';
+                if (aIsBaja && !bIsBaja) return 1;
+                if (!aIsBaja && bIsBaja) return -1;
+                return (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
+            });
+
+        if (playersInCategory.length === 0 && coaches.length === 0 && authorizedPlayers.length === 0) {
+            return showToast("No hay jugadores en esta categoría para generar el PDF.", "error");
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape' });
+        const title = selectedCategory;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const pageMargin = 15;
+        let yPosition = pageMargin;
+
+        // --- PDF Header ---
+        let logoImage = null;
+        try {
+            logoImage = await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = (err) => reject(err);
+                img.src = LOGO_URL;
+            });
+        } catch (e) {
+            console.error("No se pudo cargar el logo para el PDF:", e);
+        }
+
+        if (logoImage) {
+            const logoSize = 15;
+            const logoWidth = 10;
+            doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoWidth, logoSize);
+            doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
+        }
+
+        doc.setFontSize(18);
+        doc.text(title, pageWidth / 2, pageMargin + 10, { align: 'center' });
+        yPosition = pageMargin + 20;
+
+        const drawSectionHeader = (text, y) => {
+            if (y > pageHeight - pageMargin - 20) { // Check if space for header and one row
+                doc.addPage();
+                y = pageMargin;
+            }
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text(text, pageMargin, y);
+            doc.setFont(undefined, 'normal');
+            return y + 8;
+        };
+
+        const drawTableForCategory = (columns, data, startY) => {
+            // (Implementation of table drawing logic will be nested here in the next step)
+        };
+
+        // --- PDF Body ---
+        // (Implementation of body drawing logic will be here)
+    }
+
+    async function generateExpiringPDF() {
         if (currentlyDisplayedPlayers.length === 0 || currentColumnsForPDF.length === 0) {
             return showToast("No hay datos para generar el PDF.", "error");
         }
@@ -1521,7 +1633,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         const today = new Date();
-        const formattedDate = today.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const formattedDate = today.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }); // Keep for Vencimientos title
         const title = `Vencimientos al ${formattedDate}`;
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
@@ -1574,9 +1686,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (col === 'DNI' || col === 'FM Hasta') {
                     columnWidths[col] = baseWidth * 0.1; // 10% para DNI y FM Hasta
                 } else if (col === 'NOMBRE') {
-                    columnWidths[col] = baseWidth * 0.3; // 30% para NOMBRE
+                    columnWidths[col] = baseWidth * 0.35; // 35% para NOMBRE
                 } else if (col === 'EQUIPO' || col === 'CATEGORIA') {
-                    columnWidths[col] = baseWidth * 0.25; // 25% para EQUIPO y CATEGORIA
+                    columnWidths[col] = baseWidth * 0.225; // 22,5% para EQUIPO y CATEGORIA
                 } else {
                     columnWidths[col] = baseWidth * 0.1; // 10% por defecto
                 }
@@ -1641,6 +1753,134 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error("Error al generar PDF:", error);
             showToast(`Error al generar PDF: ${error.message}`, "error");
         }
+    }
+
+    // This is the full implementation of generateCategoryPDF, including the nested helpers.
+    async function generateCategoryPDF(selectedCategory) { // MODIFIED
+        if (typeof window.jspdf === 'undefined') {
+            return showToast("Librería PDF no disponible.", "error");
+        }
+
+        const playersInCategory = currentlyDisplayedPlayers.filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A').sort((a, b) => { const aIsBaja = a['ESTADO LICENCIA'] === 'Baja', bIsBaja = b['ESTADO LICENCIA'] === 'Baja'; if (aIsBaja && !bIsBaja) return 1; if (!aIsBaja && bIsBaja) return -1; const getSortVal = p => { const raw = (p.Numeros && p.Numeros[selectedCategory]) || p.Numero; if (raw === undefined || raw === null || raw === '') return Infinity; const s = String(raw).trim(); if (s === '0') return -2; if (s === '00') return -1; const n = parseInt(s, 10); return isNaN(n) ? Infinity : n; }; return getSortVal(a) - getSortVal(b); });
+        const coaches = currentlyDisplayedPlayers.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A');
+        const authorizedPlayers = currentlyDisplayedPlayers.filter(p => (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) && p.CATEGORIA !== selectedCategory) || (p.esAutorizado && p.CATEGORIA === selectedCategory)).sort((a, b) => { const aIsBaja = a['ESTADO LICENCIA'] === 'Baja', bIsBaja = b['ESTADO LICENCIA'] === 'Baja'; if (aIsBaja && !bIsBaja) return 1; if (!aIsBaja && bIsBaja) return -1; return (a.NOMBRE || '').localeCompare(b.NOMBRE || ''); });
+
+        if (playersInCategory.length === 0 && coaches.length === 0 && authorizedPlayers.length === 0) {
+            return showToast("No hay jugadores en esta categoría para generar el PDF.", "error");
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait' });
+        const title = selectedCategory;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const pageMargin = 15;
+        let yPosition = pageMargin;
+
+        let logoImage = null;
+        try {
+            logoImage = await new Promise((resolve, reject) => { const img = new Image(); img.crossOrigin = 'Anonymous'; img.onload = () => resolve(img); img.onerror = (err) => reject(err); img.src = LOGO_URL; });
+        } catch (e) { console.error("No se pudo cargar el logo para el PDF:", e); }
+
+        if (logoImage) {
+            const logoSize = 15, logoWidth = 10;
+            doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoWidth, logoSize);
+            doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
+        }
+
+        doc.setFontSize(18);
+        doc.text(title, pageWidth / 2, pageMargin + 10, { align: 'center' });
+        yPosition = pageMargin + 20;
+
+        const drawSectionHeader = (text, y) => {
+            if (y > pageHeight - pageMargin - 20) { doc.addPage(); y = pageMargin; }
+            doc.setFontSize(12); doc.setFont(undefined, 'bold');
+            doc.text(text, pageMargin, y);
+            doc.setFont(undefined, 'normal');
+            return y + 8;
+        };
+
+        const drawTableForCategory = (columns, data, startY) => {
+            let y = startY;
+            const rowHeight = 6, headerHeight = 7, fontSize = 8;
+            const baseWidth = pageWidth - 2 * pageMargin;
+            const columnWidths = {
+                'DNI': baseWidth * 0.15,
+                'NOMBRE': baseWidth * 0.55,
+                'FM Hasta': baseWidth * 0.15,
+                'Numero': baseWidth * 0.15
+            };
+
+            const drawHeader = () => {
+                let x = pageMargin;
+                doc.setFontSize(fontSize + 1); doc.setFont(undefined, 'bold');
+                doc.setFillColor(230, 230, 230); doc.setDrawColor(0); doc.setTextColor(0);
+                columns.forEach(col => {
+                    const colWidth = columnWidths[col];
+                    doc.rect(x, y, colWidth, headerHeight, 'FD');
+                    doc.text(col, x + 2, y + 5);
+                    x += colWidth;
+                });
+                y += headerHeight;
+                doc.setFont(undefined, 'normal'); doc.setFontSize(fontSize);
+            };
+
+            const maskDNI = dni => { const s = String(dni || ''); return s.length > 4 ? '****' + s.substring(4) : s; };
+
+            drawHeader();
+
+            data.forEach(player => {
+                if (y > pageHeight - pageMargin - rowHeight) { doc.addPage(); y = pageMargin; drawHeader(); }
+
+                const isBaja = player['ESTADO LICENCIA'] === 'Baja';
+
+                let x = pageMargin;
+                columns.forEach(colName => {
+                    const colWidth = columnWidths[colName];
+
+                    if (isBaja) {
+                        doc.setFillColor(255, 224, 224); // Light red
+                    } else {
+                        doc.setFillColor(255, 255, 255); // White
+                    }
+                    doc.setDrawColor(0, 0, 0);
+                    doc.setTextColor(0, 0, 0);
+
+                    let cellValue = player[colName] || '-';
+                    if (colName === 'DNI') {
+                        cellValue = maskDNI(player[colName]);
+                    } else if (colName === 'Numero') {
+                        cellValue = (player.Numeros && player.Numeros[selectedCategory]) || player.Numero || '-';
+                    } else if (colName === 'NOMBRE' && isBaja) {
+                        cellValue = `${player.NOMBRE || ''} - Baja`;
+                    }
+                    if (colName === 'FM Hasta' && cellValue === '1/1/1900') cellValue = '-';
+
+                    doc.rect(x, y, colWidth, rowHeight, 'FD');
+                    doc.text(String(cellValue), x + 2, y + 4, { maxWidth: colWidth - 4 });
+                    x += colWidth;
+                });
+                y += rowHeight;
+            });
+            return y;
+        };
+
+        const columns = ['DNI', 'NOMBRE', 'FM Hasta', 'Numero'];
+
+        if (playersInCategory.length > 0) {
+            yPosition = drawTableForCategory(columns, playersInCategory, yPosition);
+        }
+        if (coaches.length > 0) {
+            yPosition = drawSectionHeader('Entrenadores', yPosition + 5);
+            yPosition = drawTableForCategory(columns, coaches, yPosition);
+        }
+        if (authorizedPlayers.length > 0) {
+            yPosition = drawSectionHeader('Jugadores Autorizados (Refuerzos)', yPosition + 5);
+            yPosition = drawTableForCategory(columns, authorizedPlayers, yPosition);
+        }
+
+        doc.save(`${selectedCategory}.pdf`);
+        showToast("PDF generado.", "success");
     }
 
     // --- INICIALIZACIÓN ---
