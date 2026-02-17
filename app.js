@@ -1800,7 +1800,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (colName === 'DNI') {
                         cellValue = maskDNI(player[colName]);
                     } else if (colName === 'Numero') {
-                        cellValue = (player.Numeros && player.Numeros[selectedCategory]) || player.Numero || '-';
+                        cellValue = (player.Numeros && player.Numeros[selectedCategory]) || player.Numero || ' ';
                     } else if (colName === 'NOMBRE' && isBaja) {
                         cellValue = `${player.NOMBRE || ''} - Baja`;
                     }
