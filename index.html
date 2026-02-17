@@ -82,35 +82,29 @@
                     <div id="searchBar" class="bg-white p-6 rounded-xl shadow-md mb-8 no-print hidden">
                         <div class="flex flex-wrap gap-4 items-end">
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
-                                <label for="nameSearchInput" class="block text-sm font-medium text-gray-700">1. Buscar por Nombre</label>
-                                <input type="text" id="nameSearchInput" list="name-suggestions" placeholder="Escribe un nombre..." class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="nameSearchInput" list="name-suggestions" placeholder="Buscar por nombre..." class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                 <datalist id="name-suggestions"></datalist>
                             </div>
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 150px;">
-                                <label for="dniSearchInput" class="block text-sm font-medium text-gray-700">2. Buscar por DNI</label>
-                                <input type="text" id="dniSearchInput" list="dni-suggestions" placeholder="Escribe un DNI..." class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="dniSearchInput" list="dni-suggestions" placeholder="Buscar por DNI..." class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                 <datalist id="dni-suggestions"></datalist>
                             </div>
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
-                                <label for="categoryFilter" class="block text-sm font-medium text-gray-700">3. Filtrar por Categoría</label>
                                 <select id="categoryFilter" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                     <option value="">Todas las categorías</option>
                                 </select>
                             </div>
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
-                                <label for="equipoFilter" class="block text-sm font-medium text-gray-700">4. Filtrar por Equipo</label>
                                 <select id="equipoFilter" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                     <option value="">Todos los equipos</option>
                                 </select>
                             </div>
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
-                                <label for="seasonFilter" class="block text-sm font-medium text-gray-700">5. Filtrar por Temporada</label>
                                 <select id="seasonFilter" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                     <option value="">Todas las temporadas</option>
                                 </select>
                             </div>
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 300px;">
-                                <label class="block text-sm font-medium text-gray-700">6. Acciones rápidas</label>
                                 <div class="mt-2 flex gap-2 overflow-x-auto py-2 sm:justify-center">
                                     <button id="expiringButton" class="flex-shrink-0 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500">Vencimientos</button>
                                     <button id="resetButton" class="flex-shrink-0 py-2 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Todos</button>
