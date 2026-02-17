@@ -964,9 +964,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const categoryProgressionRules = {
                     'U11 Mixta': ['U12 Mixta'],
                     'U12 Femenino': ['U12 Mixta', 'U14 Femenino'],
-                    'U12 Mixta': ['U14 Mixto'],
-                    'U14 Femenino': ['U14 Mixto', 'U16 Femenino'],
-                    'U14 Mixto': ['U16 Masculino'],
+                    'U12 Mixta': ['U14 Masculino'],
+                    'U14 Femenino': ['U14 Masculino', 'U16 Femenino'],
+                    'U14 Masculino': ['U16 Masculino'],
                     'U16 Femenino': ['U19 Femenina', 'Liga Femenina de Basquet'],
                     'U16 Masculino': ['U18 Masculino'],
                     'U18 Masculino': ['U20 Masculino', 'Liga de Desarrollo' , 'Liga Uruguaya de Basquet'],
