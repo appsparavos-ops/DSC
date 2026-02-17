@@ -1525,7 +1525,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function generateExpiringPDF() {
-        if (currentlyDisplayedPlayers.length === 0 || currentColumnsForPDF.length === 0) {
+        if (currentlyDisplayedPlayers.length === 0) {
             return showToast("No hay datos para generar el PDF.", "error");
         }
         if (typeof window.jspdf === 'undefined') {
@@ -1535,14 +1535,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         const today = new Date();
-        const formattedDate = today.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }); // Keep for Vencimientos title
+        const formattedDate = today.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
         const title = `Vencimientos al ${formattedDate}`;
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
         const logoSize = 15;
         const pageMargin = 15;
 
-        // Cargar el logo de forma asíncrona
+        // Cargar logo
         let logoImage = null;
         try {
             logoImage = await new Promise((resolve, reject) => {
@@ -1554,17 +1554,15 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         } catch (e) {
             console.error("No se pudo cargar el logo para el PDF:", e);
-            showToast("Advertencia: No se pudo cargar el logo, se generará sin él.", "info");
+            showToast("Advertencia: No se pudo cargar el logo.", "info");
         }
 
-        // Añadir logos si se cargaron
+        // Añadir logos y título
         if (logoImage) {
             const logoWidth = 10;
             doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoWidth, logoSize);
             doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
         }
-
-        // Título centrado
         doc.setFontSize(16);
         const titleWidth = doc.getStringUnitWidth(title) * doc.internal.getFontSize() / doc.internal.scaleFactor;
         const titleX = (pageWidth - titleWidth) / 2;
@@ -1576,69 +1574,70 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         try {
-            // Crear tabla manualmente sin autoTable
-            const columns = currentColumnsForPDF;
-            
-            // Definir anchos personalizados por columna
+            // Columnas y orden para el PDF de vencimientos
+            const columns = ["CATEGORIA", "DNI", "NOMBRE", "FM Hasta"];
+
+            // Ordenar los jugadores por CATEGORIA y luego por FM HASTA
+            const sortedPlayers = [...currentlyDisplayedPlayers].sort((a, b) => {
+                const catComp = (a.CATEGORIA || '').localeCompare(b.CATEGORIA || '');
+                if (catComp !== 0) return catComp;
+
+                const dateA = parseDateDDMMYYYY(a['FM Hasta']);
+                const dateB = parseDateDDMMYYYY(b['FM Hasta']);
+                if (dateA && dateB) return dateA - dateB;
+                if (!dateA) return 1; // Pone los que no tienen fecha al final
+                if (!dateB) return -1;
+                return 0;
+            });
+
+            // Definir anchos de columna
             const columnWidths = {};
             const baseWidth = (pageWidth - 2 * pageMargin);
-            
-            // Columnas: EQUIPO 25%, CATEGORIA 25%, DNI 10%, NOMBRE 30%, FM Hasta 10% = 100%
-            columns.forEach(col => {
-                if (col === 'DNI' || col === 'FM Hasta') {
-                    columnWidths[col] = baseWidth * 0.1; // 10% para DNI y FM Hasta
-                } else if (col === 'NOMBRE') {
-                    columnWidths[col] = baseWidth * 0.35; // 35% para NOMBRE
-                } else if (col === 'EQUIPO' || col === 'CATEGORIA') {
-                    columnWidths[col] = baseWidth * 0.225; // 22,5% para EQUIPO y CATEGORIA
-                } else {
-                    columnWidths[col] = baseWidth * 0.1; // 10% por defecto
-                }
-            });
-            
+            columnWidths['CATEGORIA'] = baseWidth * 0.25;
+            columnWidths['DNI'] = baseWidth * 0.15;
+            columnWidths['NOMBRE'] = baseWidth * 0.45;
+            columnWidths['FM Hasta'] = baseWidth * 0.15;
+
             let yPosition = pageMargin + logoSize + 8;
             const rowHeight = 5;
             const fontSize = 8;
             let xPosition = pageMargin;
-            
+
             // Dibujar encabezados
             doc.setFontSize(fontSize);
             doc.setFont(undefined, 'bold');
             columns.forEach((col) => {
                 const colWidth = columnWidths[col];
-                doc.setFillColor(25, 50, 100); // Fondo blanco para cada celda
-                doc.setDrawColor(25, 50, 100); // Borde azul oscuro
-                doc.setTextColor(255, 255, 255); // Texto azul oscuro
+                doc.setFillColor(25, 50, 100);
+                doc.setDrawColor(25, 50, 100);
+                doc.setTextColor(255, 255, 255);
                 doc.rect(xPosition, yPosition, colWidth, rowHeight, 'FD');
                 doc.text(col, xPosition + 0.5, yPosition + 3.5, { maxWidth: colWidth - 1, overflow: 'hidden', align: 'left' });
                 xPosition += colWidth;
             });
-            
-            // Reset font, color y draw color para las filas
+
             doc.setFont(undefined, 'normal');
             doc.setTextColor(0, 0, 0);
             doc.setDrawColor(0, 0, 0);
-            
             yPosition += rowHeight;
-            
+
             // Dibujar filas
-            currentlyDisplayedPlayers.forEach((player) => {
-                // Verificar si necesita nueva página
+            sortedPlayers.forEach((player) => {
                 if (yPosition > pageHeight - pageMargin) {
                     doc.addPage();
                     yPosition = pageMargin;
+                    // Aquí se podría redibujar el header si se quisiera en cada página nueva
                 }
-                
+
                 const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
                 let fillColor = [255, 255, 255];
                 let textColor = [0, 0, 0];
 
                 if (player['ESTADO LICENCIA'] === 'Baja') {
-                     fillColor = [255, 224, 224]; // Light red for Baja
-                     fillColor = [220, 20, 60]; // Intense red
-                     textColor = [255, 255, 255];
+                    fillColor = [220, 20, 60]; // Rojo para Baja
+                    textColor = [255, 255, 255];
                 } else if (player['TIPO'] === 'ENTRENADOR/A') {
-                     fillColor = [219, 234, 254]; // Blue background
+                    fillColor = [219, 234, 254]; // Azul para Entrenador
                 } else if (expirationDate) {
                     const today = new Date(); today.setHours(0, 0, 0, 0);
                     const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
@@ -1646,13 +1645,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     const endOfYear = new Date(today.getFullYear(), 11, 24);
 
                     if (expirationDate < today) { fillColor = [254, 226, 226]; } // Red background
-                    else if (expirationDate <= thirtyDays) { fillColor = [255, 237, 213]; } // Orange background
-                    else if (expirationDate <= sixtyDays) { fillColor = [254, 249, 195]; } // Yellow background
-                    else if (expirationDate > endOfYear) { fillColor = [220, 252, 231]; } // Green background
+                    else if (expirationDate <= thirtyDays) { fillColor = [255, 237, 213]; } // Orange
+                    else if (expirationDate <= sixtyDays) { fillColor = [254, 249, 195]; } // Yellow
+                    else if (expirationDate > endOfYear) { fillColor = [220, 252, 231]; } // Green
                 }
 
                 xPosition = pageMargin;
-                doc.setFont(undefined, 'bold');
+                doc.setFont(undefined, 'normal');
                 doc.setTextColor(0, 0, 0);
                 columns.forEach((colName) => {
                     const colWidth = columnWidths[colName];
@@ -1664,20 +1663,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         cellValue = player[colName] || '-';
                     }
-                    
+
                     doc.setFillColor(...fillColor);
                     doc.setTextColor(...textColor);
                     doc.rect(xPosition, yPosition, colWidth, rowHeight, 'FD');
                     doc.text(String(cellValue), xPosition + 0.5, yPosition + 3.5, { maxWidth: colWidth - 1, overflow: 'hidden' });
                     xPosition += colWidth;
                 });
-                doc.setFont(undefined, 'normal');
-                
                 yPosition += rowHeight;
             });
-            
+
             doc.save(`vencimientos_${formattedDate}.pdf`);
-            showToast("PDF generado.", "success");
+            showToast("PDF de vencimientos generado.", "success");
         } catch (error) {
             console.error("Error al generar PDF:", error);
             showToast(`Error al generar PDF: ${error.message}`, "error");
