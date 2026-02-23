@@ -40,6 +40,13 @@
                 </div>
             </div>
             
+            <div class="flex items-center mt-4">
+                <input id="overwrite-existing" type="checkbox" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                <label for="overwrite-existing" class="ml-2 block text-sm text-gray-900">
+                    Sobreescribir números si ya existen en la temporada de destino
+                </label>
+            </div>
+
             <div class="pt-4">
                 <button id="start-import-btn" class="w-full justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400" disabled>
                     Iniciar Importación
@@ -122,6 +129,7 @@
 
             const sourceSeason = sourceSeasonSelect.value;
             const destSeason = destSeasonSelect.value;
+            const overwriteExisting = document.getElementById('overwrite-existing').checked;
 
             if (!sourceSeason || !destSeason) {
                 log('Debe seleccionar una temporada de origen y una de destino.', true);
@@ -175,9 +183,19 @@
                         continue;
                     }
 
+                    const destCategory = destPlayer.CATEGORIA;
+                    
+                    // Verificar si ya tiene número en destino y si la sobreescritura está desactivada
+                    const currentDestNumber = (destPlayer.Numeros && destPlayer.Numeros[destCategory]) || destPlayer.Numero;
+                    if (currentDestNumber && !overwriteExisting) {
+                        log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Omitido (Ya tiene el número ${currentDestNumber} y la sobreescritura está desactivada).`);
+                        skippedCount++;
+                        continue;
+                    }
+
                     const sourcePlayer = sourcePlayersMap.get(dni);
-                    // --- Lógica mejorada para encontrar el número ---
                     let sourceNumber = null;
+                    
                     if (sourcePlayer) {
                         // 1. Priorizar el campo 'Numero' de nivel superior.
                         if (sourcePlayer.Numero) {
@@ -190,7 +208,6 @@
                     }
 
                     if (sourceNumber) { // Proceder solo si se encontró un número
-                        const destCategory = destPlayer.CATEGORIA;
                         const dbNode = destPlayer._tipo || 'jugadores';
 
                         log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Número anterior: ${sourceNumber}. Actualizando...`);
@@ -206,7 +223,7 @@
 
                         updatedCount++;
                     } else {
-                        log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Omitido (no encontrado en origen o sin número válido en 'Numero' o 'Numeros[CATEGORIA]').`);
+                        log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Omitido (no encontrado en origen o sin número válido).`);
                         skippedCount++;
                     }
                 }
