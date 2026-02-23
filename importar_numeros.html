@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente de Importación de Números</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <div class="container mx-auto max-w-2xl bg-white p-8 rounded-xl shadow-lg">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Importación de Números por Temporada</h1>
+            <p class="text-gray-500 mt-2">Copia los números de la categoría principal de los jugadores de una temporada a otra.</p>
+        </div>
+
+        <!-- Formulario de Configuración -->
+        <div id="config-form" class="space-y-4">
+            <div>
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2">Configuración</h2>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="source-season" class="block text-sm font-medium text-gray-700">1. Temporada de Origen (Leer números desde aquí)</label>
+                    <select id="source-season" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Cargando...</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="dest-season" class="block text-sm font-medium text-gray-700">2. Temporada de Destino (Escribir números aquí)</label>
+                    <select id="dest-season" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Cargando...</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="pt-4">
+                <button id="start-import-btn" class="w-full justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400" disabled>
+                    Iniciar Importación
+                </button>
+            </div>
+        </div>
+
+        <!-- Área de Progreso y Logs -->
+        <div id="progress-log" class="hidden mt-6">
+            <h2 class="text-xl font-semibold text-gray-700 border-b pb-2">Progreso de la Importación</h2>
+            <pre id="log-output" class="mt-4 bg-gray-800 text-white text-sm rounded-md p-4 h-64 overflow-y-auto whitespace-pre-wrap"></pre>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN DE FIREBASE (debe coincidir con tu app) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyANWXQvhHpF0LCYjz4AXi3MkcP798PqRfA",
+            authDomain: "dsc24-aa5a1.firebaseapp.com",
+            databaseURL: "https://dsc24-aa5a1-default-rtdb.firebaseio.com",
+            projectId: "dsc24-aa5a1",
+            storageBucket: "dsc24-aa5a1.appspot.com",
+            messagingSenderId: "798100493177",
+            appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
+        };
+
+        // --- LÓGICA DEL SCRIPT ---
+        const startBtn = document.getElementById('start-import-btn');
+        const logOutput = document.getElementById('log-output');
+        const configForm = document.getElementById('config-form');
+        const progressLog = document.getElementById('progress-log');
+        const sourceSeasonSelect = document.getElementById('source-season');
+        const destSeasonSelect = document.getElementById('dest-season');
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const auth = firebase.auth();
+
+        // Función para añadir mensajes al log
+        function log(message, isError = false) {
+            const prefix = isError ? '[ERROR] ' : '[INFO] ';
+            console.log(prefix + message);
+            logOutput.textContent += prefix + message + '\n';
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+
+        // Cargar temporadas en los dropdowns
+        async function loadSeasons() {
+            try {
+                const snapshot = await database.ref('/temporadas').once('value');
+                if (!snapshot.exists()) {
+                    log('No se encontraron temporadas en la base de datos.', true);
+                    return;
+                }
+                const seasons = Object.keys(snapshot.val()).sort((a, b) => b.localeCompare(a)); // Descendente
+                sourceSeasonSelect.innerHTML = '<option value="">Seleccione...</option>';
+                destSeasonSelect.innerHTML = '<option value="">Seleccione...</option>';
+                seasons.forEach(season => {
+                    sourceSeasonSelect.add(new Option(season, season));
+                    destSeasonSelect.add(new Option(season, season));
+                });
+            } catch (error) {
+                log(`Error al cargar temporadas: ${error.message}`, true);
+            }
+        }
+
+        // Lógica de autenticación para habilitar el botón
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                database.ref('admins/' + user.uid).once('value').then(snapshot => {
+                    if (snapshot.exists()) {
+                        log('Usuario administrador autenticado. Listo para importar.');
+                        startBtn.disabled = false;
+                        loadSeasons();
+                    } else {
+                        log('El usuario no es administrador. La importación está deshabilitada.', true);
+                    }
+                });
+            } else {
+                log('Ningún usuario ha iniciado sesión. Por favor, inicie sesión en la aplicación principal primero.', true);
+            }
+        });
+
+        // Event listener para el botón de inicio
+        startBtn.addEventListener('click', async () => {
+            startBtn.disabled = true;
+            startBtn.textContent = 'Importando...';
+            configForm.classList.add('hidden');
+            progressLog.classList.remove('hidden');
+
+            const sourceSeason = sourceSeasonSelect.value;
+            const destSeason = destSeasonSelect.value;
+
+            if (!sourceSeason || !destSeason) {
+                log('Debe seleccionar una temporada de origen y una de destino.', true);
+                startBtn.disabled = false;
+                startBtn.textContent = 'Iniciar Importación';
+                return;
+            }
+            if (sourceSeason === destSeason) {
+                log('La temporada de origen y destino no pueden ser la misma.', true);
+                startBtn.disabled = false;
+                startBtn.textContent = 'Iniciar Importación';
+                return;
+            }
+
+            try {
+                log(`Iniciando importación de números desde ${sourceSeason} hacia ${destSeason}.`);
+
+                // 1. Obtener jugadores de la temporada de origen y mapearlos por DNI
+                log(`Paso 1: Obteniendo jugadores de la temporada de origen (${sourceSeason})...`);
+                const sourceSnapshot = await database.ref(`/registrosPorTemporada/${sourceSeason}`).once('value');
+                if (!sourceSnapshot.exists()) throw new Error(`No se encontraron datos en la temporada de origen ${sourceSeason}.`);
+                
+                const sourcePlayersMap = new Map();
+                Object.values(sourceSnapshot.val()).forEach(player => {
+                    if (player._dni && !player.esAutorizado) { // Priorizar el registro principal del jugador
+                        sourcePlayersMap.set(String(player._dni), player);
+                    }
+                });
+                log(`Se encontraron ${sourcePlayersMap.size} jugadores principales en la temporada de origen.`);
+
+                // 2. Obtener jugadores de la temporada de destino
+                log(`Paso 2: Obteniendo jugadores de la temporada de destino (${destSeason})...`);
+                const destSnapshot = await database.ref(`/registrosPorTemporada/${destSeason}`).once('value');
+                if (!destSnapshot.exists()) throw new Error(`No se encontraron datos en la temporada de destino ${destSeason}.`);
+                const destData = destSnapshot.val();
+                log(`Se encontraron ${Object.keys(destData).length} registros para procesar en la temporada de destino.`);
+
+                // 3. Preparar las actualizaciones
+                log('Paso 3: Comparando jugadores y preparando actualizaciones...');
+                const updates = {};
+                let updatedCount = 0;
+                let skippedCount = 0;
+
+                for (const pushId in destData) {
+                    const destPlayer = destData[pushId];
+                    const dni = destPlayer._dni ? String(destPlayer._dni) : null;
+
+                    if (!dni) {
+                        log(`Registro con pushId ${pushId} omitido (sin DNI).`, true);
+                        skippedCount++;
+                        continue;
+                    }
+
+                    const sourcePlayer = sourcePlayersMap.get(dni);
+                    if (sourcePlayer && sourcePlayer.Numero) {
+                        const sourceNumber = sourcePlayer.Numero;
+                        const destCategory = destPlayer.CATEGORIA;
+                        const dbNode = destPlayer._tipo || 'jugadores';
+
+                        log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Número anterior: ${sourceNumber}. Actualizando...`);
+                        
+                        const newNumeros = { ...(destPlayer.Numeros || {}) };
+                        newNumeros[destCategory] = sourceNumber;
+
+                        // Actualizar en registrosPorTemporada
+                        updates[`/registrosPorTemporada/${destSeason}/${pushId}/Numero`] = sourceNumber;
+                        updates[`/registrosPorTemporada/${destSeason}/${pushId}/Numeros`] = newNumeros;
+                        // Actualizar en el nodo canónico del jugador
+                        updates[`/${dbNode}/${dni}/temporadas/${destSeason}/${pushId}/Numero`] = sourceNumber;
+                        updates[`/${dbNode}/${dni}/temporadas/${destSeason}/${pushId}/Numeros`] = newNumeros;
+
+                        updatedCount++;
+                    } else {
+                        log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Omitido (no encontrado en origen o sin número).`);
+                        skippedCount++;
+                    }
+                }
+
+                // 4. Ejecutar las actualizaciones
+                if (Object.keys(updates).length > 0) {
+                    log(`Paso 4: Aplicando ${updatedCount} actualizaciones en la base de datos...`);
+                    await database.ref().update(updates);
+                    log('¡Actualizaciones aplicadas con éxito!');
+                } else {
+                    log('Paso 4: No se encontraron actualizaciones para aplicar.');
+                }
+
+                log(`🎉 Proceso completado. Jugadores actualizados: ${updatedCount}, Omitidos: ${skippedCount}.`);
+                startBtn.textContent = 'Completado';
+
+            } catch (error) {
+                log(`Ocurrió un error general: ${error.message}`, true);
+                startBtn.disabled = false;
+                startBtn.textContent = 'Reintentar Importación';
+            }
+        });
+    </script>
+</body>
+</html>
