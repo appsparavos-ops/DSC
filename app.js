@@ -962,6 +962,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
 
                 const categoryProgressionRules = {
+                    'U11 Femenino':['U12 Femenino','U11 Mixta','U12 Mixta'],
                     'U11 Mixta': ['U12 Mixta'],
                     'U12 Femenino': ['U12 Mixta', 'U14 Femenino'],
                     'U12 Mixta': ['U14 Masculino'],
