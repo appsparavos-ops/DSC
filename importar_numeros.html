@@ -14,6 +14,21 @@
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
 
+    <!-- Modal de Login -->
+    <div id="login-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
+            <h2 class="text-2xl font-bold text-gray-800 text-center mb-6">Iniciar Sesión</h2>
+            <div class="space-y-4">
+                <input type="email" id="email-input" placeholder="Correo electrónico" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <input type="password" id="password-input" placeholder="Contraseña" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <p id="login-error" class="text-red-500 text-sm hidden"></p>
+                <button id="login-btn" class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition duration-200">
+                    Ingresar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="container mx-auto max-w-2xl bg-white p-8 rounded-xl shadow-lg">
         <div class="text-center mb-6">
             <h1 class="text-3xl font-bold text-gray-800">Importación de Números por Temporada</h1>
@@ -58,6 +73,9 @@
         <div id="progress-log" class="hidden mt-6">
             <h2 class="text-xl font-semibold text-gray-700 border-b pb-2">Progreso de la Importación</h2>
             <pre id="log-output" class="mt-4 bg-gray-800 text-white text-sm rounded-md p-4 h-64 overflow-y-auto whitespace-pre-wrap"></pre>
+            <div class="mt-2 text-right">
+                <button id="download-log-btn" class="text-blue-600 hover:text-blue-800 text-sm font-medium underline">Descargar Log (.txt)</button>
+            </div>
         </div>
     </div>
 
@@ -69,6 +87,13 @@
         const progressLog = document.getElementById('progress-log');
         const sourceSeasonSelect = document.getElementById('source-season');
         const destSeasonSelect = document.getElementById('dest-season');
+        
+        const loginModal = document.getElementById('login-modal');
+        const emailInput = document.getElementById('email-input');
+        const passwordInput = document.getElementById('password-input');
+        const loginBtn = document.getElementById('login-btn');
+        const loginError = document.getElementById('login-error');
+        const downloadLogBtn = document.getElementById('download-log-btn');
 
         // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
@@ -103,9 +128,37 @@
             }
         }
 
+        // Lógica de Login
+        loginBtn.addEventListener('click', () => {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            loginError.classList.add('hidden');
+            
+            auth.signInWithEmailAndPassword(email, password)
+                .catch((error) => {
+                    loginError.textContent = "Error: " + error.message;
+                    loginError.classList.remove('hidden');
+                });
+        });
+
+        // Lógica de Descarga de Log
+        downloadLogBtn.addEventListener('click', () => {
+            const text = logOutput.textContent;
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `log_importacion_${new Date().toISOString().slice(0,10)}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        });
+
         // Lógica de autenticación para habilitar el botón
         auth.onAuthStateChanged(user => {
             if (user) {
+                loginModal.classList.add('hidden');
                 database.ref('admins/' + user.uid).once('value').then(snapshot => {
                     if (snapshot.exists()) {
                         log('Usuario administrador autenticado. Listo para importar.');
@@ -116,7 +169,7 @@
                     }
                 });
             } else {
-                log('Ningún usuario ha iniciado sesión. Por favor, inicie sesión en la aplicación principal primero.', true);
+                loginModal.classList.remove('hidden');
             }
         });
 
@@ -172,28 +225,47 @@
                 const updates = {};
                 let updatedCount = 0;
                 let skippedCount = 0;
+                const skippedPlayersReport = [];
 
                 for (const pushId in destData) {
                     const destPlayer = destData[pushId];
                     const dni = destPlayer._dni ? String(destPlayer._dni) : null;
 
                     if (!dni) {
-                        log(`Registro con pushId ${pushId} omitido (sin DNI).`, true);
+                        const reason = 'Registro sin DNI.';
+                        log(`Registro con pushId ${pushId} omitido (${reason})`, true);
+                        skippedPlayersReport.push({ name: 'N/A', dni: `(pushId: ${pushId})`, reason: reason });
                         skippedCount++;
                         continue;
                     }
+
+                    // Intentar obtener el nombre del origen si no está en el destino
+                    const sourcePlayer = sourcePlayersMap.get(dni);
+                    let playerName = destPlayer.NOMBRE || (sourcePlayer ? sourcePlayer.NOMBRE : null);
+
+                    if (!playerName) {
+                        try {
+                            const dbNode = destPlayer._tipo || 'jugadores';
+                            const nameSnapshot = await database.ref(`${dbNode}/${dni}/datosPersonales/NOMBRE`).once('value');
+                            playerName = nameSnapshot.val();
+                        } catch (e) {
+                            // Si falla, se mantendrá como null y pasará al valor por defecto
+                        }
+                    }
+                    if (!playerName) playerName = 'Sin Nombre';
 
                     const destCategory = destPlayer.CATEGORIA;
                     
                     // Verificar si ya tiene número en destino y si la sobreescritura está desactivada
                     const currentDestNumber = (destPlayer.Numeros && destPlayer.Numeros[destCategory]) || destPlayer.Numero;
                     if (currentDestNumber && !overwriteExisting) {
-                        log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Omitido (Ya tiene el número ${currentDestNumber} y la sobreescritura está desactivada).`);
+                        const reason = `Ya tiene el número ${currentDestNumber} y la sobreescritura está desactivada.`;
+                        log(`Jugador: ${playerName} (${dni}). Omitido. Motivo: ${reason}`);
+                        skippedPlayersReport.push({ name: playerName, dni: dni, reason: reason });
                         skippedCount++;
                         continue;
                     }
 
-                    const sourcePlayer = sourcePlayersMap.get(dni);
                     let sourceNumber = null;
                     
                     if (sourcePlayer) {
@@ -210,7 +282,7 @@
                     if (sourceNumber) { // Proceder solo si se encontró un número
                         const dbNode = destPlayer._tipo || 'jugadores';
 
-                        log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Número anterior: ${sourceNumber}. Actualizando...`);
+                        log(`Jugador: ${playerName} (${dni}). Número anterior: ${sourceNumber}. Actualizando...`);
                         
                         const newNumeros = { ...(destPlayer.Numeros || {}) };
                         newNumeros[destCategory] = sourceNumber; // Asignar el número encontrado a la nueva categoría
@@ -223,7 +295,9 @@
 
                         updatedCount++;
                     } else {
-                        log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Omitido (no encontrado en origen o sin número válido).`);
+                        const reason = 'No encontrado en origen o sin número válido para importar.';
+                        log(`Jugador: ${playerName} (${dni}). Omitido. Motivo: ${reason}`);
+                        skippedPlayersReport.push({ name: playerName, dni: dni, reason: reason });
                         skippedCount++;
                     }
                 }
@@ -238,6 +312,15 @@
                 }
 
                 log(`🎉 Proceso completado. Jugadores actualizados: ${updatedCount}, Omitidos: ${skippedCount}.`);
+                
+                if (skippedPlayersReport.length > 0) {
+                    log('\n--- DETALLE DE JUGADORES OMITIDOS ---');
+                    skippedPlayersReport.forEach(report => {
+                        log(`- Jugador: ${report.name} (DNI: ${report.dni}) | Motivo: ${report.reason}`);
+                    });
+                    log('--- FIN DEL DETALLE ---');
+                }
+
                 startBtn.textContent = 'Completado';
 
             } catch (error) {
@@ -248,4 +331,3 @@
         });
     </script>
 </body>
-</html>
