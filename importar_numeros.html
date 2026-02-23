@@ -9,6 +9,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="firebase-config.js"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
 
@@ -53,17 +54,6 @@
     </div>
 
     <script>
-        // --- CONFIGURACIÓN DE FIREBASE (debe coincidir con tu app) ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyANWXQvhHpF0LCYjz4AXi3MkcP798PqRfA",
-            authDomain: "dsc24-aa5a1.firebaseapp.com",
-            databaseURL: "https://dsc24-aa5a1-default-rtdb.firebaseio.com",
-            projectId: "dsc24-aa5a1",
-            storageBucket: "dsc24-aa5a1.appspot.com",
-            messagingSenderId: "798100493177",
-            appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
-        };
-
         // --- LÓGICA DEL SCRIPT ---
         const startBtn = document.getElementById('start-import-btn');
         const logOutput = document.getElementById('log-output');
@@ -185,17 +175,28 @@
                     }
 
                     const sourcePlayer = sourcePlayersMap.get(dni);
-                    if (sourcePlayer && sourcePlayer.Numero) {
-                        const sourceNumber = sourcePlayer.Numero;
+                    // --- Lógica mejorada para encontrar el número ---
+                    let sourceNumber = null;
+                    if (sourcePlayer) {
+                        // 1. Priorizar el campo 'Numero' de nivel superior.
+                        if (sourcePlayer.Numero) {
+                            sourceNumber = sourcePlayer.Numero;
+                        } 
+                        // 2. Si no existe, buscar dentro del objeto 'Numeros' usando la categoría de origen.
+                        else if (sourcePlayer.Numeros && sourcePlayer.CATEGORIA && sourcePlayer.Numeros[sourcePlayer.CATEGORIA]) {
+                            sourceNumber = sourcePlayer.Numeros[sourcePlayer.CATEGORIA];
+                        }
+                    }
+
+                    if (sourceNumber) { // Proceder solo si se encontró un número
                         const destCategory = destPlayer.CATEGORIA;
                         const dbNode = destPlayer._tipo || 'jugadores';
 
                         log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Número anterior: ${sourceNumber}. Actualizando...`);
                         
                         const newNumeros = { ...(destPlayer.Numeros || {}) };
-                        newNumeros[destCategory] = sourceNumber;
-
-                        // Actualizar en registrosPorTemporada
+                        newNumeros[destCategory] = sourceNumber; // Asignar el número encontrado a la nueva categoría
+                        
                         updates[`/registrosPorTemporada/${destSeason}/${pushId}/Numero`] = sourceNumber;
                         updates[`/registrosPorTemporada/${destSeason}/${pushId}/Numeros`] = newNumeros;
                         // Actualizar en el nodo canónico del jugador
@@ -204,7 +205,7 @@
 
                         updatedCount++;
                     } else {
-                        log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Omitido (no encontrado en origen o sin número).`);
+                        log(`Jugador: ${destPlayer.NOMBRE} (${dni}). Omitido (no encontrado en origen o sin número válido en 'Numero' o 'Numeros[CATEGORIA]').`);
                         skippedCount++;
                     }
                 }
