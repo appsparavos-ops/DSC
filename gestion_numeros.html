@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Números de Jugadores</title>
+    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/GestionNumeros.png"
+        type="image/png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="firebase-config.js"></script>
+</head>
+
+<body class="bg-gray-100">
+
+    <!-- Modal de Login -->
+    <div id="login-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
+            <div class="text-center mb-6">
+                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
+                    alt="Logo del Club" class="h-20 w-auto mx-auto mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Iniciar Sesión</h2>
+            </div>
+            <div class="space-y-4">
+                <input type="email" id="email-input" placeholder="Correo electrónico"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <input type="password" id="password-input" placeholder="Contraseña"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <p id="login-error" class="text-red-500 text-sm hidden"></p>
+                <button id="login-btn"
+                    class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition duration-200">
+                    Ingresar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenido Principal -->
+    <div id="main-content" class="container mx-auto max-w-4xl p-4 sm:p-8 hidden">
+        <div class="bg-white p-8 rounded-xl shadow-lg">
+            <div class="flex items-center justify-between mb-8 gap-4 border-b pb-6">
+                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
+                    alt="Logo del Club" class="h-12 sm:h-20 w-auto">
+                <div class="text-center flex-1">
+                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Gestión de Números</h1>
+                    <p class="text-sm sm:text-base text-gray-500 mt-1">Asigna y verifica los números de los jugadores.
+                    </p>
+                </div>
+                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
+                    alt="Logo del Club" class="h-12 sm:h-20 w-auto">
+            </div>
+
+            <!-- Filtros -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div>
+                    <label for="season-select" class="block text-sm font-medium text-gray-700">Temporada</label>
+                    <select id="season-select"
+                        class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Cargando...</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="team-select" class="block text-sm font-medium text-gray-700">Equipo</label>
+                    <select id="team-select"
+                        class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        disabled>
+                        <option value="">Seleccione una temporada...</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="category-select" class="block text-sm font-medium text-gray-700">Categoría</label>
+                    <select id="category-select"
+                        class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        disabled>
+                        <option value="">Seleccione un equipo...</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Botonera de Acciones -->
+            <div id="actions-container" class="mb-4 hidden flex justify-end gap-3">
+                <label class="mr-auto flex items-center gap-2 text-sm">
+                    <input type="checkbox" id="allow-conflict-checkbox" class="h-4 w-4">
+                    Guardar con conflicto
+                </label>
+                <button id="sort-btn"
+                    class="py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg shadow-md transition duration-200 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                    </svg>
+                    Ordenar por Número
+                </button>
+                <button id="export-csv-btn"
+                    class="py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-md transition duration-200 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Exportar CSV
+                </button>
+                <button id="verify-btn"
+                    class="py-2 px-4 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-md transition duration-200 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                            d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                            clip-rule="evenodd" />
+                    </svg>
+                    Verificar Conflictos
+                </button>
+            </div>
+
+            <!-- Lista de Jugadores -->
+            <div id="players-list-container" class="mt-6">
+                <p id="loading-message" class="text-center text-gray-500">Seleccione una categoría para ver los
+                    jugadores.</p>
+                <!-- Los jugadores se insertarán aquí -->
+            </div>
+
+            <!-- Botón Auto-asignar al final -->
+            <div id="bottom-actions-container" class="mt-8 hidden flex justify-center">
+                <button id="auto-assign-btn"
+                    class="py-3 px-6 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg transition duration-200 flex items-center gap-2 transform hover:scale-105">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    </svg>
+                    Auto-asignar Números Restantes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Conflicto de Números -->
+    <div id="conflict-modal"
+        class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-xl shadow-lg max-w-lg w-full">
+            <h2 class="text-2xl font-bold text-red-600 text-center mb-4">Conflicto de Número</h2>
+            <p id="conflict-message" class="text-center text-gray-700 mb-6">El número <span class="font-bold"
+                    id="conflicting-number"></span> ya está en uso.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Jugador Actual -->
+                <div id="current-player-conflict" class="border border-gray-300 p-4 rounded-lg">
+                    <h3 class="font-semibold text-gray-800 border-b pb-2 mb-3">Jugador Actual</h3>
+                    <p class="font-bold text-lg" id="current-player-name"></p>
+                    <p class="text-sm text-gray-600" id="current-player-category"></p>
+                    <div class="mt-3">
+                        <label for="current-player-number-input" class="block text-sm font-medium text-gray-700">Cambiar
+                            número:</label>
+                        <input type="text" maxlength="2" id="current-player-number-input"
+                            class="mt-1 w-full px-3 py-2 border border-blue-500 ring-2 ring-blue-200 rounded-md text-center">
+                    </div>
+                </div>
+
+                <!-- Jugadores Existentes -->
+                <div id="existing-players-container" class="flex flex-col gap-4 max-h-[60vh] overflow-y-auto">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+            </div>
+
+            <div class="mt-8 flex justify-end gap-4">
+                <button id="cancel-conflict-btn"
+                    class="py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg shadow-md hover:bg-gray-300">Cancelar</button>
+                <button id="resolve-conflict-btn"
+                    class="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md">Guardar
+                    Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Reporte de Verificación -->
+    <div id="verification-modal"
+        class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-xl shadow-lg max-w-3xl w-full max-h-[80vh] overflow-y-auto">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Reporte de Conflictos</h2>
+            <div id="verification-results" class="space-y-4">
+                <!-- Resultados aquí -->
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button id="close-verification-btn"
+                    class="py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmación de Auto-asignación -->
+    <div id="auto-assign-modal"
+        class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-xl shadow-lg max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <h2 class="text-2xl font-bold text-purple-700 text-center mb-2">Confirmar Auto-asignación</h2>
+            <p class="text-center text-gray-600 mb-4">Se asignarán los siguientes números disponibles a los jugadores
+                sin número:</p>
+
+            <div class="flex-1 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-gray-50 mb-6">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <tbody id="auto-assign-list" class="bg-white divide-y divide-gray-200">
+                        <!-- Lista dinámica -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex justify-end gap-4 mt-auto">
+                <button id="cancel-auto-assign-btn"
+                    class="py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg shadow-md hover:bg-gray-300">Cancelar</button>
+                <button id="confirm-auto-assign-btn"
+                    class="py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md">Confirmar
+                    y Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg hidden">
+        <p id="toast-message"></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Firebase & Auth ---
+            firebase.initializeApp(firebaseConfig);
+            const database = firebase.database();
+            const auth = firebase.auth();
+
+            // --- DOM Elements ---
+            const loginModal = document.getElementById('login-modal');
+            const emailInput = document.getElementById('email-input');
+            const passwordInput = document.getElementById('password-input');
+            const loginBtn = document.getElementById('login-btn');
+            const loginError = document.getElementById('login-error');
+            const mainContent = document.getElementById('main-content');
+            const seasonSelect = document.getElementById('season-select');
+            const teamSelect = document.getElementById('team-select');
+            const categorySelect = document.getElementById('category-select');
+            const playersListContainer = document.getElementById('players-list-container');
+            const loadingMessage = document.getElementById('loading-message');
+            const conflictModal = document.getElementById('conflict-modal');
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            const verifyBtn = document.getElementById('verify-btn');
+            const exportCsvBtn = document.getElementById('export-csv-btn');
+            const sortBtn = document.getElementById('sort-btn');
+            const actionsContainer = document.getElementById('actions-container');
+            const bottomActionsContainer = document.getElementById('bottom-actions-container');
+            const allowConflictCheckbox = document.getElementById('allow-conflict-checkbox');
+            const verificationModal = document.getElementById('verification-modal');
+            const verificationResults = document.getElementById('verification-results');
+            const autoAssignBtn = document.getElementById('auto-assign-btn');
+            const autoAssignModal = document.getElementById('auto-assign-modal');
+            const autoAssignList = document.getElementById('auto-assign-list');
+            const confirmAutoAssignBtn = document.getElementById('confirm-auto-assign-btn');
+
+            // --- State ---
+            let allPlayersInSeason = [];
+            let playersInCategory = [];
+            let currentUser = null;
+            let currentSortMode = 'name'; // 'name' | 'number'
+            let conflictState = { currentPlayer: null, existingPlayers: [] };
+            let pendingAutoAssignments = [];
+            let activeConflicts = [];
+            let currentConflictIndex = 0;
+
+            const categoryProgressionRules = {
+                'U11 Femenino': ['U12 Femenino', 'U11 Mixta', 'U12 Mixta'],
+                'U11 Mixta': ['U12 Mixta'],
+                'U12 Femenino': ['U12 Mixta', 'U14 Femenino'],
+                'U12 Mixta': ['U14 Masculino'],
+                'U14 Femenino': ['U16 Femenino'],
+                'U14 Masculino': ['U16 Masculino'],
+                'U16 Femenino': ['U19 Femenina', 'Liga Femenina de Basquet'],
+                'U16 Masculino': ['U18 Masculino'],
+                'U18 Masculino': ['U20 Masculino', 'Liga de Desarrollo', 'Liga Uruguaya de Basquet'],
+                'U20 Masculino': ['Liga de Desarrollo', 'Liga Uruguaya de Basquet'],
+                'Liga de Desarrollo': ['Liga Uruguaya de Basquet'],
+                'U19 Femenina': ['Liga Femenina de Basquet'],
+            };
+
+            // --- Functions ---
+            function showToast(message, isError = false) {
+                toastMessage.textContent = message;
+                toast.classList.toggle('bg-red-500', isError);
+                toast.classList.toggle('bg-green-500', !isError);
+                toast.classList.remove('hidden');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 3000);
+            }
+
+            // --- Auth Logic ---
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    database.ref('admins/' + user.uid).once('value').then(snapshot => {
+                        if (snapshot.exists()) {
+                            currentUser = user;
+                            loginModal.classList.add('hidden');
+                            mainContent.classList.remove('hidden');
+                            loadSeasons();
+                        } else {
+                            loginError.textContent = 'El usuario no es administrador.';
+                            loginError.classList.remove('hidden');
+                            auth.signOut();
+                        }
+                    });
+                } else {
+                    loginModal.classList.remove('hidden');
+                    mainContent.classList.add('hidden');
+                }
+            });
+
+            loginBtn.addEventListener('click', () => {
+                const email = emailInput.value;
+                const password = passwordInput.value;
+                loginError.classList.add('hidden');
+                auth.signInWithEmailAndPassword(email, password).catch(error => {
+                    loginError.textContent = "Error: " + error.message;
+                    loginError.classList.remove('hidden');
+                });
+            });
+
+            // --- Data Loading ---
+            async function loadSeasons() {
+                try {
+                    const snapshot = await database.ref('/temporadas').once('value');
+                    if (!snapshot.exists()) {
+                        showToast('No se encontraron temporadas.', true);
+                        return;
+                    }
+                    const seasons = Object.keys(snapshot.val()).sort((a, b) => b.localeCompare(a));
+                    seasonSelect.innerHTML = '<option value="">Seleccione...</option>';
+                    seasons.forEach(season => seasonSelect.add(new Option(season, season)));
+                } catch (error) {
+                    showToast(`Error al cargar temporadas: ${error.message}`, true);
+                }
+            }
+
+            seasonSelect.addEventListener('change', async () => {
+                const season = seasonSelect.value;
+                teamSelect.innerHTML = '<option value="">Cargando equipos...</option>';
+                teamSelect.disabled = true;
+                categorySelect.innerHTML = '<option value="">Cargando categorías...</option>';
+                categorySelect.disabled = true;
+                playersListContainer.innerHTML = '';
+                loadingMessage.textContent = 'Cargando jugadores de la temporada...';
+                loadingMessage.classList.remove('hidden');
+
+                if (!season) {
+                    loadingMessage.textContent = 'Seleccione una temporada.';
+                    return;
+                }
+
+                try {
+                    const snapshot = await database.ref(`/registrosPorTemporada/${season}`).once('value');
+                    if (!snapshot.exists()) {
+                        allPlayersInSeason = [];
+                        loadingMessage.textContent = 'No hay jugadores en esta temporada.';
+                        teamSelect.innerHTML = '<option value="">No hay equipos</option>';
+                        categorySelect.innerHTML = '<option value="">No hay categorías</option>';
+                        return;
+                    }
+
+                    const seasonalRecords = snapshot.val();
+                    const DNIyTipo = new Set(Object.values(seasonalRecords).map(r => (r._tipo && r._dni) ? `${r._tipo}|${r._dni}` : null).filter(Boolean));
+
+                    const promises = Array.from(DNIyTipo).map(item => {
+                        const [tipo, dni] = item.split('|');
+                        const dbNode = (tipo === 'JUGADOR/A' || tipo === 'jugadores') ? 'jugadores' : 'entrenadores';
+                        return database.ref(`/${dbNode}/${dni}/datosPersonales`).once('value');
+                    });
+
+                    const personalDataSnapshots = await Promise.all(promises);
+                    const datosPersonalesMap = new Map();
+                    const dniTipoArray = Array.from(DNIyTipo);
+
+                    personalDataSnapshots.forEach((snap, index) => {
+                        if (snap && snap.exists()) {
+                            const dni = dniTipoArray[index].split('|')[1];
+                            datosPersonalesMap.set(dni, snap.val());
+                        }
+                    });
+
+                    allPlayersInSeason = Object.values(seasonalRecords).map(record => {
+                        const personalData = datosPersonalesMap.get(String(record._dni)) || {};
+                        return { ...record, ...personalData };
+                    });
+
+                    const teams = [...new Set(allPlayersInSeason.map(p => p.EQUIPO).filter(Boolean))].sort();
+                    teamSelect.innerHTML = '<option value="">Seleccione equipo...</option>';
+                    teams.forEach(t => teamSelect.add(new Option(t, t)));
+                    teamSelect.disabled = false;
+
+                    categorySelect.innerHTML = '<option value="">Seleccione un equipo primero...</option>';
+                    categorySelect.disabled = true;
+
+                    loadingMessage.textContent = 'Seleccione un equipo y categoría para ver los jugadores.';
+                    actionsContainer.classList.add('hidden');
+                    bottomActionsContainer.classList.add('hidden');
+
+                } catch (error) {
+                    showToast(`Error al cargar jugadores: ${error.message}`, true);
+                    loadingMessage.textContent = 'Error al cargar datos.';
+                }
+            });
+
+            teamSelect.addEventListener('change', () => {
+                const team = teamSelect.value;
+                categorySelect.innerHTML = '<option value="">Cargando categorías...</option>';
+                categorySelect.disabled = true;
+                playersListContainer.innerHTML = '';
+
+                if (!team) {
+                    categorySelect.innerHTML = '<option value="">Seleccione un equipo primero...</option>';
+                    loadingMessage.textContent = 'Seleccione un equipo.';
+                    actionsContainer.classList.add('hidden');
+                    bottomActionsContainer.classList.add('hidden');
+                    return;
+                }
+
+                const playersInTeam = allPlayersInSeason.filter(p => p.EQUIPO === team);
+                const categories = [...new Set(playersInTeam.map(p => p.CATEGORIA).filter(Boolean))].sort();
+
+                categorySelect.innerHTML = '<option value="">Seleccione categoría...</option>';
+                categories.forEach(cat => categorySelect.add(new Option(cat, cat)));
+                categorySelect.disabled = false;
+
+                loadingMessage.textContent = 'Seleccione una categoría para ver los jugadores.';
+                actionsContainer.classList.add('hidden');
+                bottomActionsContainer.classList.add('hidden');
+            });
+
+            categorySelect.addEventListener('change', () => {
+                const category = categorySelect.value;
+                if (!category) {
+                    playersListContainer.innerHTML = '';
+                    loadingMessage.textContent = 'Seleccione una categoría para ver los jugadores.';
+                    loadingMessage.classList.remove('hidden');
+                    actionsContainer.classList.add('hidden');
+                    bottomActionsContainer.classList.add('hidden');
+                    return;
+                }
+
+                filterAndSortPlayers();
+                actionsContainer.classList.remove('hidden');
+                bottomActionsContainer.classList.remove('hidden');
+            });
+
+            function renderPlayers() {
+                loadingMessage.classList.add('hidden');
+                if (playersInCategory.length === 0) {
+                    playersListContainer.innerHTML = '<p class="text-center text-gray-500">No hay jugadores en esta categoría.</p>';
+                    return;
+                }
+
+                let html = '<div class="space-y-3">';
+                playersInCategory.forEach(player => {
+                    const playerNumber = (player.Numeros && player.Numeros[player.CATEGORIA]) || player.Numero || '';
+                    html += `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                    <span class="font-medium text-gray-800">${player.NOMBRE}</span>
+                    <div class="flex items-center gap-3">
+                        <label for="num-${player._pushId}" class="text-sm">Número:</label>
+                        <input type="text" maxlength="2" id="num-${player._pushId}" data-pushid="${player._pushId}" 
+                               value="${playerNumber}" 
+                               class="w-20 px-2 py-1 border border-gray-300 rounded-md text-center number-input">
+                    </div>
+                </div>
+            `;
+                });
+                html += '</div>';
+                playersListContainer.innerHTML = html;
+
+                document.querySelectorAll('.number-input').forEach(input => {
+                    input.addEventListener('change', handleNumberChange);
+                });
+            }
+
+            function filterAndSortPlayers() {
+                const category = categorySelect.value;
+                const team = teamSelect.value;
+                if (!category || !team) return;
+
+                let filtered = allPlayersInSeason
+                    .filter(p => p.CATEGORIA === category && p.EQUIPO === team && p.TIPO !== 'ENTRENADOR/A' && !p.esAutorizado);
+
+                if (currentSortMode === 'name') {
+                    filtered.sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
+                } else {
+                    filtered.sort((a, b) => {
+                        const getSortVal = (p) => {
+                            const raw = (p.Numeros && p.Numeros[category]) || p.Numero;
+                            if (raw === undefined || raw === null || raw === '') return Infinity;
+                            const s = String(raw).trim();
+                            if (s === '0') return -2;
+                            if (s === '00') return -1;
+                            const n = parseInt(s, 10);
+                            return isNaN(n) ? Infinity : n;
+                        };
+                        return getSortVal(a) - getSortVal(b);
+                    });
+                }
+
+                playersInCategory = filtered;
+                renderPlayers();
+            }
+
+            // --- Core Logic ---
+            async function handleNumberChange(event) {
+                const input = event.target;
+                let newNumber = input.value.trim();
+                const pushId = input.dataset.pushid;
+
+                if (newNumber === '') { // If number is cleared, just save it.
+                    await saveNumber(pushId, newNumber);
+                    return;
+                }
+
+                // Validar rango: permite "00" o números del 0 al 99
+                const isValid = /^(00|[0-9]{1,2})$/.test(newNumber);
+                if (!isValid) {
+                    showToast('Número inválido. Use 00 o 0-99.', true);
+                    const currentPlayer = allPlayersInSeason.find(p => p._pushId === pushId);
+                    input.value = (currentPlayer.Numeros && currentPlayer.Numeros[currentPlayer.CATEGORIA]) || currentPlayer.Numero || '';
+                    return;
+                }
+
+                // Normalizar (ej: "05" -> "5"), excepto "00" que se mantiene igual
+                if (newNumber !== '00') {
+                    newNumber = String(Number(newNumber));
+                    input.value = newNumber;
+                }
+
+                const currentPlayer = allPlayersInSeason.find(p => p._pushId === pushId);
+                if (!currentPlayer) return;
+
+                const conflicts = getConflictingPlayers(newNumber, currentPlayer);
+
+                if (conflicts.length > 0) {
+                    if (allowConflictCheckbox && allowConflictCheckbox.checked) {
+                        await saveNumber(pushId, newNumber);
+                        showToast(`Número ${newNumber} guardado (conflicto permitido).`);
+                    } else {
+                        showConflictModal(currentPlayer, conflicts, newNumber);
+                    }
+                } else {
+                    await saveNumber(pushId, newNumber);
+                }
+            }
+
+            function getConflictingPlayers(number, currentPlayer, ignorePlayers = []) {
+                const playerCategory = currentPlayer.CATEGORIA;
+
+                // Buscar categorías anteriores (donde la categoría actual aparece como siguiente)
+                const prevCategories = Object.keys(categoryProgressionRules).filter(key =>
+                    categoryProgressionRules[key].includes(playerCategory)
+                );
+
+                const relatedCategories = [playerCategory, ...(categoryProgressionRules[playerCategory] || []), ...prevCategories];
+
+                const ignoreIds = ignorePlayers.map(p => p._pushId);
+
+                return allPlayersInSeason.filter(p => {
+                    // Don't check against self
+                    if (p._pushId === currentPlayer._pushId) return false;
+                    // No verificar contra el jugador que estamos ignorando (útil para resolver conflictos mutuos)
+                    if (ignoreIds.includes(p._pushId)) return false;
+
+                    // Si los jugadores pertenecen a distinto equipo, no hay conflicto
+                    if (p.EQUIPO !== currentPlayer.EQUIPO) return false;
+
+                    // Si los jugadores pertenecen a distinto equipo, no hay conflicto
+                    if (p.EQUIPO !== currentPlayer.EQUIPO) return false;
+
+                    // Check if player `p` is in a related category
+                    if (relatedCategories.includes(p.CATEGORIA)) {
+                        const pNumber = (p.Numeros && p.Numeros[p.CATEGORIA]) || p.Numero;
+                        if (pNumber !== undefined && pNumber !== null && String(pNumber).trim() !== '' && String(pNumber).trim() === String(number).trim()) {
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+            }
+
+            function findNextAvailableNumber(player) {
+                // Candidatos: primero "00", luego del "0" al "99"
+                const candidates = ['00'];
+                for (let i = 0; i < 100; i++) {
+                    candidates.push(String(i));
+                }
+
+                for (const candidate of candidates) {
+                    if (getConflictingPlayers(candidate, player).length === 0) return candidate;
+                }
+                return null; // No se encontró (raro)
+            }
+
+            function findAvailableNumbers(player, count = 5, offset = 0) {
+                const candidates = ['00'];
+                for (let i = 0; i < 100; i++) {
+                    candidates.push(String(i));
+                }
+
+                const availableAll = [];
+                for (const candidate of candidates) {
+                    if (getConflictingPlayers(candidate, player).length === 0) availableAll.push(candidate);
+                }
+
+                return availableAll.slice(offset, offset + count);
+            }
+
+            async function saveNumber(pushId, number) {
+                const player = allPlayersInSeason.find(p => p._pushId === pushId);
+                if (!player) return;
+
+                const { _tipo, _dni, TEMPORADA, CATEGORIA } = player;
+                const dbNode = (_tipo === 'JUGADOR/A' || _tipo === 'jugadores') ? 'jugadores' : 'entrenadores';
+
+                const newNumeros = { ...(player.Numeros || {}), [CATEGORIA]: number };
+
+                const updates = {};
+                updates[`/registrosPorTemporada/${TEMPORADA}/${pushId}/Numero`] = number;
+                updates[`/registrosPorTemporada/${TEMPORADA}/${pushId}/Numeros`] = newNumeros;
+                updates[`/${dbNode}/${_dni}/temporadas/${TEMPORADA}/${pushId}/Numero`] = number;
+                updates[`/${dbNode}/${_dni}/temporadas/${TEMPORADA}/${pushId}/Numeros`] = newNumeros;
+
+                try {
+                    await database.ref().update(updates);
+                    showToast(`Número de ${player.NOMBRE} guardado.`);
+                    // Update local state to avoid re-fetching
+                    player.Numero = number;
+                    player.Numeros = newNumeros;
+                } catch (error) {
+                    showToast(`Error al guardar: ${error.message}`, true);
+                    // Revert input value on failure
+                    const input = document.getElementById(`num-${pushId}`);
+                    if (input) input.value = (player.Numeros && player.Numeros[player.CATEGORIA]) || player.Numero || '';
+                }
+            }
+
+            // --- Conflict Modal Logic ---
+            function showConflictModal(currentPlayer, existingPlayers, conflictingNumber) {
+                conflictState = { currentPlayer, existingPlayers };
+
+                document.getElementById('conflicting-number').textContent = conflictingNumber;
+
+                // Current player info
+                document.getElementById('current-player-name').textContent = currentPlayer.NOMBRE;
+                document.getElementById('current-player-category').textContent = `Cat: ${currentPlayer.CATEGORIA}`;
+                const currentUserInput = document.getElementById('current-player-number-input');
+                currentUserInput.value = conflictingNumber;
+                currentUserInput.dataset.pushid = currentPlayer._pushId;
+
+                // Existing players info
+                const container = document.getElementById('existing-players-container');
+                container.innerHTML = '';
+
+                existingPlayers.forEach(player => {
+                    const div = document.createElement('div');
+                    div.className = 'border border-gray-300 p-4 rounded-lg bg-red-50';
+                    div.innerHTML = `
+                <h3 class="font-semibold text-gray-800 border-b pb-2 mb-3">Jugador en Conflicto</h3>
+                <p class="font-bold text-lg">${player.NOMBRE}</p>
+                <p class="text-sm text-gray-600">Cat: ${player.CATEGORIA}</p>
+                <div class="mt-3">
+                    <label class="block text-sm font-medium text-gray-700">Cambiar número:</label>
+                    <input type="text" maxlength="2" id="existing-num-${player._pushId}" value="${conflictingNumber}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-center existing-player-input">
+                </div>
+            `;
+                    container.appendChild(div);
+                });
+
+                conflictModal.classList.remove('hidden');
+            }
+
+            document.getElementById('cancel-conflict-btn').addEventListener('click', () => {
+                conflictModal.classList.add('hidden');
+                // Re-render to show original values
+                renderPlayers();
+            });
+
+            document.getElementById('resolve-conflict-btn').addEventListener('click', async () => {
+                const newCurrentNumber = document.getElementById('current-player-number-input').value.trim();
+
+                const { currentPlayer, existingPlayers } = conflictState;
+
+                // Si el usuario permite guardar con conflictos, saltamos las validaciones y guardamos tal cual
+                if (allowConflictCheckbox && allowConflictCheckbox.checked) {
+                    // Recolectar nuevos números de los jugadores existentes
+                    const existingUpdates = [];
+                    for (const p of existingPlayers) {
+                        const input = document.getElementById(`existing-num-${p._pushId}`);
+                        if (input) {
+                            existingUpdates.push({ player: p, newNumber: input.value.trim() });
+                        }
+                    }
+
+                    await saveNumber(currentPlayer._pushId, newCurrentNumber);
+                    for (const update of existingUpdates) {
+                        await saveNumber(update.player._pushId, update.newNumber);
+                    }
+
+                    conflictModal.classList.add('hidden');
+                    showToast('Cambios guardados con conflicto permitido.');
+
+                    // Actualizar los inputs en la lista principal
+                    const mainInput = document.getElementById(`num-${currentPlayer._pushId}`);
+                    if (mainInput) mainInput.value = newCurrentNumber;
+                    existingUpdates.forEach(update => {
+                        const existingInput = document.getElementById(`num-${update.player._pushId}`);
+                        if (existingInput) existingInput.value = update.newNumber;
+                    });
+                    return;
+                }
+
+                // Recolectar nuevos números de los jugadores existentes
+                const existingUpdates = [];
+                for (const p of existingPlayers) {
+                    const input = document.getElementById(`existing-num-${p._pushId}`);
+                    if (input) {
+                        existingUpdates.push({ player: p, newNumber: input.value.trim() });
+                    }
+                }
+
+                // 1. Verificar conflicto interno (entre los jugadores del modal)
+                const allProposed = [{ id: currentPlayer._pushId, num: newCurrentNumber }, ...existingUpdates.map(u => ({ id: u.player._pushId, num: u.newNumber }))];
+                const nums = allProposed.map(x => x.num).filter(n => n !== '');
+                const uniqueNums = new Set(nums);
+                if (nums.length !== uniqueNums.size) {
+                    showToast('Hay números repetidos en la selección actual.', true);
+                    return;
+                }
+
+                // 2. Verificar conflicto del Jugador Actual (ignorando a los jugadores existentes en el modal)
+                const conflictsCurrent = getConflictingPlayers(newCurrentNumber, currentPlayer, existingPlayers);
+                if (conflictsCurrent.length > 0) {
+                    showToast(`El número ${newCurrentNumber} para ${currentPlayer.NOMBRE} entra en conflicto con ${conflictsCurrent[0].NOMBRE}.`, true);
+                    return;
+                }
+
+                // 3. Verificar conflicto de los Jugadores Existentes (ignorando al actual y a los otros existentes)
+                for (const update of existingUpdates) {
+                    const ignoreForThis = [currentPlayer, ...existingPlayers.filter(ep => ep._pushId !== update.player._pushId)];
+                    const conflicts = getConflictingPlayers(update.newNumber, update.player, ignoreForThis);
+                    if (conflicts.length > 0) {
+                        showToast(`El número ${update.newNumber} para ${update.player.NOMBRE} entra en conflicto con ${conflicts[0].NOMBRE}.`, true);
+                        return;
+                    }
+                }
+
+                // Save both, even if one hasn't changed. This is simpler.
+                await saveNumber(currentPlayer._pushId, newCurrentNumber);
+                for (const update of existingUpdates) {
+                    await saveNumber(update.player._pushId, update.newNumber);
+                }
+
+                conflictModal.classList.add('hidden');
+                showToast('Cambios guardados con éxito.');
+
+                // Update the input field in the main list for the current player
+                const mainInput = document.getElementById(`num-${currentPlayer._pushId}`);
+                if (mainInput) mainInput.value = newCurrentNumber;
+
+                // Actualizar también el input del jugador existente si está visible en la lista
+                existingUpdates.forEach(update => {
+                    const existingInput = document.getElementById(`num-${update.player._pushId}`);
+                    if (existingInput) existingInput.value = update.newNumber;
+                });
+            });
+
+            // Highlight input on focus in modal
+            document.getElementById('current-player-number-input').addEventListener('focus', e => {
+                e.target.classList.add('border-blue-500', 'ring-2', 'ring-blue-200');
+                document.querySelectorAll('.existing-player-input').forEach(el => el.classList.remove('border-blue-500', 'ring-2', 'ring-blue-200'));
+            });
+            // Event delegation for dynamic inputs
+            document.getElementById('existing-players-container').addEventListener('focusin', e => {
+                if (e.target.classList.contains('existing-player-input')) {
+                    e.target.classList.add('border-blue-500', 'ring-2', 'ring-blue-200');
+                    document.getElementById('current-player-number-input').classList.remove('border-blue-500', 'ring-2', 'ring-blue-200');
+                    // Remove highlight from other existing inputs
+                    document.querySelectorAll('.existing-player-input').forEach(el => {
+                        if (el !== e.target) el.classList.remove('border-blue-500', 'ring-2', 'ring-blue-200');
+                    });
+                }
+            });
+
+            // --- Export CSV Logic ---
+            exportCsvBtn.addEventListener('click', () => {
+                if (playersInCategory.length === 0) {
+                    showToast('No hay datos para exportar.', true);
+                    return;
+                }
+
+                const season = seasonSelect.value;
+                const category = categorySelect.value;
+                const safeCategory = category.replace(/[^a-z0-9]/gi, '_');
+                const filename = `Numeros_${safeCategory}_${season}.csv`;
+
+                // BOM para asegurar que Excel reconozca UTF-8 (tildes, ñ, etc.)
+                let csvContent = "\uFEFF";
+                csvContent += "Nombre;DNI;Categoría;Número\n";
+
+                playersInCategory.forEach(player => {
+                    const number = (player.Numeros && player.Numeros[player.CATEGORIA]) || player.Numero || '';
+                    const name = (player.NOMBRE || '').replace(/"/g, '""'); // Escapar comillas en el nombre
+
+                    const row = [
+                        `"${name}"`,
+                        `"${player._dni || ''}"`,
+                        `"${player.CATEGORIA || ''}"`,
+                        `"${number}"`
+                    ].join(";");
+                    csvContent += row + "\n";
+                });
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+
+            // --- Sort Logic ---
+            sortBtn.addEventListener('click', () => {
+                if (currentSortMode === 'name') {
+                    currentSortMode = 'number';
+                    sortBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+                </svg>
+                Ordenar por Nombre
+            `;
+                } else {
+                    currentSortMode = 'name';
+                    sortBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                </svg>
+                Ordenar por Número
+            `;
+                }
+                filterAndSortPlayers();
+            });
+
+            // --- Auto Assign Logic ---
+            autoAssignBtn.addEventListener('click', () => {
+                if (playersInCategory.length === 0) {
+                    showToast('No hay jugadores en la lista.', true);
+                    return;
+                }
+
+                // 1. Filtrar jugadores sin número
+                const playersWithoutNumber = playersInCategory.filter(p => {
+                    const num = (p.Numeros && p.Numeros[p.CATEGORIA]) || p.Numero;
+                    return num === undefined || num === null || String(num).trim() === '';
+                });
+
+                if (playersWithoutNumber.length === 0) {
+                    showToast('Todos los jugadores ya tienen número.', false);
+                    return;
+                }
+
+                pendingAutoAssignments = [];
+                const temporarilyTakenNumbers = new Set();
+
+                // 2. Calcular números disponibles
+                playersWithoutNumber.forEach(player => {
+                    // Buscar candidatos: 00, 0-99
+                    const candidates = ['00'];
+                    for (let i = 0; i < 100; i++) candidates.push(String(i));
+
+                    let assigned = null;
+
+                    for (const candidate of candidates) {
+                        // Verificar conflicto en BD
+                        const conflicts = getConflictingPlayers(candidate, player);
+                        // Verificar conflicto con los que acabamos de asignar en este bucle
+                        const isTakenLocally = temporarilyTakenNumbers.has(candidate);
+
+                        if (conflicts.length === 0 && !isTakenLocally) {
+                            assigned = candidate;
+                            temporarilyTakenNumbers.add(candidate);
+                            break;
+                        }
+                    }
+
+                    if (assigned !== null) {
+                        pendingAutoAssignments.push({ player, number: assigned });
+                    }
+                });
+
+                if (pendingAutoAssignments.length === 0) {
+                    showToast('No se encontraron números disponibles para asignar.', true);
+                    return;
+                }
+
+                // 3. Mostrar Modal
+                autoAssignList.innerHTML = pendingAutoAssignments.map(item => `
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.player.NOMBRE}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                    <div class="flex items-center justify-end gap-2">
+                        <label for="assign-${item.player._pushId}" class="text-sm text-gray-600">Asignar Nº</label>
+                        <input type="text" id="assign-${item.player._pushId}" value="${item.number}" 
+                            class="w-16 px-2 py-1 border border-gray-300 rounded-md text-center font-bold text-purple-700 focus:ring-2 focus:ring-purple-500 outline-none auto-assign-input"
+                            data-pushid="${item.player._pushId}">
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+
+                autoAssignModal.classList.remove('hidden');
+            });
+
+            document.getElementById('cancel-auto-assign-btn').addEventListener('click', () => {
+                autoAssignModal.classList.add('hidden');
+                pendingAutoAssignments = [];
+            });
+
+            confirmAutoAssignBtn.addEventListener('click', async () => {
+                const inputs = document.querySelectorAll('.auto-assign-input');
+                const assignments = [];
+
+                for (const input of inputs) {
+                    const val = input.value.trim();
+                    if (!/^(00|[0-9]{1,2})$/.test(val)) {
+                        showToast(`Número inválido: ${val}`, true);
+                        return;
+                    }
+                    assignments.push({ pushId: input.dataset.pushid, number: val });
+                }
+
+                for (const assignment of assignments) {
+                    await saveNumber(assignment.pushId, assignment.number);
+                    // Actualizar input visualmente
+                    const input = document.getElementById(`num-${assignment.pushId}`);
+                    if (input) input.value = assignment.number;
+                }
+                autoAssignModal.classList.add('hidden');
+                showToast(`Se asignaron números a ${assignments.length} jugadores.`);
+                pendingAutoAssignments = [];
+            });
+
+            // --- Verification Logic ---
+            verifyBtn.addEventListener('click', () => {
+                const conflictsMap = new Map(); // Para evitar duplicados de pares exactos
+
+                playersInCategory.forEach(player => {
+                    const currentNumber = (player.Numeros && player.Numeros[player.CATEGORIA]) || player.Numero;
+
+                    if (currentNumber !== undefined && currentNumber !== null && currentNumber !== '') {
+                        const conflictingPlayers = getConflictingPlayers(currentNumber, player);
+                        conflictingPlayers.forEach(conflictingPlayer => {
+                            // Ordenar por ID para que el par (A,B) sea igual a (B,A)
+                            const ids = [player._pushId, conflictingPlayer._pushId].sort();
+                            const pairKey = ids.join('-');
+
+                            if (!conflictsMap.has(pairKey)) {
+                                conflictsMap.set(pairKey, {
+                                    player1: player,
+                                    player2: conflictingPlayer,
+                                    number: currentNumber
+                                });
+                            }
+                        });
+                    }
+                });
+
+                activeConflicts = Array.from(conflictsMap.values());
+                currentConflictIndex = 0;
+
+                if (activeConflicts.length === 0) {
+                    showToast('¡No se encontraron conflictos en esta categoría!');
+                    return;
+                }
+                showNextConflict();
+            });
+
+            function showNextConflict() {
+                if (currentConflictIndex >= activeConflicts.length) {
+                    verificationModal.classList.add('hidden');
+                    showToast('Se han revisado todos los conflictos.');
+                    filterAndSortPlayers(); // Refrescar lista principal
+                    return;
+                }
+
+                const item = activeConflicts[currentConflictIndex];
+                const p1 = item.player1;
+                const p2 = item.player2;
+
+                // Atributos dinámicos para manejar el offset de sugerencias por jugador
+                p1._suggestOffset = 0;
+                p2._suggestOffset = 0;
+
+                verificationResults.innerHTML = '';
+                const div = document.createElement('div');
+                div.className = 'p-6 border border-red-200 bg-red-50 rounded-xl shadow-inner';
+
+                div.innerHTML = `
+            <div class="flex justify-between items-center mb-4">
+                <span class="text-sm font-bold text-red-600 bg-red-100 px-3 py-1 rounded-full">
+                    Conflicto ${currentConflictIndex + 1} de ${activeConflicts.length}
+                </span>
+                <span class="text-lg font-bold text-gray-700">Número duplicado: ${item.number}</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Jugador 1 -->
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                    <p class="font-bold text-gray-800 text-lg">${p1.NOMBRE}</p>
+                    <p class="text-sm text-gray-500 mb-3">${p1.CATEGORIA}</p>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Nuevo número:</label>
+                    <input type="text" id="ver-input-${p1._pushId}" class="w-full px-3 py-2 border rounded-md text-center font-bold text-blue-600" value="${item.number}">
+                    <p class="text-xs text-gray-500 mt-2">Sugerencias (similares):</p>
+                    <div class="flex items-center gap-2 mt-1">
+                        <div id="ver-available-${p1._pushId}" class="flex flex-wrap gap-1"></div>
+                        <button type="button" class="add-more-suggest-btn p-1 bg-gray-200 hover:bg-gray-300 rounded text-gray-700 font-bold" data-playerindex="1">+</button>
+                    </div>
+                </div>
+
+                <!-- Jugador 2 -->
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                    <p class="font-bold text-gray-800 text-lg">${p2.NOMBRE}</p>
+                    <p class="text-sm text-gray-500 mb-3">${p2.CATEGORIA}</p>
+                    <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Nuevo número:</label>
+                    <input type="text" id="ver-input-${p2._pushId}" class="w-full px-3 py-2 border rounded-md text-center font-bold text-blue-600" value="${item.number}">
+                    <p class="text-xs text-gray-500 mt-2">Sugerencias (similares):</p>
+                    <div class="flex items-center gap-2 mt-1">
+                        <div id="ver-available-${p2._pushId}" class="flex flex-wrap gap-1"></div>
+                        <button type="button" class="add-more-suggest-btn p-1 bg-gray-200 hover:bg-gray-300 rounded text-gray-700 font-bold" data-playerindex="2">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 flex flex-col sm:flex-row justify-end gap-3 border-t pt-4">
+                <button id="skip-conflict-btn" class="py-2 px-6 bg-gray-200 text-gray-800 font-bold rounded-lg hover:bg-gray-300 transition-colors">
+                    Mantener y Siguiente
+                </button>
+                <button id="apply-step-btn" class="py-2 px-6 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md transition-all">
+                    Guardar y Siguiente
+                </button>
+            </div>
+        `;
+
+                verificationResults.appendChild(div);
+
+                // Llenar números disponibles
+                const fillAvailable = (player, containerId, append = false) => {
+                    const container = document.getElementById(containerId);
+                    const count = 5;
+                    const availList = findAvailableNumbers(player, count, player._suggestOffset);
+
+                    const html = availList.map(n =>
+                        `<button type="button" class="ver-avail-btn px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium hover:bg-blue-100 border border-blue-200" data-pushid="${player._pushId}" data-num="${n}">${n}</button>`
+                    ).join('');
+
+                    if (append) {
+                        container.insertAdjacentHTML('beforeend', html);
+                    } else {
+                        container.innerHTML = html;
+                    }
+                    player._suggestOffset += count;
+                };
+
+                fillAvailable(p1, `ver-available-${p1._pushId}`);
+                fillAvailable(p2, `ver-available-${p2._pushId}`);
+
+                // Manejar botones "+"
+                div.querySelectorAll('.add-more-suggest-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const idx = e.currentTarget.dataset.playerindex;
+                        const targetPlayer = idx === '1' ? p1 : p2;
+                        fillAvailable(targetPlayer, `ver-available-${targetPlayer._pushId}`, true);
+                    });
+                });
+
+                // Eventos de navegación
+                document.getElementById('skip-conflict-btn').onclick = () => {
+                    currentConflictIndex++;
+                    showNextConflict();
+                };
+
+                document.getElementById('apply-step-btn').onclick = async (e) => {
+                    const btn = e.currentTarget;
+                    let v1 = document.getElementById(`ver-input-${p1._pushId}`).value.trim();
+                    let v2 = document.getElementById(`ver-input-${p2._pushId}`).value.trim();
+
+                    const validRe = /^(00|[0-9]{1,2})$/;
+                    if (v1 !== '' && !validRe.test(v1)) { showToast('Número inválido para el primer jugador.', true); return; }
+                    if (v2 !== '' && !validRe.test(v2)) { showToast('Número inválido para el segundo jugador.', true); return; }
+
+                    if (v1 !== '00' && v1 !== '') v1 = String(Number(v1));
+                    if (v2 !== '00' && v2 !== '') v2 = String(Number(v2));
+
+                    if (!(allowConflictCheckbox && allowConflictCheckbox.checked) && v1 === v2 && v1 !== '') {
+                        showToast('Los dos jugadores no pueden tener el mismo número.', true);
+                        return;
+                    }
+
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="animate-spin mr-2">⏳</span> Guardando...';
+
+                    try {
+                        const old1 = (p1.Numeros && p1.Numeros[p1.CATEGORIA]) || p1.Numero || '';
+                        const old2 = (p2.Numeros && p2.Numeros[p2.CATEGORIA]) || p2.Numero || '';
+
+                        if (v1 !== old1) await saveNumber(p1._pushId, v1);
+                        if (v2 !== old2) await saveNumber(p2._pushId, v2);
+
+                        showToast('Cambios aplicados.');
+                        currentConflictIndex++;
+                        showNextConflict();
+                    } catch (err) {
+                        showToast('Error al guardar: ' + err.message, true);
+                        btn.disabled = false;
+                        btn.textContent = 'Guardar y Siguiente';
+                    }
+                };
+
+                verificationModal.classList.remove('hidden');
+            }
+
+            // Event delegation para números disponibles en el nuevo flujo
+            verificationResults.addEventListener('click', (e) => {
+                const target = e.target;
+                if (target.classList && target.classList.contains('ver-avail-btn')) {
+                    const pushId = target.dataset.pushid;
+                    const num = target.dataset.num;
+                    const input = document.getElementById(`ver-input-${pushId}`);
+                    if (input) input.value = num;
+                }
+            });
+
+            document.getElementById('close-verification-btn').addEventListener('click', () => {
+                verificationModal.classList.add('hidden');
+            });
+
+        });
+    </script>
+</body>
+
+</html>

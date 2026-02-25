@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Usuarios - DSC</title>
+    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/GestionNumeros.png"
+        type="image/png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="firebase-config.js"></script>
+</head>
+
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full border-t-4 border-blue-600">
+        <div class="flex items-center justify-between mb-8 gap-4">
+            <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="Logo"
+                class="h-12 w-auto">
+            <div class="text-center">
+                <h1 class="text-2xl font-bold text-gray-800">Nuevo Usuario</h1>
+                <p class="text-sm text-gray-400">Control de Acceso</p>
+            </div>
+            <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="Logo"
+                class="h-12 w-auto">
+        </div>
+
+        <form id="registration-form" class="space-y-4">
+            <div>
+                <label for="reg-email" class="block text-sm font-medium text-gray-700">Correo Electrónico</label>
+                <input type="email" id="reg-email" required
+                    class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
+            </div>
+
+            <div>
+                <label for="reg-password" class="block text-sm font-medium text-gray-700">Contraseña</label>
+                <input type="password" id="reg-password" required minlength="6"
+                    class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
+            </div>
+
+            <div>
+                <label for="reg-role" class="block text-sm font-medium text-gray-700">Rol del Sistema</label>
+                <select id="reg-role"
+                    class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
+                    <option value="admin">Administrador (Acceso Total)</option>
+                    <option value="user">Usuario (Solo Lectura)</option>
+                </select>
+            </div>
+
+            <button type="submit" id="submit-btn"
+                class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transform active:scale-95 transition-all flex items-center justify-center gap-2">
+                <span>Registrar Usuario</span>
+            </button>
+        </form>
+
+        <p id="message" class="mt-4 text-center text-sm font-medium hidden"></p>
+
+        <div class="mt-6 pt-6 border-t text-center">
+            <a href="index.html" class="text-blue-600 hover:underline text-sm font-medium">&larr; Volver al Inicio</a>
+        </div>
+    </div>
+
+    <script>
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        const form = document.getElementById('registration-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const msg = document.getElementById('message');
+
+        function showMessage(text, isError = false) {
+            msg.textContent = text;
+            msg.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-red-500' : 'text-green-600'}`;
+            msg.classList.remove('hidden');
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            const role = document.getElementById('reg-role').value;
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<span>Procesando...</span>`;
+            msg.classList.add('hidden');
+
+            try {
+                // 1. Crear en Firebase Auth
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+
+                // 2. Si es admin, registrar en /admins
+                if (role === 'admin') {
+                    await db.ref('admins/' + user.uid).set(true);
+                }
+
+                showMessage("¡Usuario creado con éxito! Ya puede iniciar sesión.");
+                form.reset();
+            } catch (error) {
+                console.error(error);
+                let errorText = "Error: " + error.message;
+                if (error.code === 'auth/email-already-in-use') errorText = "Este correo ya está registrado.";
+                if (error.code === 'auth/weak-password') errorText = "La contraseña debe tener al menos 6 caracteres.";
+                showMessage(errorText, true);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `<span>Registrar Usuario</span>`;
+            }
+        });
+    </script>
+</body>
+
+</html>
