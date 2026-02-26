@@ -17,7 +17,31 @@
 
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
 
-    <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full border-t-4 border-blue-600">
+    <!-- Modal de Login -->
+    <div id="login-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
+            <div class="text-center mb-6">
+                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
+                    alt="Logo del Club" class="h-20 w-auto mx-auto mb-4">
+                <h2 class="text-2xl font-bold text-gray-800 font-bold">Iniciar Sesión</h2>
+                <p class="text-gray-500 text-sm mt-1">Solo administradores pueden registrar usuarios</p>
+            </div>
+            <div class="space-y-4">
+                <input type="email" id="login-email" placeholder="Correo electrónico"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <input type="password" id="login-password" placeholder="Contraseña"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <p id="login-error" class="text-red-500 text-sm hidden"></p>
+                <button id="login-btn"
+                    class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition duration-200">
+                    Ingresar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="registration-container"
+        class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full border-t-4 border-blue-600 hidden">
         <div class="flex items-center justify-between mb-8 gap-4">
             <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="Logo"
                 class="h-12 w-auto">
@@ -59,8 +83,19 @@
 
         <p id="message" class="mt-4 text-center text-sm font-medium hidden"></p>
 
-        <div class="mt-6 pt-6 border-t text-center">
-            <a href="index.html" class="text-blue-600 hover:underline text-sm font-medium">&larr; Volver al Inicio</a>
+        <div class="mt-8 pt-6 border-t">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">Administradores Actuales</h3>
+            <div id="users-list" class="space-y-3">
+                <!-- Lista dinámica de usuarios -->
+                <p class="text-sm text-gray-400 text-center italic">Cargando lista...</p>
+            </div>
+        </div>
+
+        <div class="mt-6 pt-6 border-t text-center flex flex-col gap-3">
+            <button id="logout-btn-main"
+                class="text-red-600 hover:bg-red-50 py-2 rounded-lg text-sm font-bold transition-colors border border-red-100">
+                Cerrar Sesión Activa
+            </button>
         </div>
     </div>
 
@@ -69,15 +104,114 @@
         const auth = firebase.auth();
         const db = firebase.database();
 
+        // Aplicación secundaria para crear usuarios sin cerrar la sesión administrativa
+        const secondaryApp = firebase.initializeApp(firebaseConfig, "SecondaryRegistrationApp");
+        const secondaryAuth = secondaryApp.auth();
+
         const form = document.getElementById('registration-form');
         const submitBtn = document.getElementById('submit-btn');
         const msg = document.getElementById('message');
+        const usersListContainer = document.getElementById('users-list');
 
         function showMessage(text, isError = false) {
             msg.textContent = text;
             msg.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-red-500' : 'text-green-600'}`;
             msg.classList.remove('hidden');
         }
+
+        const registrationContainer = document.getElementById('registration-container');
+        const loginModal = document.getElementById('login-modal');
+        const loginEmail = document.getElementById('login-email');
+        const loginPass = document.getElementById('login-password');
+        const loginBtn = document.getElementById('login-btn');
+        const loginError = document.getElementById('login-error');
+
+        // --- Auth Guard ---
+        auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).then(() => {
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    db.ref('admins/' + user.uid).once('value').then(snapshot => {
+                        if (snapshot.exists()) {
+                            loginModal.classList.add('hidden');
+                            registrationContainer.classList.remove('hidden');
+                            loadAdmins();
+                        } else {
+                            loginError.textContent = 'No tienes permisos de administrador.';
+                            loginError.classList.remove('hidden');
+                            auth.signOut();
+                        }
+                    });
+                } else {
+                    loginModal.classList.remove('hidden');
+                    registrationContainer.classList.add('hidden');
+                }
+            });
+        });
+
+        // Botón de Logout Manual
+        document.getElementById('logout-btn-main')?.addEventListener('click', () => {
+            if (confirm('¿Deseas cerrar tu sesión?')) {
+                auth.signOut();
+            }
+        });
+
+        loginBtn.addEventListener('click', () => {
+            const email = loginEmail.value;
+            const pass = loginPass.value;
+            loginError.classList.add('hidden');
+            auth.signInWithEmailAndPassword(email, pass).catch(err => {
+                loginError.textContent = "Error: " + err.message;
+                loginError.classList.remove('hidden');
+            });
+        });
+
+        // --- Admin Management Logic ---
+        function loadAdmins() {
+            db.ref('admins').on('value', snapshot => {
+                if (!snapshot.exists()) {
+                    usersListContainer.innerHTML = '<p class="text-sm text-gray-400 text-center italic">No hay administradores registrados.</p>';
+                    return;
+                }
+
+                const admins = snapshot.val();
+                let html = '';
+
+                Object.entries(admins).forEach(([uid, data]) => {
+                    // Si data es un objeto (por registros anteriores), buscar email. Si es true, mostrar UID.
+                    const displayInfo = (data && data.email) ? data.email : 'UID: ' + uid.substring(0, 8) + '...';
+                    const isOwnUser = uid === auth.currentUser.uid;
+
+                    html += `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
+                            <div class="overflow-hidden">
+                                <p class="text-sm font-medium text-gray-700 truncate">${displayInfo}</p>
+                                ${isOwnUser ? '<span class="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold uppercase">Tú</span>' : ''}
+                            </div>
+                            ${!isOwnUser ? `
+                                <button onclick="deleteAdmin('${uid}', '${displayInfo}')" class="text-red-500 hover:text-red-700 p-1 transition-colors" title="Revocar Acceso">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+
+                usersListContainer.innerHTML = html;
+            });
+        }
+
+        window.deleteAdmin = async (uid, info) => {
+            if (confirm(`¿Estás seguro de que deseas revocar el acceso a ${info}?`)) {
+                try {
+                    await db.ref('admins/' + uid).remove();
+                    showMessage(`Acceso revocado correctamente.`);
+                } catch (error) {
+                    showMessage(`Error al eliminar: ${error.message}`, true);
+                }
+            }
+        };
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -91,13 +225,23 @@
             msg.classList.add('hidden');
 
             try {
-                // 1. Crear en Firebase Auth
-                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-                const user = userCredential.user;
+                // 1. Crear usuario en la App Secundaria (esto no afecta la sesión del admin en la App Primaria)
+                const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+                const newUser = userCredential.user;
 
-                // 2. Si es admin, registrar en /admins
+                // 2. Cerrar sesión en la App Secundaria inmediatamente para limpiar
+                await secondaryAuth.signOut();
+
+                // 3. Asignar rol en la base de datos usando la App Primaria (donde seguimos logueados como admin)
                 if (role === 'admin') {
-                    await db.ref('admins/' + user.uid).set(true);
+                    // Guardamos un objeto con el email para que el listado sea legible, 
+                    // pero el acceso se valida por la existencia del nodo admins/{uid}
+                    await db.ref('admins/' + newUser.uid).set({
+                        email: email,
+                        role: 'admin'
+                    });
+                } else {
+                    await db.ref('users/' + newUser.uid).set(true);
                 }
 
                 showMessage("¡Usuario creado con éxito! Ya puede iniciar sesión.");
