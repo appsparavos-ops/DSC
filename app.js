@@ -103,19 +103,43 @@ document.addEventListener('DOMContentLoaded', function() {
             auth.onAuthStateChanged(user => {
                 if (user) {
                     logAction('login', { email: user.email });
-                    database.ref('admins/' + user.uid).once('value').then(snapshot => {
-                        if (snapshot.exists()) {
-                            currentUserRole = 'admin';
-                            isEditModeActive = true;
-                        } else {
-                            currentUserRole = 'user';
-                            isEditModeActive = false;
-                        }
-                        showMainContent();
-                    }).catch(error => {
-                        console.error("Error al verificar rol de admin:", error);
-                        auth.signOut();
-                    });
+                    // Intentar verificar si es administrador
+                    database.ref('admins/' + user.uid).once('value')
+                        .then(snapshot => {
+                            if (snapshot.exists()) {
+                                currentUserRole = 'admin';
+                                isEditModeActive = true;
+                                showMainContent();
+                            } else {
+                                // Si no existe en admins, verificar en users
+                                return checkUserRole(user.uid);
+                            }
+                        })
+                        .catch(error => {
+                            // Si da error de permisos (común en usuarios), verificar en users
+                            if (error.code === 'PERMISSION_DENIED') {
+                                return checkUserRole(user.uid);
+                            }
+                            console.error("Error al verificar rol:", error);
+                            auth.signOut();
+                        });
+
+                    function checkUserRole(uid) {
+                        return database.ref('users/' + uid).once('value')
+                            .then(snapshot => {
+                                if (snapshot.exists()) {
+                                    currentUserRole = 'user';
+                                } else {
+                                    currentUserRole = 'guest'; // Opcional: manejar otros casos
+                                }
+                                isEditModeActive = false;
+                                showMainContent();
+                            })
+                            .catch(err => {
+                                console.error("Error al verificar rol de usuario:", err);
+                                auth.signOut();
+                            });
+                    }
                 } else {
                     currentUserRole = null;
                     isEditModeActive = false;
