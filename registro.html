@@ -71,6 +71,7 @@
                 <select id="reg-role"
                     class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all">
                     <option value="admin">Administrador (Acceso Total)</option>
+                    <option value="developer" id="role-dev-option">Desarrollador (Acceso Total - Protegido)</option>
                     <option value="user">Usuario (Solo Lectura)</option>
                 </select>
             </div>
@@ -84,10 +85,21 @@
         <p id="message" class="mt-4 text-center text-sm font-medium hidden"></p>
 
         <div class="mt-8 pt-6 border-t">
-            <h3 class="text-lg font-bold text-gray-800 mb-4">Administradores Actuales</h3>
-            <div id="users-list" class="space-y-3">
-                <!-- Lista dinámica de usuarios -->
-                <p class="text-sm text-gray-400 text-center italic">Cargando lista...</p>
+            <button id="toggle-mgmt-btn"
+                class="w-full flex items-center justify-between py-2 px-1 text-gray-700 hover:text-blue-600 transition-colors focus:outline-none">
+                <span class="text-lg font-bold font-bold">Gestión de Acceso (Usuarios)</span>
+                <svg id="toggle-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transform transition-transform"
+                    viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                        clip-rule="evenodd" />
+                </svg>
+            </button>
+            <div id="mgmt-section" class="hidden mt-4">
+                <div id="users-list" class="space-y-3">
+                    <!-- Lista dinámica de usuarios -->
+                    <p class="text-sm text-gray-400 text-center italic">Cargando lista...</p>
+                </div>
             </div>
         </div>
 
@@ -112,11 +124,18 @@
         const submitBtn = document.getElementById('submit-btn');
         const msg = document.getElementById('message');
         const usersListContainer = document.getElementById('users-list');
+        let allUsersData = {};
+        let currentUserRole = null;
 
         function showMessage(text, isError = false) {
             msg.textContent = text;
             msg.className = `mt-4 text-center text-sm font-medium ${isError ? 'text-red-500' : 'text-green-600'}`;
             msg.classList.remove('hidden');
+        }
+
+        // Función para sanear el email para usarlo como llave en Firebase
+        function encodeEmail(email) {
+            return email.replace(/\./g, '_dot_').replace(/@/g, '_at_');
         }
 
         const registrationContainer = document.getElementById('registration-container');
@@ -131,10 +150,12 @@
             auth.onAuthStateChanged(user => {
                 if (user) {
                     db.ref('admins/' + user.uid).once('value').then(snapshot => {
+                        const adminData = snapshot.val();
                         if (snapshot.exists()) {
+                            currentUserRole = adminData.role || 'admin';
                             loginModal.classList.add('hidden');
                             registrationContainer.classList.remove('hidden');
-                            loadAdmins();
+                            loadUsers();
                         } else {
                             loginError.textContent = 'No tienes permisos de administrador.';
                             loginError.classList.remove('hidden');
@@ -155,6 +176,16 @@
             }
         });
 
+        // Toggle de Sección de Gestión
+        const toggleMgmtBtn = document.getElementById('toggle-mgmt-btn');
+        const mgmtSection = document.getElementById('mgmt-section');
+        const toggleIcon = document.getElementById('toggle-icon');
+
+        toggleMgmtBtn?.addEventListener('click', () => {
+            const isHidden = mgmtSection.classList.toggle('hidden');
+            toggleIcon.classList.toggle('rotate-180', !isHidden);
+        });
+
         loginBtn.addEventListener('click', () => {
             const email = loginEmail.value;
             const pass = loginPass.value;
@@ -165,30 +196,51 @@
             });
         });
 
-        // --- Admin Management Logic ---
-        function loadAdmins() {
-            db.ref('admins').on('value', snapshot => {
-                if (!snapshot.exists()) {
-                    usersListContainer.innerHTML = '<p class="text-sm text-gray-400 text-center italic">No hay administradores registrados.</p>';
+        // --- User Management Logic ---
+        function loadUsers() {
+            const adminsRef = db.ref('admins');
+            const usersRef = db.ref('users');
+
+            function updateUI() {
+                if (Object.keys(allUsersData).length === 0) {
+                    usersListContainer.innerHTML = '<p class="text-sm text-gray-400 text-center italic">No hay usuarios registrados.</p>';
                     return;
                 }
 
-                const admins = snapshot.val();
                 let html = '';
+                let developerCount = 0;
+                // Ordenar para que los "Tú" y admins salgan primero si se desea, o por email/ID
+                const sortedUsers = Object.entries(allUsersData).sort((a, b) => {
+                    if (a[0] === auth.currentUser.uid) return -1;
+                    if (b[0] === auth.currentUser.uid) return 1;
+                    return 0;
+                });
 
-                Object.entries(admins).forEach(([uid, data]) => {
-                    // Si data es un objeto (por registros anteriores), buscar email. Si es true, mostrar UID.
-                    const displayInfo = (data && data.email) ? data.email : 'UID: ' + uid.substring(0, 8) + '...';
+                sortedUsers.forEach(([uid, data]) => {
                     const isOwnUser = uid === auth.currentUser.uid;
+                    const role = data.role || 'usuario';
+                    if (role === 'developer') developerCount++;
+
+                    const displayInfo = (data && data.email) ? data.email : `UID: ${uid.substring(0, 8)}...`;
+
+                    // Colores por rol
+                    let roleClass = 'bg-gray-200 text-gray-600';
+                    if (role === 'admin') roleClass = 'bg-purple-100 text-purple-600';
+                    if (role === 'developer') roleClass = 'bg-yellow-100 text-yellow-700';
 
                     html += `
                         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
                             <div class="overflow-hidden">
-                                <p class="text-sm font-medium text-gray-700 truncate">${displayInfo}</p>
-                                ${isOwnUser ? '<span class="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold uppercase">Tú</span>' : ''}
+                                <div class="flex items-center gap-2">
+                                    <p class="text-xs font-bold text-gray-800 truncate">${displayInfo}</p>
+                                    <span class="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${roleClass}">
+                                        ${role}
+                                    </span>
+                                    ${isOwnUser ? '<span class="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold uppercase">Tú</span>' : ''}
+                                </div>
                             </div>
-                            ${!isOwnUser ? `
-                                <button onclick="deleteAdmin('${uid}', '${displayInfo}')" class="text-red-500 hover:text-red-700 p-1 transition-colors" title="Revocar Acceso">
+                            ${(!isOwnUser && role !== 'developer') ? `
+                                <button onclick="deleteUser('${uid}', '${role}', '${displayInfo}')" class="text-red-500 hover:text-red-700 p-1 transition-colors" title="Revocar Acceso">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
@@ -197,16 +249,88 @@
                         </div>
                     `;
                 });
-
                 usersListContainer.innerHTML = html;
+
+                // Controlar visibilidad de la opción "Desarrollador"
+                const devOption = document.getElementById('role-dev-option');
+                if (devOption) {
+                    // Solo un desarrollador puede ver la opción de crear otro desarrollador
+                    // Y además se respeta el límite de 2
+                    if (currentUserRole !== 'developer' || developerCount >= 2) {
+                        devOption.disabled = true;
+                        devOption.style.display = 'none';
+                        if (document.getElementById('reg-role').value === 'developer') {
+                            document.getElementById('reg-role').value = 'admin';
+                        }
+                    } else {
+                        devOption.disabled = false;
+                        devOption.style.display = 'block';
+                    }
+                }
+            }
+
+            // Escuchar administradores
+            adminsRef.on('value', snapshot => {
+                const admins = snapshot.val() || {};
+                // Limpiar usuarios antiguos que eran admins pero ya no están en este nodo
+                Object.keys(allUsersData).forEach(uid => {
+                    if (allUsersData[uid].role === 'admin') delete allUsersData[uid];
+                });
+
+                Object.entries(admins).forEach(([uid, data]) => {
+                    const role = (data && typeof data === 'object') ? (data.role || 'admin') : 'admin';
+                    allUsersData[uid] = (typeof data === 'object') ? { ...data, role: role } : { email: null, role: role };
+
+                    // Sincronización automática de emailMapping con manejo de errores
+                    if (data && data.email) {
+                        db.ref('emailMapping/' + encodeEmail(data.email)).set(uid).catch(err => {
+                            if (err.code === 'PERMISSION_DENIED') {
+                                console.warn("Aviso: No se pudo actualizar el mapa de emails (admins) por falta de permisos.");
+                            }
+                        });
+                    }
+                });
+                updateUI();
+            });
+
+            // Escuchar usuarios regulares
+            usersRef.on('value', snapshot => {
+                const users = snapshot.val() || {};
+                // Limpiar usuarios antiguos que eran 'usuario'
+                Object.keys(allUsersData).forEach(uid => {
+                    if (allUsersData[uid].role === 'usuario') delete allUsersData[uid];
+                });
+
+                Object.entries(users).forEach(([uid, data]) => {
+                    // Si el usuario ya está como admin (poco probable pero posible), no lo sobreescribimos
+                    if (!allUsersData[uid]) {
+                        const role = (data && typeof data === 'object') ? (data.role || 'usuario') : 'usuario';
+                        allUsersData[uid] = (typeof data === 'object') ? { ...data, role: role } : { email: null, role: role };
+
+                        // Sincronización automática de emailMapping con manejo de errores
+                        if (data && data.email) {
+                            db.ref('emailMapping/' + encodeEmail(data.email)).set(uid).catch(err => {
+                                if (err.code === 'PERMISSION_DENIED') {
+                                    console.warn("Aviso: No se pudo actualizar el mapa de emails (users) por falta de permisos.");
+                                }
+                            });
+                        }
+                    }
+                });
+                updateUI();
             });
         }
 
-        window.deleteAdmin = async (uid, info) => {
-            if (confirm(`¿Estás seguro de que deseas revocar el acceso a ${info}?`)) {
+        window.deleteUser = async (uid, role, info) => {
+            if (role === 'developer') {
+                showMessage(`Error: El usuario ${info} tiene rol de Desarrollador y está protegido contra eliminación.`, true);
+                return;
+            }
+            const node = (role === 'admin' || role === 'developer') ? 'admins' : 'users';
+            if (confirm(`¿Estás seguro de que deseas revocar el acceso (${role}) a ${info}?`)) {
                 try {
-                    await db.ref('admins/' + uid).remove();
-                    showMessage(`Acceso revocado correctamente.`);
+                    await db.ref(`${node}/${uid}`).remove();
+                    showMessage(`Acceso de ${role} revocado correctamente.`);
                 } catch (error) {
                     showMessage(`Error al eliminar: ${error.message}`, true);
                 }
@@ -219,37 +343,93 @@
             const email = document.getElementById('reg-email').value;
             const password = document.getElementById('reg-password').value;
             const role = document.getElementById('reg-role').value;
+            const encodedEmail = encodeEmail(email);
+
+            // Validación de seguridad de jerarquía
+            if (role === 'developer' && currentUserRole !== 'developer') {
+                showMessage("Error: Solo un Desarrollador puede crear otros Desarrolladores.", true);
+                return;
+            }
 
             submitBtn.disabled = true;
             submitBtn.innerHTML = `<span>Procesando...</span>`;
             msg.classList.add('hidden');
 
             try {
-                // 1. Crear usuario en la App Secundaria (esto no afecta la sesión del admin en la App Primaria)
-                const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
-                const newUser = userCredential.user;
+                let newUser = null;
+                let isReactivation = false;
 
-                // 2. Cerrar sesión en la App Secundaria inmediatamente para limpiar
-                await secondaryAuth.signOut();
+                try {
+                    // 1. Intentar crear el usuario en la App Secundaria
+                    const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+                    newUser = userCredential.user;
+                    await secondaryAuth.signOut();
+                } catch (authError) {
+                    if (authError.code === 'auth/email-already-in-use') {
+                        // El usuario ya existe en Firebase Auth, verificar si lo tenemos mapeado
+                        const snapshot = await db.ref('emailMapping/' + encodedEmail).once('value');
+                        if (snapshot.exists()) {
+                            const existingUid = snapshot.val();
+                            // Blindaje: Verificar si el usuario ya es desarrollador
+                            const currentUserData = allUsersData[existingUid];
+                            if (currentUserData && currentUserData.role === 'developer' && role !== 'developer') {
+                                throw new Error("Esta cuenta es de un Desarrollador y su rol no puede ser modificado para mantener la protección.");
+                            }
 
-                // 3. Asignar rol en la base de datos usando la App Primaria (donde seguimos logueados como admin)
-                if (role === 'admin') {
-                    // Guardamos un objeto con el email para que el listado sea legible, 
-                    // pero el acceso se valida por la existencia del nodo admins/{uid}
-                    await db.ref('admins/' + newUser.uid).set({
-                        email: email,
-                        role: 'admin'
-                    });
-                } else {
-                    await db.ref('users/' + newUser.uid).set(true);
+                            if (confirm(`El usuario ${email} ya existe en el sistema pero no tiene acceso. ¿Deseas reactivarlo con el rol ${role}?`)) {
+                                newUser = { uid: existingUid };
+                                isReactivation = true;
+                            } else {
+                                throw new Error("Registro cancelado por el administrador.");
+                            }
+                        } else {
+                            throw authError; // Seguir con el error estándar si no hay mapeo
+                        }
+                    } else {
+                        throw authError;
+                    }
                 }
 
-                showMessage("¡Usuario creado con éxito! Ya puede iniciar sesión.");
+                if (!newUser) return;
+
+                // 2. Asignar rol en la base de datos
+                if (role === 'admin' || role === 'developer') {
+                    await db.ref('admins/' + newUser.uid).set({
+                        email: email,
+                        role: role
+                    });
+                    // Eliminar de nodo users por si acaso existía antes
+                    await db.ref('users/' + newUser.uid).remove();
+                } else {
+                    await db.ref('users/' + newUser.uid).set({
+                        email: email,
+                        role: 'usuario'
+                    });
+                    // Eliminar de nodo admins por si acaso existía antes
+                    await db.ref('admins/' + newUser.uid).remove();
+                }
+
+                // 3. Guardar/Actualizar mapeo de email a UID (con manejo de errores de permisos)
+                try {
+                    await db.ref('emailMapping/' + encodedEmail).set(newUser.uid);
+                } catch (mapError) {
+                    console.error("Error al guardar mapeo:", mapError);
+                    if (mapError.code === 'PERMISSION_DENIED') {
+                        showMessage("¡Usuario creado, pero hubo un problema de permisos en Firebase! La reactivación futura podría fallar. Revisa las reglas de seguridad.", true);
+                        // No lanzamos el error para permitir que el registro termine (limpie el form, etc.)
+                    } else {
+                        throw mapError;
+                    }
+                }
+
+                if (!msg.classList.contains('text-red-500')) {
+                    showMessage(isReactivation ? "¡Usuario reactivado con éxito!" : "¡Usuario creado con éxito!");
+                }
                 form.reset();
             } catch (error) {
                 console.error(error);
                 let errorText = "Error: " + error.message;
-                if (error.code === 'auth/email-already-in-use') errorText = "Este correo ya está registrado.";
+                if (error.code === 'auth/email-already-in-use') errorText = "Este correo ya está registrado en Firebase pero no tiene un registro previo en esta app.";
                 if (error.code === 'auth/weak-password') errorText = "La contraseña debe tener al menos 6 caracteres.";
                 showMessage(errorText, true);
             } finally {
