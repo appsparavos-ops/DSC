@@ -1,27 +1,29 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestion de Jugadores</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_SportingCuad.png" type="image/png">
-    
+    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_SportingCuad.png"
+        type="image/png">
+
     <!-- Librerías Externas -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
+
     <!-- Enlace a tu hoja de estilos CSS -->
     <link rel="stylesheet" href="styles.css">
 
     <!-- Ocultar contenido hasta que JS decida qué mostrar -->
     <style>
-      .uninitialized #login-container,
-      .uninitialized #main-container {
-        visibility: hidden;
-      }
+        .uninitialized #login-container,
+        .uninitialized #main-container {
+            visibility: hidden;
+        }
     </style>
 
     <!-- jsPDF and html2canvas for PDF Generation -->
@@ -29,26 +31,33 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
+
 <body class="bg-blue-900 text-gray-800 uninitialized">
 
     <div id="login-container" class="min-h-screen flex items-center justify-center">
         <div class="max-w-md w-full bg-white p-8 rounded-xl shadow-md">
             <div class="text-center mb-6">
-                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="Logo del Club" class="h-20 w-auto mx-auto mb-4">
+                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
+                    alt="Logo del Club" class="h-20 w-auto mx-auto mb-4">
                 <h1 class="text-2xl font-bold text-gray-800">Control de Acceso</h1>
                 <p class="text-gray-500">Inicia sesión para continuar</p>
             </div>
             <form id="login-form">
                 <div class="mb-4">
                     <label for="login-email" class="block text-sm font-medium text-gray-700">Correo Electrónico</label>
-                    <input type="email" id="login-email" placeholder="tu@email.com" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500" required>
+                    <input type="email" id="login-email" placeholder="tu@email.com"
+                        class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        required>
                 </div>
                 <div class="mb-6">
                     <label for="login-password" class="block text-sm font-medium text-gray-700">Contraseña</label>
-                    <input type="password" id="login-password" placeholder="********" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500" required>
+                    <input type="password" id="login-password" placeholder="********"
+                        class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        required>
                 </div>
                 <div id="login-error-message" class="text-red-500 text-sm mb-4 hidden"></div>
-                <button type="submit" class="w-full justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <button type="submit"
+                    class="w-full justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     Ingresar
                 </button>
             </form>
@@ -60,21 +69,24 @@
 
             <header class="flex justify-between items-center mb-6 p-4 no-print">
                 <div>
-                    <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="Logo del Club" class="h-12 sm:h-16 md:h-20 w-auto">
+                    <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
+                        alt="Logo del Club" class="h-12 sm:h-16 md:h-20 w-auto">
                 </div>
                 <div class="text-center px-2">
                     <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-white">Defensor Sporting Club</h1>
                     <p class="text-sm sm:text-base font-bold text-white mt-1">Gestión de Jugadores</p>
                 </div>
                 <div class="flex items-center gap-4">
-                    <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="Logo del Club" class="h-12 sm:h-16 md:h-20 w-auto">
+                    <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
+                        alt="Logo del Club" class="h-12 sm:h-16 md:h-20 w-auto">
                 </div>
             </header>
 
             <div id="main-content">
                 <main>
                     <div id="searchToggleContainer" class="text-center mb-4 no-print">
-                        <button id="toggleSearchButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <button id="toggleSearchButton"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                             Mostrar/Ocultar Búsqueda
                         </button>
                     </div>
@@ -82,35 +94,47 @@
                     <div id="searchBar" class="bg-white p-6 rounded-xl shadow-md mb-8 no-print hidden">
                         <div class="flex flex-wrap gap-4 items-end">
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
-                                <input type="text" id="nameSearchInput" list="name-suggestions" placeholder="Buscar por nombre..." class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="nameSearchInput" list="name-suggestions"
+                                    placeholder="Buscar por nombre..."
+                                    class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                 <datalist id="name-suggestions"></datalist>
                             </div>
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 150px;">
-                                <input type="text" id="dniSearchInput" list="dni-suggestions" placeholder="Buscar por DNI..." class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <input type="text" id="dniSearchInput" list="dni-suggestions"
+                                    placeholder="Buscar por DNI..."
+                                    class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                 <datalist id="dni-suggestions"></datalist>
                             </div>
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
-                                <select id="categoryFilter" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <select id="categoryFilter"
+                                    class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                     <option value="">Todas las categorías</option>
                                 </select>
                             </div>
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
-                                <select id="equipoFilter" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <select id="equipoFilter"
+                                    class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                     <option value="">Todos los equipos</option>
                                 </select>
                             </div>
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 200px;">
-                                <select id="seasonFilter" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                                <select id="seasonFilter"
+                                    class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                     <option value="">Todas las temporadas</option>
                                 </select>
                             </div>
                             <div class="flex-grow w-full sm:w-auto" style="min-width: 300px;">
                                 <div class="mt-2 flex gap-2 overflow-x-auto py-2 sm:justify-center">
-                                    <button id="expiringButton" class="flex-shrink-0 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500">Vencimientos</button>
-                                    <button id="resetButton" class="flex-shrink-0 py-2 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Todos</button>
-                                    <button id="toggleEditModeButton" class="flex-shrink-0 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Login (Admin)</button>
-                                    <button id="printButton" class="flex-shrink-0 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 hidden">Generar PDF</button>
-                                    <button id="logout-button" class="flex-shrink-0 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">Cerrar Sesión</button>
+                                    <button id="expiringButton"
+                                        class="flex-shrink-0 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500">Vencimientos</button>
+                                    <button id="resetButton"
+                                        class="flex-shrink-0 py-2 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Todos</button>
+                                    <button id="printButton"
+                                        class="flex-shrink-0 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 hidden">Generar
+                                        PDF</button>
+                                    <button id="logout-button"
+                                        class="flex-shrink-0 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">Cerrar
+                                        Sesión</button>
                                 </div>
                             </div>
                         </div>
@@ -128,41 +152,15 @@
                 <p>Aplicación de Gestión de Jugadores &copy; 2025</p>
             </footer>
         </div>
-        
+
         <div id="print-footer"></div>
 
-        <div id="loginModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
-            <div class="relative mx-auto p-8 border w-full max-w-md shadow-lg rounded-md bg-white">
-                <div class="text-center">
-                    <h3 class="text-2xl font-bold text-gray-900">Acceso de Administrador</h3>
-                    <div class="mt-4">
-                        <form id="loginForm">
-                            <div class="mb-4">
-                                <label for="emailInput" class="text-left block text-sm font-medium text-gray-700">Email</label>
-                                <input type="email" id="emailInput" placeholder="tu@email.com" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500" required>
-                            </div>
-                            <div class="mb-6">
-                                <label for="passwordInput" class="text-left block text-sm font-medium text-gray-700">Contraseña</label>
-                                <input type="password" id="passwordInput" placeholder="********" class="mt-2 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500" required>
-                            </div>
-                            <div id="loginError" class="text-red-500 text-sm mb-4 hidden"></div>
-                            <div class="flex justify-between gap-4">
-                                <button type="submit" class="w-full justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                    Iniciar Sesión
-                                </button>
-                                <button type="button" id="cancelLoginButton" class="w-full justify-center py-2 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
-                                    Cancelar
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
+
 
         <!-- Enlace a tu archivo JavaScript -->
         <script src="app.js"></script>
     </div>
 
 </body>
+
 </html>

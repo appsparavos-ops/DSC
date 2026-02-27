@@ -322,12 +322,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 allPlayers = Object.values(seasonalRecords).map(record => {
                     const personalData = datosPersonalesMap.get(String(record._dni)) || {};
-                    // Fuente de la verdad: prioritariamente de datosPersonales
-                    const fmHasta = personalData['FM Hasta'] || record['FM Hasta'];
-                    const fmDesde = personalData['FM Desde'] || record['FM Desde'];
                     const combined = { ...record, ...personalData };
-                    if (fmHasta) combined['FM Hasta'] = fmHasta;
-                    if (fmDesde) combined['FM Desde'] = fmDesde;
+                    // Fuente de la verdad ÚNICA: estrictamente de datosPersonales si existe
+                    if (personalData['FM Hasta'] !== undefined) combined['FM Hasta'] = personalData['FM Hasta'];
+                    if (personalData['FM Desde'] !== undefined) combined['FM Desde'] = personalData['FM Desde'];
                     return combined;
                 });
                 if (allPlayers.length > 0) {
@@ -383,12 +381,13 @@ document.addEventListener('DOMContentLoaded', function () {
             updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}/Numeros`] = newNumeros;
             updates[`/registrosPorTemporada/${season}/${pushId}/Numero`] = newPrimaryNumber;
             updates[`/registrosPorTemporada/${season}/${pushId}/Numeros`] = newNumeros;
-            // Asegurar que FM Hasta está disponible en registrosPorTemporada para la verdad absoluta
+
+            // Fuente de Verdad: Actualizar siempre en datosPersonales (dentro del nodo principal)
             if (playerToUpdate['FM Hasta']) {
-                updates[`/registrosPorTemporada/${season}/${pushId}/FM Hasta`] = playerToUpdate['FM Hasta'];
+                updates[`/${dbNode}/${dni}/datosPersonales/FM Hasta`] = playerToUpdate['FM Hasta'];
             }
             if (playerToUpdate['FM Desde']) {
-                updates[`/registrosPorTemporada/${season}/${pushId}/FM Desde`] = playerToUpdate['FM Desde'];
+                updates[`/${dbNode}/${dni}/datosPersonales/FM Desde`] = playerToUpdate['FM Desde'];
             }
 
             // Preparamos un objeto limpio para la bitácora, sin rutas de Firebase como claves.
@@ -425,7 +424,12 @@ document.addEventListener('DOMContentLoaded', function () {
             personalKeys.forEach(k => { if (finalData[k] !== undefined) personalDataToUpdate[k] = finalData[k]; });
             seasonalKeys.forEach(k => { if (finalData[k] !== undefined) seasonalDataToUpdate[k] = finalData[k]; });
 
-            const combinedDataForIndex = { ...finalData };
+            const combinedDataForIndex = { ...seasonalDataToUpdate, NOMBRE: personalDataToUpdate.NOMBRE, DNI: personalDataToUpdate.DNI };
+            // Asegurar campos técnicos para el índice
+            combinedDataForIndex._firebaseKey = pushId;
+            combinedDataForIndex._tipo = dbNode;
+            combinedDataForIndex._dni = dni;
+            combinedDataForIndex._pushId = pushId;
 
             updates[`/${dbNode}/${dni}/datosPersonales`] = personalDataToUpdate;
             updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}`] = seasonalDataToUpdate;
@@ -1331,8 +1335,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const combinedDataForIndex = {
             NOMBRE: originalPlayer.NOMBRE,
             DNI: originalPlayer.DNI,
-            'FM Desde': originalPlayer['FM Desde'],
-            'FM Hasta': originalPlayer['FM Hasta'],
             ...newSeasonalData,
             _firebaseKey: pushId,
             _tipo: dbNode,
@@ -1488,8 +1490,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const combinedDataForIndex = {
             NOMBRE: originalPlayer.NOMBRE,
             DNI: originalPlayer.DNI,
-            'FM Desde': originalPlayer['FM Desde'],
-            'FM Hasta': originalPlayer['FM Hasta'],
             ...newSeasonalData,
             _firebaseKey: pushId,
             _tipo: dbNode,
