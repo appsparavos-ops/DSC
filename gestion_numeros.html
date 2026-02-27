@@ -89,7 +89,7 @@
             </div>
 
             <!-- Botonera de Acciones -->
-            <div id="actions-container" class="mb-4 hidden flex justify-end gap-3">
+            <div id="actions-container" class="mb-4 hidden flex flex-wrap justify-center gap-3">
                 <button id="sort-btn"
                     class="py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg shadow-md transition duration-200 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
@@ -166,29 +166,25 @@
     <!-- Modal de Advertencia de Conflicto -->
     <div id="conflict-modal"
         class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 hidden">
-        <div class="bg-white p-8 rounded-xl shadow-lg max-w-lg w-full">
-            <h2 class="text-2xl font-bold text-amber-600 text-center mb-4">Advertencia: Número en Uso</h2>
-            <p id="conflict-message" class="text-center text-gray-700 mb-6">El número <span class="font-bold"
-                    id="conflicting-number"></span> que has asignado a <span class="font-bold"
-                    id="current-player-name-modal"></span> (<span id="current-player-category-modal"
-                    class="italic"></span>) ya está siendo utilizado por los siguientes jugadores:</p>
+        <div class="bg-white p-6 sm:p-8 rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <h2 class="text-2xl font-bold text-amber-600 text-center mb-2">Resolución de Conflictos</h2>
+            <p class="text-center text-gray-700 mb-6">El número <span class="font-bold text-lg"
+                    id="conflicting-number"></span> está duplicado. Selecciona qué número asignar a cada jugador:</p>
 
-            <div id="existing-players-container" class="flex flex-col gap-4 max-h-[40vh] overflow-y-auto mb-6">
+            <div id="conflict-players-list" class="space-y-6">
                 <!-- Se llenará dinámicamente -->
             </div>
 
-            <div class="mt-8 flex flex-col gap-3">
+            <div class="mt-8 flex flex-col gap-3 pt-6 border-t border-gray-100">
                 <button id="resolve-conflict-btn"
-                    class="w-full py-3 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-md transition duration-200 uppercase text-sm">Guardar
-                    igualmente</button>
+                    class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition duration-200 uppercase text-sm">Guardar
+                    Cambios y Resolver</button>
+                <button id="force-conflict-btn"
+                    class="w-full py-3 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-md transition duration-200 uppercase text-sm">Mantener
+                    Número para Todos (Forzar)</button>
                 <button id="cancel-conflict-btn"
-                    class="w-full py-3 px-4 bg-gray-200 text-gray-800 font-bold rounded-lg shadow-md hover:bg-gray-300 transition duration-200 uppercase text-sm">Volver
-                    atrás y modificar</button>
-            </div>
-
-            <!-- Contenedor oculto para compatibilidad con lógica antigua si fuera necesario, o para futura expansión -->
-            <div id="current-player-conflict" class="hidden">
-                <input type="hidden" id="current-player-number-input">
+                    class="w-full py-3 px-4 bg-gray-200 text-gray-800 font-bold rounded-lg shadow-md hover:bg-gray-300 transition duration-200 uppercase text-sm">Cancelar
+                    y Volver</button>
             </div>
         </div>
     </div>
@@ -273,6 +269,12 @@
             const autoAssignList = document.getElementById('auto-assign-list');
             const confirmAutoAssignBtn = document.getElementById('confirm-auto-assign-btn');
 
+            // Nuevos elementos del modal de conflicto
+            const conflictPlayersList = document.getElementById('conflict-players-list');
+            const forceConflictBtn = document.getElementById('force-conflict-btn');
+            const resolveConflictBtn = document.getElementById('resolve-conflict-btn');
+            const cancelConflictBtn = document.getElementById('cancel-conflict-btn');
+
             // --- State ---
             let allPlayersInSeason = [];
             let playersInCategory = [];
@@ -297,6 +299,20 @@
                 'Liga de Desarrollo': ['Liga Uruguaya de Basquet'],
                 'U19 Femenina': ['Liga Femenina de Basquet'],
             };
+
+            function getCategoryRank(cat) {
+                const ranks = {
+                    'U11 Femenino': 1, 'U11 Mixta': 1,
+                    'U12 Femenino': 2, 'U12 Mixta': 2,
+                    'U14 Femenino': 3, 'U14 Masculino': 3,
+                    'U16 Femenino': 4, 'U16 Masculino': 4,
+                    'U18 Masculino': 5, 'U19 Femenina': 5,
+                    'U20 Masculino': 6,
+                    'Liga de Desarrollo': 7,
+                    'Liga Uruguaya de Basquet': 8, 'Liga Femenina de Basquet': 8
+                };
+                return ranks[cat] || 99;
+            }
 
             // --- Functions ---
             function showToast(message, isError = false) {
@@ -725,37 +741,134 @@
             function showConflictModal(currentPlayer, existingPlayers, conflictingNumber) {
                 conflictState = { currentPlayer, existingPlayers, conflictingNumber };
                 document.getElementById('conflicting-number').textContent = conflictingNumber;
-                document.getElementById('current-player-name-modal').textContent = currentPlayer.NOMBRE;
-                document.getElementById('current-player-category-modal').textContent = currentPlayer.CATEGORIA;
 
-                // Existing players info
-                const container = document.getElementById('existing-players-container');
-                container.innerHTML = '';
+                const allInvolved = [currentPlayer, ...existingPlayers];
+                conflictPlayersList.innerHTML = '';
 
-                existingPlayers.forEach(player => {
+                allInvolved.forEach((player, idx) => {
+                    const isCurrent = idx === 0;
+                    const rank = getCategoryRank(player.CATEGORIA);
+                    const otherRanks = allInvolved.filter((_, i) => i !== idx).map(p => getCategoryRank(p.CATEGORIA));
+                    const isLower = otherRanks.some(r => rank < r);
+
                     const div = document.createElement('div');
-                    div.className = 'border border-gray-100 p-3 rounded-lg bg-gray-50 flex flex-col';
+                    div.className = `p-4 rounded-xl border-2 ${isLower ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-gray-50'}`;
+
+                    // Sugerencias para este jugador
+                    const suggestions = findAvailableNumbers(player, 4);
+                    const suggestionsHtml = suggestions.map(n =>
+                        `<button type="button" class="conflict-suggest-btn px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-bold hover:bg-blue-200" data-targetid="conflict-input-${player._pushId}" data-num="${n}">${n}</button>`
+                    ).join('');
+
                     div.innerHTML = `
-                        <span class="font-bold text-gray-800">${player.NOMBRE}</span>
-                        <span class="text-xs text-gray-500 uppercase">${player.CATEGORIA} | ${player.EQUIPO}</span>
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <p class="font-bold text-gray-800">${player.NOMBRE} ${isCurrent ? '<span class="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full ml-2 uppercase">Editando</span>' : ''}</p>
+                                <p class="text-xs text-gray-500 uppercase font-semibold">${player.CATEGORIA} | ${player.EQUIPO}</p>
+                            </div>
+                            <div class="text-right">
+                                <label class="block text-[10px] font-bold text-gray-400 uppercase">Número</label>
+                                <input type="text" id="conflict-input-${player._pushId}" data-pushid="${player._pushId}" 
+                                       class="w-16 px-2 py-1 border-2 border-blue-400 rounded-lg text-center font-bold text-blue-700 text-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                                       value="${conflictingNumber}">
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase">Sugerencias:</span>
+                            <div class="flex flex-wrap gap-1">
+                                ${suggestionsHtml}
+                            </div>
+                        </div>
                     `;
-                    container.appendChild(div);
+                    conflictPlayersList.appendChild(div);
+                });
+
+                // Event delegation para sugerencias dentro del modal
+                conflictPlayersList.querySelectorAll('.conflict-suggest-btn').forEach(btn => {
+                    btn.onclick = (e) => {
+                        const targetId = e.currentTarget.dataset.targetid;
+                        const num = e.currentTarget.dataset.num;
+                        document.getElementById(targetId).value = num;
+                    };
                 });
 
                 conflictModal.classList.remove('hidden');
             }
 
-            document.getElementById('cancel-conflict-btn').addEventListener('click', () => {
+            cancelConflictBtn.addEventListener('click', () => {
                 conflictModal.classList.add('hidden');
-                // Re-render to show original values
-                renderPlayers();
+                renderPlayers(); // Revertir cambios visuales en la tabla
             });
 
-            document.getElementById('resolve-conflict-btn').addEventListener('click', async () => {
-                const { currentPlayer, conflictingNumber } = conflictState;
-                await saveNumber(currentPlayer._pushId, conflictingNumber);
-                conflictModal.classList.add('hidden');
-                showToast(`Número ${conflictingNumber} guardado para ${currentPlayer.NOMBRE} (a pesar del conflicto).`);
+            forceConflictBtn.addEventListener('click', async () => {
+                if (confirm('¿Estás seguro de que deseas mantener el conflicto para todos estos jugadores?')) {
+                    const { currentPlayer, conflictingNumber } = conflictState;
+                    await saveNumber(currentPlayer._pushId, conflictingNumber);
+                    conflictModal.classList.add('hidden');
+                    showToast(`Conflicto mantenido: ${conflictingNumber} asignado a ${currentPlayer.NOMBRE}.`);
+                }
+            });
+
+            resolveConflictBtn.addEventListener('click', async () => {
+                const inputs = conflictPlayersList.querySelectorAll('input');
+                const resolutions = [];
+                const numbersUsed = new Set();
+                let hasInternalConflict = false;
+
+                // 1. Recolectar y validar internamente
+                for (const input of inputs) {
+                    const pushId = input.dataset.pushid;
+                    const num = input.value.trim();
+                    const player = allPlayersInSeason.find(p => p._pushId === pushId);
+
+                    if (!/^(00|[0-9]{1,2})$/.test(num)) {
+                        showToast(`Número inválido para ${player.NOMBRE}`, true);
+                        return;
+                    }
+
+                    if (numbersUsed.has(num)) {
+                        hasInternalConflict = true;
+                    }
+                    numbersUsed.add(num);
+                    resolutions.push({ pushId, num, player });
+                }
+
+                if (hasInternalConflict) {
+                    if (!confirm('Los números elegidos en el modal aún tienen conflictos entre sí. ¿Deseas guardar de todas formas?')) {
+                        return;
+                    }
+                }
+
+                // 2. Validar contra TERCEROS (externos al modal)
+                const allInvolvedIds = resolutions.map(r => r.pushId);
+                for (const res of resolutions) {
+                    const externalConflicts = getConflictingPlayers(res.num, res.player).filter(p => !allInvolvedIds.includes(p._pushId));
+                    if (res.num !== '' && externalConflicts.length > 0) {
+                        showToast(`El número ${res.num} para ${res.player.NOMBRE} crea un nuevo conflicto con ${externalConflicts[0].NOMBRE} (${externalConflicts[0].CATEGORIA}).`, true);
+                        return;
+                    }
+                }
+
+                // 3. Guardar todo
+                resolveConflictBtn.disabled = true;
+                resolveConflictBtn.textContent = 'Guardando...';
+
+                try {
+                    for (const res of resolutions) {
+                        const currentPlayerNumber = (res.player.Numeros && res.player.Numeros[res.player.CATEGORIA]) || res.player.Numero || '';
+                        if (res.num !== currentPlayerNumber) {
+                            await saveNumber(res.pushId, res.num);
+                        }
+                    }
+                    conflictModal.classList.add('hidden');
+                    showToast('Conflictos resueltos con éxito.');
+                    filterAndSortPlayers(); // Refrescar vista
+                } catch (error) {
+                    showToast('Error al resolver conflictos: ' + error.message, true);
+                } finally {
+                    resolveConflictBtn.disabled = false;
+                    resolveConflictBtn.textContent = 'Guardar Cambios y Resolver';
+                }
             });
 
 
@@ -968,6 +1081,9 @@
                 const p1 = item.player1;
                 const p2 = item.player2;
 
+                const rank1 = getCategoryRank(p1.CATEGORIA);
+                const rank2 = getCategoryRank(p2.CATEGORIA);
+
                 // Atributos dinámicos para manejar el offset de sugerencias por jugador
                 p1._suggestOffset = 0;
                 p2._suggestOffset = 0;
@@ -986,11 +1102,11 @@
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Jugador 1 -->
-                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div class="${rank1 < rank2 ? 'bg-red-50 border-red-500' : 'bg-white border-gray-200'} p-4 rounded-lg shadow-sm border">
                     <p class="font-bold text-gray-800 text-lg">${p1.NOMBRE}</p>
                     <p class="text-sm text-gray-500 mb-3">${p1.CATEGORIA}</p>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Nuevo número:</label>
-                    <input type="text" id="ver-input-${p1._pushId}" class="w-full px-3 py-2 border rounded-md text-center font-bold text-blue-600" value="${item.number}">
+                    <input type="text" id="ver-input-${p1._pushId}" class="w-full px-3 py-2 border rounded-md text-center font-bold text-blue-600 bg-gray-100 cursor-not-allowed" value="${item.number}" readonly>
                     <p class="text-xs text-gray-500 mt-2">Sugerencias (similares):</p>
                     <div class="flex items-center gap-2 mt-1">
                         <div id="ver-available-${p1._pushId}" class="flex flex-wrap gap-1"></div>
@@ -999,11 +1115,11 @@
                 </div>
 
                 <!-- Jugador 2 -->
-                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div class="${rank2 < rank1 ? 'bg-red-50 border-red-500' : 'bg-white border-gray-200'} p-4 rounded-lg shadow-sm border">
                     <p class="font-bold text-gray-800 text-lg">${p2.NOMBRE}</p>
                     <p class="text-sm text-gray-500 mb-3">${p2.CATEGORIA}</p>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Nuevo número:</label>
-                    <input type="text" id="ver-input-${p2._pushId}" class="w-full px-3 py-2 border rounded-md text-center font-bold text-blue-600" value="${item.number}">
+                    <input type="text" id="ver-input-${p2._pushId}" class="w-full px-3 py-2 border rounded-md text-center font-bold text-blue-600 bg-gray-100 cursor-not-allowed" value="${item.number}" readonly>
                     <p class="text-xs text-gray-500 mt-2">Sugerencias (similares):</p>
                     <div class="flex items-center gap-2 mt-1">
                         <div id="ver-available-${p2._pushId}" class="flex flex-wrap gap-1"></div>
@@ -1072,8 +1188,21 @@
                     if (v1 !== '00' && v1 !== '') v1 = String(Number(v1));
                     if (v2 !== '00' && v2 !== '') v2 = String(Number(v2));
 
-                    if (!(allowConflictCheckbox && allowConflictCheckbox.checked) && v1 === v2 && v1 !== '') {
+                    if (v1 === v2 && v1 !== '') {
                         showToast('Los dos jugadores no pueden tener el mismo número.', true);
+                        return;
+                    }
+
+                    // Verificar si el nuevo número causa un nuevo conflicto con un TERCER jugador
+                    const c1 = getConflictingPlayers(v1, p1, [p2]);
+                    if (v1 !== '' && c1.length > 0) {
+                        showToast(`Nuevo conflicto para ${p1.NOMBRE}: ${v1} está en uso por ${c1[0].NOMBRE} (${c1[0].CATEGORIA})`, true);
+                        return;
+                    }
+
+                    const c2 = getConflictingPlayers(v2, p2, [p1]);
+                    if (v2 !== '' && c2.length > 0) {
+                        showToast(`Nuevo conflicto para ${p2.NOMBRE}: ${v2} está en uso por ${c2[0].NOMBRE} (${c2[0].CATEGORIA})`, true);
                         return;
                     }
 
