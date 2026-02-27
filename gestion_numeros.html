@@ -90,10 +90,6 @@
 
             <!-- Botonera de Acciones -->
             <div id="actions-container" class="mb-4 hidden flex justify-end gap-3">
-                <label class="mr-auto flex items-center gap-2 text-sm">
-                    <input type="checkbox" id="allow-conflict-checkbox" class="h-4 w-4">
-                    Guardar con conflicto
-                </label>
                 <button id="sort-btn"
                     class="py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg shadow-md transition duration-200 flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
@@ -167,40 +163,32 @@
         </div>
     </div>
 
-    <!-- Modal de Conflicto de Números -->
+    <!-- Modal de Advertencia de Conflicto -->
     <div id="conflict-modal"
         class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 hidden">
         <div class="bg-white p-8 rounded-xl shadow-lg max-w-lg w-full">
-            <h2 class="text-2xl font-bold text-red-600 text-center mb-4">Conflicto de Número</h2>
+            <h2 class="text-2xl font-bold text-amber-600 text-center mb-4">Advertencia: Número en Uso</h2>
             <p id="conflict-message" class="text-center text-gray-700 mb-6">El número <span class="font-bold"
-                    id="conflicting-number"></span> ya está en uso.</p>
+                    id="conflicting-number"></span> que has asignado a <span class="font-bold"
+                    id="current-player-name-modal"></span> (<span id="current-player-category-modal"
+                    class="italic"></span>) ya está siendo utilizado por los siguientes jugadores:</p>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Jugador Actual -->
-                <div id="current-player-conflict" class="border border-gray-300 p-4 rounded-lg">
-                    <h3 class="font-semibold text-gray-800 border-b pb-2 mb-3">Jugador Actual</h3>
-                    <p class="font-bold text-lg" id="current-player-name"></p>
-                    <p class="text-sm text-gray-600" id="current-player-category"></p>
-                    <div class="mt-3">
-                        <label for="current-player-number-input" class="block text-sm font-medium text-gray-700">Cambiar
-                            número:</label>
-                        <input type="text" maxlength="2" id="current-player-number-input"
-                            class="mt-1 w-full px-3 py-2 border border-blue-500 ring-2 ring-blue-200 rounded-md text-center">
-                    </div>
-                </div>
-
-                <!-- Jugadores Existentes -->
-                <div id="existing-players-container" class="flex flex-col gap-4 max-h-[60vh] overflow-y-auto">
-                    <!-- Se llenará dinámicamente -->
-                </div>
+            <div id="existing-players-container" class="flex flex-col gap-4 max-h-[40vh] overflow-y-auto mb-6">
+                <!-- Se llenará dinámicamente -->
             </div>
 
-            <div class="mt-8 flex justify-end gap-4">
-                <button id="cancel-conflict-btn"
-                    class="py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg shadow-md hover:bg-gray-300">Cancelar</button>
+            <div class="mt-8 flex flex-col gap-3">
                 <button id="resolve-conflict-btn"
-                    class="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md">Guardar
-                    Cambios</button>
+                    class="w-full py-3 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-md transition duration-200 uppercase text-sm">Guardar
+                    igualmente</button>
+                <button id="cancel-conflict-btn"
+                    class="w-full py-3 px-4 bg-gray-200 text-gray-800 font-bold rounded-lg shadow-md hover:bg-gray-300 transition duration-200 uppercase text-sm">Volver
+                    atrás y modificar</button>
+            </div>
+
+            <!-- Contenedor oculto para compatibilidad con lógica antigua si fuera necesario, o para futura expansión -->
+            <div id="current-player-conflict" class="hidden">
+                <input type="hidden" id="current-player-number-input">
             </div>
         </div>
     </div>
@@ -278,7 +266,6 @@
             const sortBtn = document.getElementById('sort-btn');
             const actionsContainer = document.getElementById('actions-container');
             const bottomActionsContainer = document.getElementById('bottom-actions-container');
-            const allowConflictCheckbox = document.getElementById('allow-conflict-checkbox');
             const verificationModal = document.getElementById('verification-modal');
             const verificationResults = document.getElementById('verification-results');
             const autoAssignBtn = document.getElementById('auto-assign-btn');
@@ -637,12 +624,7 @@
                 const conflicts = getConflictingPlayers(newNumber, currentPlayer);
 
                 if (conflicts.length > 0) {
-                    if (allowConflictCheckbox && allowConflictCheckbox.checked) {
-                        await saveNumber(pushId, newNumber);
-                        showToast(`Número ${newNumber} guardado (conflicto permitido).`);
-                    } else {
-                        showConflictModal(currentPlayer, conflicts, newNumber);
-                    }
+                    showConflictModal(currentPlayer, conflicts, newNumber);
                 } else {
                     await saveNumber(pushId, newNumber);
                 }
@@ -741,16 +723,10 @@
 
             // --- Conflict Modal Logic ---
             function showConflictModal(currentPlayer, existingPlayers, conflictingNumber) {
-                conflictState = { currentPlayer, existingPlayers };
-
+                conflictState = { currentPlayer, existingPlayers, conflictingNumber };
                 document.getElementById('conflicting-number').textContent = conflictingNumber;
-
-                // Current player info
-                document.getElementById('current-player-name').textContent = currentPlayer.NOMBRE;
-                document.getElementById('current-player-category').textContent = `Cat: ${currentPlayer.CATEGORIA}`;
-                const currentUserInput = document.getElementById('current-player-number-input');
-                currentUserInput.value = conflictingNumber;
-                currentUserInput.dataset.pushid = currentPlayer._pushId;
+                document.getElementById('current-player-name-modal').textContent = currentPlayer.NOMBRE;
+                document.getElementById('current-player-category-modal').textContent = currentPlayer.CATEGORIA;
 
                 // Existing players info
                 const container = document.getElementById('existing-players-container');
@@ -758,16 +734,11 @@
 
                 existingPlayers.forEach(player => {
                     const div = document.createElement('div');
-                    div.className = 'border border-gray-300 p-4 rounded-lg bg-red-50';
+                    div.className = 'border border-gray-100 p-3 rounded-lg bg-gray-50 flex flex-col';
                     div.innerHTML = `
-                <h3 class="font-semibold text-gray-800 border-b pb-2 mb-3">Jugador en Conflicto</h3>
-                <p class="font-bold text-lg">${player.NOMBRE}</p>
-                <p class="text-sm text-gray-600">Cat: ${player.CATEGORIA}</p>
-                <div class="mt-3">
-                    <label class="block text-sm font-medium text-gray-700">Cambiar número:</label>
-                    <input type="text" maxlength="2" id="existing-num-${player._pushId}" value="${conflictingNumber}" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-center existing-player-input">
-                </div>
-            `;
+                        <span class="font-bold text-gray-800">${player.NOMBRE}</span>
+                        <span class="text-xs text-gray-500 uppercase">${player.CATEGORIA} | ${player.EQUIPO}</span>
+                    `;
                     container.appendChild(div);
                 });
 
@@ -781,110 +752,13 @@
             });
 
             document.getElementById('resolve-conflict-btn').addEventListener('click', async () => {
-                const newCurrentNumber = document.getElementById('current-player-number-input').value.trim();
-
-                const { currentPlayer, existingPlayers } = conflictState;
-
-                // Si el usuario permite guardar con conflictos, saltamos las validaciones y guardamos tal cual
-                if (allowConflictCheckbox && allowConflictCheckbox.checked) {
-                    // Recolectar nuevos números de los jugadores existentes
-                    const existingUpdates = [];
-                    for (const p of existingPlayers) {
-                        const input = document.getElementById(`existing-num-${p._pushId}`);
-                        if (input) {
-                            existingUpdates.push({ player: p, newNumber: input.value.trim() });
-                        }
-                    }
-
-                    await saveNumber(currentPlayer._pushId, newCurrentNumber);
-                    for (const update of existingUpdates) {
-                        await saveNumber(update.player._pushId, update.newNumber);
-                    }
-
-                    conflictModal.classList.add('hidden');
-                    showToast('Cambios guardados con conflicto permitido.');
-
-                    // Actualizar los inputs en la lista principal
-                    const mainInput = document.getElementById(`num-${currentPlayer._pushId}`);
-                    if (mainInput) mainInput.value = newCurrentNumber;
-                    existingUpdates.forEach(update => {
-                        const existingInput = document.getElementById(`num-${update.player._pushId}`);
-                        if (existingInput) existingInput.value = update.newNumber;
-                    });
-                    return;
-                }
-
-                // Recolectar nuevos números de los jugadores existentes
-                const existingUpdates = [];
-                for (const p of existingPlayers) {
-                    const input = document.getElementById(`existing-num-${p._pushId}`);
-                    if (input) {
-                        existingUpdates.push({ player: p, newNumber: input.value.trim() });
-                    }
-                }
-
-                // 1. Verificar conflicto interno (entre los jugadores del modal)
-                const allProposed = [{ id: currentPlayer._pushId, num: newCurrentNumber }, ...existingUpdates.map(u => ({ id: u.player._pushId, num: u.newNumber }))];
-                const nums = allProposed.map(x => x.num).filter(n => n !== '');
-                const uniqueNums = new Set(nums);
-                if (nums.length !== uniqueNums.size) {
-                    showToast('Hay números repetidos en la selección actual.', true);
-                    return;
-                }
-
-                // 2. Verificar conflicto del Jugador Actual (ignorando a los jugadores existentes en el modal)
-                const conflictsCurrent = getConflictingPlayers(newCurrentNumber, currentPlayer, existingPlayers);
-                if (conflictsCurrent.length > 0) {
-                    showToast(`El número ${newCurrentNumber} para ${currentPlayer.NOMBRE} entra en conflicto con ${conflictsCurrent[0].NOMBRE}.`, true);
-                    return;
-                }
-
-                // 3. Verificar conflicto de los Jugadores Existentes (ignorando al actual y a los otros existentes)
-                for (const update of existingUpdates) {
-                    const ignoreForThis = [currentPlayer, ...existingPlayers.filter(ep => ep._pushId !== update.player._pushId)];
-                    const conflicts = getConflictingPlayers(update.newNumber, update.player, ignoreForThis);
-                    if (conflicts.length > 0) {
-                        showToast(`El número ${update.newNumber} para ${update.player.NOMBRE} entra en conflicto con ${conflicts[0].NOMBRE}.`, true);
-                        return;
-                    }
-                }
-
-                // Save both, even if one hasn't changed. This is simpler.
-                await saveNumber(currentPlayer._pushId, newCurrentNumber);
-                for (const update of existingUpdates) {
-                    await saveNumber(update.player._pushId, update.newNumber);
-                }
-
+                const { currentPlayer, conflictingNumber } = conflictState;
+                await saveNumber(currentPlayer._pushId, conflictingNumber);
                 conflictModal.classList.add('hidden');
-                showToast('Cambios guardados con éxito.');
-
-                // Update the input field in the main list for the current player
-                const mainInput = document.getElementById(`num-${currentPlayer._pushId}`);
-                if (mainInput) mainInput.value = newCurrentNumber;
-
-                // Actualizar también el input del jugador existente si está visible en la lista
-                existingUpdates.forEach(update => {
-                    const existingInput = document.getElementById(`num-${update.player._pushId}`);
-                    if (existingInput) existingInput.value = update.newNumber;
-                });
+                showToast(`Número ${conflictingNumber} guardado para ${currentPlayer.NOMBRE} (a pesar del conflicto).`);
             });
 
-            // Highlight input on focus in modal
-            document.getElementById('current-player-number-input').addEventListener('focus', e => {
-                e.target.classList.add('border-blue-500', 'ring-2', 'ring-blue-200');
-                document.querySelectorAll('.existing-player-input').forEach(el => el.classList.remove('border-blue-500', 'ring-2', 'ring-blue-200'));
-            });
-            // Event delegation for dynamic inputs
-            document.getElementById('existing-players-container').addEventListener('focusin', e => {
-                if (e.target.classList.contains('existing-player-input')) {
-                    e.target.classList.add('border-blue-500', 'ring-2', 'ring-blue-200');
-                    document.getElementById('current-player-number-input').classList.remove('border-blue-500', 'ring-2', 'ring-blue-200');
-                    // Remove highlight from other existing inputs
-                    document.querySelectorAll('.existing-player-input').forEach(el => {
-                        if (el !== e.target) el.classList.remove('border-blue-500', 'ring-2', 'ring-blue-200');
-                    });
-                }
-            });
+
 
             // --- Export CSV Logic ---
             exportCsvBtn.addEventListener('click', () => {
