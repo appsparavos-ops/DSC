@@ -1,19 +1,5 @@
-document.addEventListener('DOMContentLoaded', function() {
-    // --- PREVENCIÓN DE PARPADEO (FLICKERING) ---
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('dni')) {
-        const loginContainer = document.getElementById('login-container');
-        const mainContainer = document.getElementById('main-container');
-        const mainContent = document.getElementById('main-content');
-        const playerDetailView = document.getElementById('playerDetailView');
-        if (loginContainer) loginContainer.style.display = 'none';
-        if (mainContainer) mainContainer.style.display = 'block';
-        if (mainContent) mainContent.classList.add('hidden');
-        if (playerDetailView) {
-            playerDetailView.classList.remove('hidden');
-            playerDetailView.innerHTML = '<div class="text-center p-8 text-white">Cargando jugador...</div>';
-        }
-    }
+document.addEventListener('DOMContentLoaded', function () {
+
 
     let isDeviceReady = false;
     document.addEventListener('deviceready', () => { isDeviceReady = true; }, false);
@@ -35,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const IMG_BASE_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/';
     const LOGO_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png';
     const PLACEHOLDER_SVG_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2EwYTBhMCI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OS00IDQgNHptMCAyYy0yLjY3IDAtOCA0IDQgNHYyYzAgMS4xLjkgMiAyIDJoMTRjMS4xIDAgMi0uOSAyLTJ2LTJjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PC9zdmc+';
-    const COLUMN_ORDER = [ 'DNI', 'NOMBRE','FM Hasta', 'Numero','CATEGORIA','COMPETICION','EQUIPO', ];
+    const COLUMN_ORDER = ['DNI', 'NOMBRE', 'FM Hasta', 'Numero', 'CATEGORIA', 'COMPETICION', 'EQUIPO',];
 
     // --- ELEMENTOS DEL DOM ---
     const loginContainer = document.getElementById('login-container');
@@ -61,7 +47,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const dniSuggestionsDatalist = document.getElementById('dni-suggestions');
     const mainContent = document.getElementById('main-content');
     const playerDetailView = document.getElementById('playerDetailView');
-    
+
     let allPlayers = [], originalHeaders = [], currentlyDisplayedPlayers = [], currentColumnsForPDF = [];
     let isEditModeActive = false, currentUserRole = null, currentPlayerIndex = -1, currentSeasonListener = null;
 
@@ -69,11 +55,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function getTimestampKey() {
         const now = new Date();
         const timestamp = now.getFullYear().toString() +
-               String(now.getMonth() + 1).padStart(2, '0') +
-               String(now.getDate()).padStart(2, '0') +
-               String(now.getHours()).padStart(2, '0') +
-               String(now.getMinutes()).padStart(2, '0') +
-               String(now.getSeconds()).padStart(2, '0');
+            String(now.getMonth() + 1).padStart(2, '0') +
+            String(now.getDate()).padStart(2, '0') +
+            String(now.getHours()).padStart(2, '0') +
+            String(now.getMinutes()).padStart(2, '0') +
+            String(now.getSeconds()).padStart(2, '0');
         const randomPart = Math.random().toString(36).substring(2, 7); // 5 random chars
         return `${timestamp}-${randomPart}`;
     }
@@ -148,24 +134,24 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }).catch(error => {
             console.error("Error al configurar la persistencia de la sesión:", error);
-            if(loginErrorMessage) loginErrorMessage.textContent = "Error de configuración de la sesión.";
+            if (loginErrorMessage) loginErrorMessage.textContent = "Error de configuración de la sesión.";
         });
     }
 
     function showLoginScreen() {
         document.body.classList.remove('uninitialized');
-        if(mainContainer) mainContainer.style.display = 'none';
-        if(loginContainer) loginContainer.style.display = 'flex';
-        if(loginEmailInput) loginEmailInput.value = '';
-        if(loginPasswordInput) loginPasswordInput.value = '';
-        if(loginErrorMessage) loginErrorMessage.classList.add('hidden');
+        if (mainContainer) mainContainer.style.display = 'none';
+        if (loginContainer) loginContainer.style.display = 'flex';
+        if (loginEmailInput) loginEmailInput.value = '';
+        if (loginPasswordInput) loginPasswordInput.value = '';
+        if (loginErrorMessage) loginErrorMessage.classList.add('hidden');
     }
 
     function showMainContent() {
         document.body.classList.remove('uninitialized');
-        if(loginContainer) loginContainer.style.display = 'none';
-        if(mainContainer) mainContainer.style.display = 'block';
-        
+        if (loginContainer) loginContainer.style.display = 'none';
+        if (mainContainer) mainContainer.style.display = 'block';
+
         const controlsContainer = document.getElementById('resetButton')?.parentNode;
         if (controlsContainer) {
             let addButton = document.getElementById('addPlayerButton');
@@ -176,7 +162,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     addButton.textContent = 'Agregar Jugador';
                     addButton.className = 'ml-2 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500';
                     addButton.addEventListener('click', showAddPlayerForm);
-                    
+
                     const printButton = document.getElementById('printButton');
                     if (printButton) {
                         printButton.parentNode.insertBefore(addButton, printButton.nextSibling);
@@ -194,21 +180,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    if(newLoginForm) newLoginForm.addEventListener('submit', (e) => {
+    if (newLoginForm) newLoginForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        if(loginErrorMessage) loginErrorMessage.classList.add('hidden');
+        if (loginErrorMessage) loginErrorMessage.classList.add('hidden');
         const email = loginEmailInput.value;
         const password = loginPasswordInput.value;
         auth.signInWithEmailAndPassword(email, password).catch(error => {
             console.error("Error de login:", error);
-            if(loginErrorMessage) {
+            if (loginErrorMessage) {
                 loginErrorMessage.textContent = 'Credenciales incorrectas. Intente de nuevo.';
                 loginErrorMessage.classList.remove('hidden');
             }
         });
     });
 
-    if(logoutButton) logoutButton.addEventListener('click', () => {
+    if (logoutButton) logoutButton.addEventListener('click', () => {
         auth.signOut().then(() => {
             showToast('Has cerrado la sesión.');
         });
@@ -230,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-    
+
     function showToast(message, type = '') {
         const toast = document.createElement('div');
         toast.textContent = message;
@@ -289,30 +275,30 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!temporada) {
             allPlayers = [];
             displayPlayers([]);
-            if(messageEl) {
+            if (messageEl) {
                 messageEl.textContent = 'Por favor, selecciona una temporada.';
                 messageEl.style.display = 'block';
             }
             return;
         }
 
-        if(messageEl) {
+        if (messageEl) {
             messageEl.textContent = `Conectando a la temporada ${temporada}...`;
             messageEl.style.display = 'block';
         }
-        if(tableContainer) tableContainer.innerHTML = '';
+        if (tableContainer) tableContainer.innerHTML = '';
 
         if (currentSeasonListener) {
             currentSeasonListener.ref.off('value', currentSeasonListener.callback);
         }
 
         const registrosRef = database.ref('/registrosPorTemporada/' + temporada);
-        
+
         const listenerCallback = snapshot => {
             if (!snapshot.exists()) {
                 allPlayers = [];
                 displayPlayers([]);
-                if(messageEl) messageEl.textContent = `No hay datos para la temporada ${temporada}.`;
+                if (messageEl) messageEl.textContent = `No hay datos para la temporada ${temporada}.`;
                 return;
             }
 
@@ -336,9 +322,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 allPlayers = Object.values(seasonalRecords).map(record => {
                     const personalData = datosPersonalesMap.get(String(record._dni)) || {};
-                    // Nos aseguramos que los datos de FM vengan de datosPersonales, pero respetamos si ya existen en el registro
-                    const fmHasta = record['FM Hasta'] || personalData['FM Hasta'];
-                    const fmDesde = record['FM Desde'] || personalData['FM Desde'];
+                    // Fuente de la verdad: prioritariamente de datosPersonales
+                    const fmHasta = personalData['FM Hasta'] || record['FM Hasta'];
+                    const fmDesde = personalData['FM Desde'] || record['FM Desde'];
                     const combined = { ...record, ...personalData };
                     if (fmHasta) combined['FM Hasta'] = fmHasta;
                     if (fmDesde) combined['FM Desde'] = fmDesde;
@@ -348,11 +334,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     originalHeaders = Object.keys(allPlayers[0]);
                     populateCategoryFilter(allPlayers);
                     applyFilters();
-                    if(messageEl) messageEl.style.display = 'none';
+                    if (messageEl) messageEl.style.display = 'none';
                     showPlayerFromUrl();
                 } else {
-                    if(tableContainer) tableContainer.innerHTML = '';
-                    if(messageEl) {
+                    if (tableContainer) tableContainer.innerHTML = '';
+                    if (messageEl) {
                         messageEl.textContent = 'No se encontraron datos para esta temporada.';
                         messageEl.style.display = 'block';
                     }
@@ -362,7 +348,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         registrosRef.on('value', listenerCallback, (error) => {
             console.error(`Error de Firebase (${temporada}):`, error);
-            if(messageEl) messageEl.textContent = `Error al conectar con la temporada ${temporada}.`;
+            if (messageEl) messageEl.textContent = `Error al conectar con la temporada ${temporada}.`;
         });
 
         currentSeasonListener = { ref: registrosRef, callback: listenerCallback };
@@ -420,7 +406,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             // --- LÓGICA ORIGINAL PARA JUGADORES NO AUTORIZADOS ---
             const finalData = { ...playerToUpdate };
-            if(playerDetailView) {
+            if (playerDetailView) {
                 playerDetailView.querySelectorAll('#player-data-list input[type="text"]').forEach(input => finalData[input.dataset.key] = input.value);
                 const selectElement = document.getElementById('edit-categoriasAutorizadas');
                 finalData.categoriasAutorizadas = selectElement ? Array.from(selectElement.selectedOptions).map(o => o.value) : (playerToUpdate.categoriasAutorizadas || []);
@@ -438,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const personalDataToUpdate = {}, seasonalDataToUpdate = {};
             personalKeys.forEach(k => { if (finalData[k] !== undefined) personalDataToUpdate[k] = finalData[k]; });
             seasonalKeys.forEach(k => { if (finalData[k] !== undefined) seasonalDataToUpdate[k] = finalData[k]; });
-            
+
             const combinedDataForIndex = { ...finalData };
 
             updates[`/${dbNode}/${dni}/datosPersonales`] = personalDataToUpdate;
@@ -467,17 +453,17 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    if(toggleSearchButton) toggleSearchButton.addEventListener('click', () => searchBar.classList.toggle('hidden'));
-    if(nameSearchInput) nameSearchInput.addEventListener('input', applyFilters);
-    if(dniSearchInput) dniSearchInput.addEventListener('input', applyFilters);
-    if(categoryFilter) categoryFilter.addEventListener('change', applyFilters);
-    if(equipoFilter) equipoFilter.addEventListener('change', applyFilters);
-    if(seasonFilter) seasonFilter.addEventListener('change', () => {
-        if(nameSearchInput) nameSearchInput.value = '';
-        if(dniSearchInput) dniSearchInput.value = '';
-        if(categoryFilter) categoryFilter.selectedIndex = 0;
-        if(equipoFilter) equipoFilter.selectedIndex = 0;
-        
+    if (toggleSearchButton) toggleSearchButton.addEventListener('click', () => searchBar.classList.toggle('hidden'));
+    if (nameSearchInput) nameSearchInput.addEventListener('input', applyFilters);
+    if (dniSearchInput) dniSearchInput.addEventListener('input', applyFilters);
+    if (categoryFilter) categoryFilter.addEventListener('change', applyFilters);
+    if (equipoFilter) equipoFilter.addEventListener('change', applyFilters);
+    if (seasonFilter) seasonFilter.addEventListener('change', () => {
+        if (nameSearchInput) nameSearchInput.value = '';
+        if (dniSearchInput) dniSearchInput.value = '';
+        if (categoryFilter) categoryFilter.selectedIndex = 0;
+        if (equipoFilter) equipoFilter.selectedIndex = 0;
+
         const newSeason = seasonFilter.value;
         conectarTemporada(newSeason);
 
@@ -486,22 +472,22 @@ document.addEventListener('DOMContentLoaded', function() {
             database.ref('preferenciasUsuarios/' + user.uid).update({ ultimaTemporadaSeleccionada: newSeason });
         }
     });
-    if(resetButton) resetButton.addEventListener('click', resetAll);
-    if(expiringButton) expiringButton.addEventListener('click', showExpiring);
-    if(printButton) printButton.addEventListener('click', generatePDF);
+    if (resetButton) resetButton.addEventListener('click', resetAll);
+    if (expiringButton) expiringButton.addEventListener('click', showExpiring);
+    if (printButton) printButton.addEventListener('click', generatePDF);
 
     function applyFilters() {
-        if(printButton) printButton.classList.add('hidden');
+        if (printButton) printButton.classList.add('hidden');
         const nameTerm = nameSearchInput ? nameSearchInput.value.toLowerCase().trim() : '';
         const dniTerm = dniSearchInput ? dniSearchInput.value.toLowerCase().trim() : '';
         const selectedCategory = categoryFilter ? categoryFilter.value : '';
         const selectedEquipo = equipoFilter ? equipoFilter.value : '';
-        
+
         populateCategoryFilter(allPlayers);
         populateEquipoFilter(allPlayers);
         updateSearchSuggestions(allPlayers);
 
-        let filteredPlayers = allPlayers.filter(p => 
+        let filteredPlayers = allPlayers.filter(p =>
             (!nameTerm || (p.NOMBRE && p.NOMBRE.toLowerCase().includes(nameTerm))) &&
             (!dniTerm || (p.DNI && String(p.DNI).toLowerCase().includes(dniTerm))) &&
             (!selectedCategory || p.CATEGORIA === selectedCategory || (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) || (p.esAutorizado && p.CATEGORIA === selectedCategory)) &&
@@ -510,7 +496,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         displayPlayers(filteredPlayers);
     }
-    
+
     function parseDateDDMMYYYY(dateString) {
         if (!dateString || typeof dateString !== 'string') return null;
         const parts = dateString.split('/');
@@ -521,7 +507,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showExpiring() {
-        if(printButton) printButton.classList.remove('hidden');
+        if (printButton) printButton.classList.remove('hidden');
         const selectedSeason = seasonFilter ? seasonFilter.value : null;
         if (!selectedSeason) {
             showToast("Por favor, selecciona una temporada para ver los vencimientos.");
@@ -533,7 +519,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const limitDate = new Date(); limitDate.setDate(today.getDate() + 60);
-        
+
         let expiringPlayers = allPlayers.filter(p => p.TIPO !== 'ENTRENADOR/A' && p['FM Hasta'] && parseDateDDMMYYYY(p['FM Hasta']) <= limitDate);
         const displayColumns = ['EQUIPO', 'CATEGORIA', 'DNI', 'NOMBRE', 'FM Hasta'];
         let title = `Vencimientos para la Temporada ${selectedSeason}`;
@@ -579,16 +565,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function resetAll() {
-        if(printButton) printButton.classList.add('hidden');
-        if(nameSearchInput) nameSearchInput.value = '';
-        if(dniSearchInput) dniSearchInput.value = '';
-        if(categoryFilter) categoryFilter.selectedIndex = 0;
-        if(equipoFilter) equipoFilter.selectedIndex = 0;
-        if(nameSuggestionsDatalist) nameSuggestionsDatalist.innerHTML = '';
-        if(dniSuggestionsDatalist) dniSuggestionsDatalist.innerHTML = '';
+        if (printButton) printButton.classList.add('hidden');
+        if (nameSearchInput) nameSearchInput.value = '';
+        if (dniSearchInput) dniSearchInput.value = '';
+        if (categoryFilter) categoryFilter.selectedIndex = 0;
+        if (equipoFilter) equipoFilter.selectedIndex = 0;
+        if (nameSuggestionsDatalist) nameSuggestionsDatalist.innerHTML = '';
+        if (dniSuggestionsDatalist) dniSuggestionsDatalist.innerHTML = '';
         applyFilters();
     }
-    
+
     function updateSearchSuggestions(players) {
         if (!nameSearchInput || !dniSearchInput || !nameSuggestionsDatalist || !dniSuggestionsDatalist) return;
         const nameTerm = nameSearchInput.value.toLowerCase().trim();
@@ -622,7 +608,7 @@ document.addEventListener('DOMContentLoaded', function() {
             row.className = 'clickable-row';
             const originalIndex = currentlyDisplayedPlayers.findIndex(p => p._firebaseKey === player._firebaseKey);
             row.addEventListener('click', () => showPlayerDetails(player, isEditModeActive, originalIndex, false));
-            
+
             const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
             let colorClass = 'hover:bg-gray-100';
             if (player['TIPO'] === 'ENTRENADOR/A') {
@@ -642,10 +628,10 @@ document.addEventListener('DOMContentLoaded', function() {
             currentColumns.forEach(colName => {
                 const td = document.createElement('td');
                 td.className = `px-2 py-2 text-sm ${colName === 'NOMBRE' ? 'truncate max-w-48' : 'whitespace-nowrap'}`;
-                if ( colName === 'DNI' ||colName === 'FM Hasta' || colName === 'Numero' || colName === 'EQUIPO' || colName === 'CATEGORIA' || colName === 'COMPETICION') {
+                if (colName === 'DNI' || colName === 'FM Hasta' || colName === 'Numero' || colName === 'EQUIPO' || colName === 'CATEGORIA' || colName === 'COMPETICION') {
                     td.classList.add('text-center');
                 }
-                
+
                 let cellValue;
                 if (colName === 'CATEGORIA' && player.esAutorizado) {
                     cellValue = player.categoriaOrigen || player.CATEGORIA;
@@ -676,7 +662,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 th.textContent = headerText;
                 headerRow.appendChild(th);
             });
-            
+
             const tbody = table.createTBody();
             tbody.className = 'bg-white divide-y divide-gray-200';
             players.forEach(player => tbody.appendChild(createPlayerRow(player, categoryContext)));
@@ -694,7 +680,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (customTitle) {
             tableContainer.appendChild(createTable(players, selectedCategory));
         } else if (selectedCategory) {
-            if(printButton) printButton.classList.remove('hidden');
+            if (printButton) printButton.classList.remove('hidden');
             const playersInCategory = players
                 .filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A')
                 .sort((a, b) => {
@@ -772,7 +758,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tableContainer.appendChild(createTable(players, selectedCategory));
         }
     }
-    
+
     function populateCategoryFilter(players) {
         if (!categoryFilter) return;
 
@@ -781,7 +767,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get all unique, sorted categories from the current season's players
         const categories = [...new Set(
             players.flatMap(p => [p.CATEGORIA, p.categoriaOrigen, ...(p.categoriasAutorizadas || [])])
-                   .filter(Boolean)
+                .filter(Boolean)
         )].sort();
 
         // Preserve the placeholder option (the first option)
@@ -846,9 +832,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const photoUrl = `${IMG_BASE_URL}${encodeURIComponent(player.DNI)}.jpg`;
         const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
         let borderColor = 'border-gray-200', backgroundColor = 'bg-white', fmHastaFrameClass = '';
-        
+
         if (expirationDate) {
-            const hoy = new Date(); hoy.setHours(0,0,0,0);
+            const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
             const thirtyDays = new Date(hoy); thirtyDays.setDate(hoy.getDate() + 30);
             const sixtyDays = new Date(hoy); sixtyDays.setDate(hoy.getDate() + 60);
             const endOfYear = new Date(hoy.getFullYear(), 11, 23);
@@ -900,7 +886,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             </div>
         ` : '';
-        
+
         const toggleButtonHtml = canEdit ? `<button id="toggle-view-btn" class="py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">${isEditing ? 'Ver Ficha' : 'Editar'}</button>` : '';
 
         const detailRows = [
@@ -932,14 +918,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             ${detailRows.map(row => `
                                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                                     ${row.map(key => {
-                                        let val = player[key] || '';
-                                        if (key === 'CATEGORIA' && player.esAutorizado) {
-                                            val = player.categoriaOrigen || val;
-                                        }
-                                        return isEditing ?
-                                        `<div><label for="edit-${key}" class="block text-sm font-medium text-gray-600">${key}</label><input type="text" id="edit-${key}" data-key="${key}" value="${val}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm"></div>` :
-                                        createDetailHtml(key, val, fmHastaFrameClass)
-                                    }).join('')}
+            let val = player[key] || '';
+            if (key === 'CATEGORIA' && player.esAutorizado) {
+                val = player.categoriaOrigen || val;
+            }
+            return isEditing ?
+                `<div><label for="edit-${key}" class="block text-sm font-medium text-gray-600">${key}</label><input type="text" id="edit-${key}" data-key="${key}" value="${val}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm"></div>` :
+                createDetailHtml(key, val, fmHastaFrameClass)
+        }).join('')}
                                 </div>
                             `).join('')}
                         </div>
@@ -968,7 +954,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (categoriasSelect) {
                 const updateNumerosUI = () => {
                     const numerosContent = document.getElementById('numeros-content');
-                    if(!numerosContent) return;
+                    if (!numerosContent) return;
                     const selectedCategories = Array.from(categoriasSelect.selectedOptions).map(opt => opt.value);
                     let numerosHtml = '';
                     const primaryCategory = player.CATEGORIA;
@@ -986,7 +972,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
 
                 const categoryProgressionRules = {
-                    'U11 Femenino':['U12 Femenino','U11 Mixta','U12 Mixta'],
+                    'U11 Femenino': ['U12 Femenino', 'U11 Mixta', 'U12 Mixta'],
                     'U11 Mixta': ['U12 Mixta'],
                     'U12 Femenino': ['U12 Mixta', 'U14 Femenino'],
                     'U12 Mixta': ['U14 Masculino'],
@@ -994,7 +980,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     'U14 Masculino': ['U16 Masculino'],
                     'U16 Femenino': ['U19 Femenina', 'Liga Femenina de Basquet'],
                     'U16 Masculino': ['U18 Masculino'],
-                    'U18 Masculino': ['U20 Masculino', 'Liga de Desarrollo' , 'Liga Uruguaya de Basquet'],
+                    'U18 Masculino': ['U20 Masculino', 'Liga de Desarrollo', 'Liga Uruguaya de Basquet'],
                     'U20 Masculino': ['Liga de Desarrollo', 'Liga Uruguaya de Basquet'],
                     'Liga de Desarrollo': ['Liga Uruguaya de Basquet'],
                     'U19 Femenina': ['Liga Femenina de Basquet'],
@@ -1006,7 +992,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const existingAuthorizations = player.categoriasAutorizadas || [];
 
                 let categoriesToShow = [...new Set([...suggestedCategories, ...existingAuthorizations])];
-                
+
                 const specialLeagues = ["Liga de Desarrollo", "Liga Uruguaya de Basquet"];
                 categoriesToShow = categoriesToShow.filter(cat => !specialLeagues.includes(cat));
 
@@ -1019,7 +1005,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     if (categoriasContainer) {
                         // Restaurar la visibilidad por defecto, sin forzar 'block'
-                        categoriasContainer.style.display = ''; 
+                        categoriasContainer.style.display = '';
                     }
                     categoriesToShow.sort();
                     categoriasSelect.innerHTML = '';
@@ -1040,7 +1026,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('backButton').addEventListener('click', hidePlayerDetails);
         document.getElementById('prevButton').addEventListener('click', () => { if (currentPlayerIndex > 0) showPlayerDetails(currentlyDisplayedPlayers[--currentPlayerIndex], canEdit, currentPlayerIndex, isEditing); });
         document.getElementById('nextButton').addEventListener('click', () => { if (currentPlayerIndex < currentlyDisplayedPlayers.length - 1) showPlayerDetails(currentlyDisplayedPlayers[++currentPlayerIndex], canEdit, currentPlayerIndex, isEditing); });
-        
+
         if (canEdit) {
             const toggleBtn = document.getElementById('toggle-view-btn');
             if (toggleBtn) toggleBtn.addEventListener('click', () => showPlayerDetails(player, canEdit, playerIndex, !isEditing));
@@ -1059,11 +1045,11 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
-    
+
     function hidePlayerDetails() {
-        if(playerDetailView) playerDetailView.classList.add('hidden');
-        if(mainContent) mainContent.classList.remove('hidden');
-        if(nameSearchInput) nameSearchInput.focus();
+        if (playerDetailView) playerDetailView.classList.add('hidden');
+        if (mainContent) mainContent.classList.remove('hidden');
+        if (nameSearchInput) nameSearchInput.focus();
         const url = new URL(window.location);
         if (url.searchParams.has('dni')) {
             url.searchParams.delete('dni');
@@ -1106,36 +1092,36 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div id="add-player-form" class="space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                         ${Object.keys(allFields).map(key => {
-                            if (key === 'TIPO') {
-                                return `<div>
+            if (key === 'TIPO') {
+                return `<div>
                                     <label for="add-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
                                     <select id="add-${key}" data-key="${key}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
                                         <option value="JUGADOR/A" selected>JUGADOR/A</option>
                                         <option value="ENTRENADOR/A">ENTRENADOR/A</option>
                                     </select>
                                 </div>`;
-                            }
-                            if (key === 'CATEGORIA' || key === 'EQUIPO' || key === 'COMPETICION') {
-                                const options = key === 'CATEGORIA' ? categorias : (key === 'EQUIPO' ? equipos : competiciones);
-                                if (options.length > 0) {
-                                    return `<div>
+            }
+            if (key === 'CATEGORIA' || key === 'EQUIPO' || key === 'COMPETICION') {
+                const options = key === 'CATEGORIA' ? categorias : (key === 'EQUIPO' ? equipos : competiciones);
+                if (options.length > 0) {
+                    return `<div>
                                         <label for="add-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
                                         <select id="add-${key}" data-key="${key}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
                                             <option value="">Seleccione...</option>
                                             ${options.map(o => `<option value="${o}">${o}</option>`).join('')}
                                         </select>
                                     </div>`;
-                                }
-                                return `<div>
+                }
+                return `<div>
                                     <label for="add-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
                                     <input type="text" id="add-${key}" data-key="${key}" value="${allFields[key]}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
                                 </div>`;
-                            }
-                            return `<div>
+            }
+            return `<div>
                                 <label for="add-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
                                 <input type="text" id="add-${key}" data-key="${key}" value="${allFields[key]}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
                             </div>`;
-                        }).join('')}
+        }).join('')}
                     </div>
                 </div>
                 <div class="mt-6 flex items-center justify-end space-x-4">
@@ -1194,9 +1180,9 @@ document.addEventListener('DOMContentLoaded', function() {
             seasonalKeys.forEach(k => { if (newPlayerData[k] !== undefined) seasonalDataToSave[k] = newPlayerData[k]; });
             seasonalDataToSave.TEMPORADA = season;
             if (seasonalDataToSave.CATEGORIA && seasonalDataToSave.Numero) {
-                 seasonalDataToSave.Numeros = { [seasonalDataToSave.CATEGORIA]: seasonalDataToSave.Numero };
+                seasonalDataToSave.Numeros = { [seasonalDataToSave.CATEGORIA]: seasonalDataToSave.Numero };
             } else {
-                 seasonalDataToSave.Numeros = {};
+                seasonalDataToSave.Numeros = {};
             }
 
 
@@ -1276,31 +1262,31 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div id="import-player-form" class="space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                         ${Object.keys(seasonalFields).map(key => {
-                            const value = seasonalFields[key];
-                            if (key === 'TIPO') {
-                                return `<div>
+            const value = seasonalFields[key];
+            if (key === 'TIPO') {
+                return `<div>
                                     <label for="import-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
                                     <select id="import-${key}" data-key="${key}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
                                         <option value="JUGADOR/A" ${value === 'JUGADOR/A' ? 'selected' : ''}>JUGADOR/A</option>
                                         <option value="ENTRENADOR/A" ${value === 'ENTRENADOR/A' ? 'selected' : ''}>ENTRENADOR/A</option>
                                     </select>
                                 </div>`;
-                            }
-                            if (key === 'CATEGORIA' || key === 'EQUIPO' || key === 'COMPETICION') {
-                                const options = key === 'CATEGORIA' ? categorias : (key === 'EQUIPO' ? equipos : competiciones);
-                                return `<div>
+            }
+            if (key === 'CATEGORIA' || key === 'EQUIPO' || key === 'COMPETICION') {
+                const options = key === 'CATEGORIA' ? categorias : (key === 'EQUIPO' ? equipos : competiciones);
+                return `<div>
                                     <label for="import-${key}" class="block text-sm font-medium text-gray-600">${key}</label>
                                     <select id="import-${key}" data-key="${key}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
                                         <option value="">Seleccione...</option>
                                         ${options.map(o => `<option value="${o}" ${o === value ? 'selected' : ''}>${o}</option>`).join('')}
                                     </select>
                                 </div>`;
-                            }
-                            return `<div>
+            }
+            return `<div>
                                 <label for="import-${key}" class="block text-sm font-medium text-gray-600">${key.replace('_', ' ')}</label>
                                 <input type="text" id="import-${key}" data-key="${key}" value="${value}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
                             </div>`;
-                        }).join('')}
+        }).join('')}
                     </div>
                 </div>
                 <div class="mt-6 flex items-center justify-end space-x-4">
@@ -1535,7 +1521,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast(`Error al autorizar: ${error.message}`, "error");
         }
     }
-    
+
     async function generatePDF() {
         const selectedCategory = categoryFilter ? categoryFilter.value : '';
 
@@ -1768,8 +1754,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 doc.setFontSize(fontSize + 1); doc.setFont(undefined, 'bold');
                 columns.forEach(col => {
                     const colWidth = columnWidths[col];
-                    doc.setFillColor(25, 50, 100); 
-                    doc.setDrawColor(25, 50, 100); 
+                    doc.setFillColor(25, 50, 100);
+                    doc.setDrawColor(25, 50, 100);
                     doc.setTextColor(255, 255, 255);
                     doc.rect(x, y, colWidth, headerHeight, 'FD');
                     doc.text(col, x + 2, y + 5, { maxWidth: colWidth - 4, align: 'left' });
@@ -1794,11 +1780,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 let textColor = [0, 0, 0];
 
                 if (isBaja) {
-                     fillColor = [255, 224, 224]; // Light red for Baja
-                     fillColor = [220, 20, 60]; // Intense red
-                     textColor = [255, 255, 255];
+                    fillColor = [255, 224, 224]; // Light red for Baja
+                    fillColor = [220, 20, 60]; // Intense red
+                    textColor = [255, 255, 255];
                 } else if (player['TIPO'] === 'ENTRENADOR/A') {
-                     fillColor = [219, 234, 254]; // Blue background
+                    fillColor = [219, 234, 254]; // Blue background
                 } else if (expirationDate) {
                     const today = new Date(); today.setHours(0, 0, 0, 0);
                     const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
