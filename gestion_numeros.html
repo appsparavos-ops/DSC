@@ -13,12 +13,17 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="firebase-config.js"></script>
+    <style>
+        body.uninitialized {
+            display: none;
+        }
+    </style>
 </head>
 
-<body class="bg-gray-100">
+<body class="bg-gray-100 uninitialized">
 
     <!-- Modal de Login -->
-    <div id="login-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
+    <div id="login-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 hidden">
         <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
             <div class="text-center mb-6">
                 <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
@@ -43,8 +48,10 @@
     <div id="main-content" class="container mx-auto max-w-4xl p-4 sm:p-8 hidden">
         <div class="bg-white p-8 rounded-xl shadow-lg">
             <div class="flex items-center justify-between mb-8 gap-4 border-b pb-6">
-                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
-                    alt="Logo del Club" class="h-12 sm:h-20 w-auto">
+                <div class="flex flex-col items-center gap-2">
+                    <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
+                        alt="Logo del Club" class="h-12 sm:h-20 w-auto">
+                </div>
                 <div class="text-center flex-1">
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Gestión de Números</h1>
                     <p class="text-sm sm:text-base text-gray-500 mt-1">Asigna y verifica los números de los jugadores.
@@ -133,6 +140,28 @@
                             d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
                     </svg>
                     Auto-asignar Números Restantes
+                </button>
+            </div>
+
+            <!-- Botones de Navegación al Final -->
+            <div class="flex justify-center gap-4 mt-12 pt-6 border-t border-gray-100">
+                <button id="navToIndex"
+                    class="py-2 px-6 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg shadow-md transition duration-200 text-xs uppercase flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    Volver a Inicio
+                </button>
+                <button id="logout-btn-header"
+                    class="py-2 px-6 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg shadow-md transition duration-200 text-xs uppercase flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Salir
                 </button>
             </div>
         </div>
@@ -294,25 +323,53 @@
             }
 
             // --- Auth Logic ---
-            auth.onAuthStateChanged(user => {
-                if (user) {
-                    database.ref('admins/' + user.uid).once('value').then(snapshot => {
-                        if (snapshot.exists()) {
-                            currentUser = user;
-                            loginModal.classList.add('hidden');
-                            mainContent.classList.remove('hidden');
-                            loadSeasons();
-                        } else {
-                            loginError.textContent = 'El usuario no es administrador.';
-                            loginError.classList.remove('hidden');
-                            auth.signOut();
-                        }
-                    });
-                } else {
-                    loginModal.classList.remove('hidden');
-                    mainContent.classList.add('hidden');
+            auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).then(() => {
+                auth.onAuthStateChanged(user => {
+                    document.body.classList.remove('uninitialized');
+                    if (user) {
+                        database.ref('admins/' + user.uid).once('value').then(snapshot => {
+                            if (snapshot.exists()) {
+                                currentUser = user;
+                                loginModal.classList.add('hidden');
+                                mainContent.classList.remove('hidden');
+                                loadSeasons();
+                            } else {
+                                loginError.textContent = 'Acceso restringido a administradores.';
+                                loginError.classList.remove('hidden');
+                                // No cerramos sesión para permitir volver a index.html
+                                ensureVolverBtnInLogin();
+                            }
+                        });
+                    } else {
+                        loginModal.classList.remove('hidden');
+                        mainContent.classList.add('hidden');
+                    }
+                });
+            });
+
+            document.getElementById('logout-btn-header')?.addEventListener('click', () => {
+                if (confirm('¿Deseas cerrar la sesión?')) {
+                    auth.signOut();
                 }
             });
+
+            const navToIndex = document.getElementById('navToIndex');
+            if (navToIndex) {
+                navToIndex.addEventListener('click', () => {
+                    window.location.href = 'index.html';
+                });
+            }
+
+            function ensureVolverBtnInLogin() {
+                if (!document.getElementById('volver-login-btn')) {
+                    const volverBtn = document.createElement('button');
+                    volverBtn.id = 'volver-login-btn';
+                    volverBtn.textContent = 'Volver a Inicio';
+                    volverBtn.className = 'w-full mt-2 py-2 px-4 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-md transition duration-200';
+                    volverBtn.onclick = () => window.location.href = 'index.html';
+                    loginBtn.parentNode.appendChild(volverBtn);
+                }
+            }
 
             loginBtn.addEventListener('click', () => {
                 const email = emailInput.value;

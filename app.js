@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const loginPasswordInput = document.getElementById('login-password');
     const loginErrorMessage = document.getElementById('login-error-message');
     const logoutButton = document.getElementById('logout-button');
+    const navToGestionNumeros = document.getElementById('navToGestionNumeros');
     const toggleSearchButton = document.getElementById('toggleSearchButton');
     const searchBar = document.getElementById('searchBar');
     const nameSearchInput = document.getElementById('nameSearchInput');
@@ -151,6 +152,14 @@ document.addEventListener('DOMContentLoaded', function () {
         document.body.classList.remove('uninitialized');
         if (loginContainer) loginContainer.style.display = 'none';
         if (mainContainer) mainContainer.style.display = 'block';
+
+        if (navToGestionNumeros) {
+            if (currentUserRole === 'admin') {
+                navToGestionNumeros.classList.remove('hidden');
+            } else {
+                navToGestionNumeros.classList.add('hidden');
+            }
+        }
 
         const controlsContainer = document.getElementById('resetButton')?.parentNode;
         if (controlsContainer) {
@@ -462,6 +471,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (dniSearchInput) dniSearchInput.addEventListener('input', applyFilters);
     if (categoryFilter) categoryFilter.addEventListener('change', applyFilters);
     if (equipoFilter) equipoFilter.addEventListener('change', applyFilters);
+    if (navToGestionNumeros) navToGestionNumeros.addEventListener('click', () => window.location.href = 'gestion_numeros.html');
     if (seasonFilter) seasonFilter.addEventListener('change', () => {
         if (nameSearchInput) nameSearchInput.value = '';
         if (dniSearchInput) dniSearchInput.value = '';
