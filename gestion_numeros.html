@@ -392,6 +392,17 @@
                     const seasons = Object.keys(snapshot.val()).sort((a, b) => b.localeCompare(a));
                     seasonSelect.innerHTML = '<option value="">Seleccione...</option>';
                     seasons.forEach(season => seasonSelect.add(new Option(season, season)));
+
+                    // Cargar preferencia del usuario (Lectura exclusiva en GN)
+                    if (currentUser) {
+                        const prefSnapshot = await database.ref(`preferenciasUsuarios/${currentUser.uid}/ultimaTemporadaSeleccionada`).once('value');
+                        const preferredSeason = prefSnapshot.val();
+                        if (preferredSeason && seasons.includes(preferredSeason)) {
+                            seasonSelect.value = preferredSeason;
+                            // Disparamos el evento manualmente para cargar los datos
+                            seasonSelect.dispatchEvent(new Event('change'));
+                        }
+                    }
                 } catch (error) {
                     showToast(`Error al cargar temporadas: ${error.message}`, true);
                 }
@@ -507,6 +518,30 @@
                 bottomActionsContainer.classList.remove('hidden');
             });
 
+            function updateVisualConflicts() {
+                const inputs = document.querySelectorAll('.number-input');
+                inputs.forEach(input => {
+                    const number = input.value.trim();
+                    const pushId = input.dataset.pushid;
+                    const player = allPlayersInSeason.find(p => p._pushId === pushId);
+
+                    if (!player || number === '') {
+                        input.classList.remove('border-red-500', 'bg-red-50', 'text-red-700');
+                        input.classList.add('border-gray-300');
+                        return;
+                    }
+
+                    const conflicts = getConflictingPlayers(number, player);
+                    if (conflicts.length > 0) {
+                        input.classList.add('border-red-500', 'bg-red-50', 'text-red-700');
+                        input.classList.remove('border-gray-300');
+                    } else {
+                        input.classList.remove('border-red-500', 'bg-red-50', 'text-red-700');
+                        input.classList.add('border-gray-300');
+                    }
+                });
+            }
+
             function renderPlayers() {
                 loadingMessage.classList.add('hidden');
                 if (playersInCategory.length === 0) {
@@ -534,7 +569,11 @@
 
                 document.querySelectorAll('.number-input').forEach(input => {
                     input.addEventListener('change', handleNumberChange);
+                    input.addEventListener('input', updateVisualConflicts);
                 });
+
+                // Validación inicial al renderizar
+                updateVisualConflicts();
             }
 
             function filterAndSortPlayers() {
