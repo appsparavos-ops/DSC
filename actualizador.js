@@ -15,6 +15,7 @@ const logDisplay = document.getElementById('log-display');
 const clearLogsBtn = document.getElementById('clear-logs');
 const statsContainer = document.getElementById('stats-container');
 const loadingSpinner = document.getElementById('loading-spinner');
+const cancelBtn = document.getElementById('cancel-btn');
 
 // Estadísticas
 const statTotal = document.getElementById('stat-total');
@@ -27,6 +28,8 @@ const DAYS_THRESHOLD = 30;
 // Estado
 let playersToUpdate = [];
 let updatedCount = 0;
+let isCancelled = false;
+let abortController = null;
 
 // Utilidades
 function log(msg, type = 'info') {
@@ -134,7 +137,7 @@ function renderPlayers() {
                 statusClass = 'bg-green-100 text-green-600';
                 break;
             case 'no_change':
-                statusText = 'El Jugador no actualizo';
+                statusText = 'El Jugador no actualizó';
                 statusClass = 'bg-gray-100 text-gray-600';
                 break;
             case 'fail':
@@ -170,18 +173,21 @@ function updateStats(total, pending) {
 
 async function updateSinglePlayer(index) {
     const player = playersToUpdate[index];
-    if (player.status === 'success' || player.status === 'no_change' || player.status === 'updating') return;
+    if (player.status === 'success' || player.status === 'no_change' || player.status === 'updating' || isCancelled) return;
 
     player.status = 'updating';
     renderPlayers();
     loadingSpinner.classList.remove('hidden');
     log(`Buscando datos APS para: ${player.nombre}...`, 'info');
 
+    abortController = new AbortController();
+
     try {
         const response = await fetch(SCRAPE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ dni: player.dni })
+            body: JSON.stringify({ dni: player.dni }),
+            signal: abortController.signal
         });
 
         if (!response.ok) throw new Error('Servicio de scraping no disponible');
@@ -222,31 +228,62 @@ async function updateSinglePlayer(index) {
             log(`No se encontraron datos para ${player.nombre} en APS.`, 'warn');
         }
     } catch (error) {
-        player.status = 'fail';
-        log(`Error con ${player.nombre}: ${error.message}`, 'error');
+        if (error.name === 'AbortError') {
+            log(`Proceso de ${player.nombre} cancelado.`, 'warn');
+            player.status = 'pending';
+        } else {
+            player.status = 'fail';
+            log(`Error con ${player.nombre}: ${error.message}`, 'error');
+        }
     } finally {
         renderPlayers();
         loadingSpinner.classList.add('hidden');
+        abortController = null;
     }
 }
 
 async function updateAll() {
     log('Iniciando actualización masiva...', 'warn');
+    isCancelled = false;
     updateAllBtn.disabled = true;
     updateAllBtn.classList.add('opacity-50');
+    cancelBtn.classList.remove('hidden');
 
     for (let i = 0; i < playersToUpdate.length; i++) {
+        if (isCancelled) break;
         if (playersToUpdate[i].status === 'pending' || playersToUpdate[i].status === 'fail') {
             await updateSinglePlayer(i);
         }
     }
 
-    log('Proceso de actualización masiva finalizado.', 'info');
+    if (isCancelled) {
+        log('Actualización masiva cancelada por el usuario.', 'error');
+    } else {
+        log('Proceso de actualización masiva finalizado.', 'info');
+    }
+
     updateAllBtn.disabled = false;
     updateAllBtn.classList.remove('opacity-50');
+    cancelBtn.classList.add('hidden');
+}
+
+function cancelUpdate() {
+    log('Cancelando proceso...', 'error');
+    isCancelled = true;
+    if (abortController) {
+        abortController.abort();
+    }
+    cancelBtn.disabled = true;
+    cancelBtn.classList.add('opacity-50');
+    setTimeout(() => {
+        cancelBtn.disabled = false;
+        cancelBtn.classList.remove('opacity-50');
+        cancelBtn.classList.add('hidden');
+    }, 1000);
 }
 
 // Event Listeners
 scanBtn.addEventListener('click', scanPlayers);
 updateAllBtn.addEventListener('click', updateAll);
+cancelBtn.addEventListener('click', cancelUpdate);
 clearLogsBtn.addEventListener('click', () => { logDisplay.innerHTML = '> Consola reseteada...'; });
