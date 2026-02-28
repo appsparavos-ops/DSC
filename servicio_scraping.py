@@ -32,12 +32,28 @@ def health():
 
 @app.route('/players', methods=['GET'])
 def get_players():
-    print(">>> Solicitud de lista de jugadores recibida")
+    season = request.args.get('season')
+    print(f">>> Solicitud de lista de jugadores recibida (Temporada: {season or 'Todas'})")
+    
     db = get_db()
     if not db:
         return jsonify({'error': 'Firebase no inicializado'}), 500
-    players = firebase_service.get_players(db)
+    
+    if season and season.lower() != 'todas':
+        players = firebase_service.get_seasonal_players(db, season)
+    else:
+        players = firebase_service.get_players(db)
+        
     return jsonify(players)
+
+@app.route('/seasons', methods=['GET'])
+def get_seasons():
+    print(">>> Solicitud de lista de temporadas recibida")
+    db = get_db()
+    if not db:
+        return jsonify({'error': 'Firebase no inicializado'}), 500
+    seasons = firebase_service.get_seasons(db)
+    return jsonify(seasons)
 
 @app.route('/scrape', methods=['POST'])
 def scrape():

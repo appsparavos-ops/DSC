@@ -69,13 +69,25 @@
                 </div>
             </div>
             <div class="flex flex-wrap justify-center gap-3">
+            <div class="flex flex-wrap justify-center gap-3 items-center">
+                <div class="relative">
+                    <select id="season-filter" 
+                        class="bg-white/90 border border-indigo-200 text-gray-700 px-4 py-3 rounded-xl font-bold shadow-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none appearance-none pr-10 cursor-pointer">
+                        <option value="todas">Cargando temporadas...</option>
+                    </select>
+                    <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-indigo-500">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                </div>
                 <button id="scan-btn"
                     class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center gap-2">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                    Escanear Base de Datos
+                    Escanear
                 </button>
                 <button id="update-all-btn"
                     class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg hidden flex items-center gap-2">

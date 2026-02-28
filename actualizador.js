@@ -4,6 +4,7 @@ const API_BASE_URL = 'https://dsc-vh8j.onrender.com';
 const SCRAPE_URL = `${API_BASE_URL}/scrape`;
 const PLAYERS_URL = `${API_BASE_URL}/players`;
 const UPDATE_URL = `${API_BASE_URL}/update_player`;
+const SEASONS_URL = `${API_BASE_URL}/seasons`;
 
 // Selección de elementos DOM
 const scanBtn = document.getElementById('scan-btn');
@@ -16,6 +17,7 @@ const clearLogsBtn = document.getElementById('clear-logs');
 const statsContainer = document.getElementById('stats-container');
 const loadingSpinner = document.getElementById('loading-spinner');
 const cancelBtn = document.getElementById('cancel-btn');
+const seasonFilter = document.getElementById('season-filter');
 
 // Estadísticas
 const statTotal = document.getElementById('stat-total');
@@ -54,12 +56,15 @@ function formatDate(date) {
 
 // Lógica de Negocio
 async function scanPlayers() {
+    const selectedSeason = seasonFilter.value;
+    const url = selectedSeason === 'todas' ? PLAYERS_URL : `${PLAYERS_URL}?season=${selectedSeason}`;
+    
     log(`Conectando con Backend en: ${API_BASE_URL}...`, 'info');
     scanBtn.disabled = true;
     scanBtn.classList.add('opacity-50');
 
     try {
-        const response = await fetch(PLAYERS_URL);
+        const response = await fetch(url);
         if (!response.ok) {
             log(`Error de Servidor: Status ${response.status}`, 'error');
             throw new Error('Servidor respondió con un error.');
@@ -282,8 +287,34 @@ function cancelUpdate() {
     }, 1000);
 }
 
+// Cargar temporadas al iniciar
+async function loadSeasons() {
+    try {
+        const response = await fetch(SEASONS_URL);
+        if (!response.ok) throw new Error('No se pudieron cargar las temporadas');
+        
+        const seasons = await response.json();
+        seasonFilter.innerHTML = '<option value="todas">Todas las temporadas</option>';
+        
+        seasons.forEach(s => {
+            const option = document.createElement('option');
+            option.value = s;
+            option.textContent = s;
+            seasonFilter.appendChild(option);
+        });
+        
+        log('Temporadas cargadas con éxito.', 'info');
+    } catch (error) {
+        log(`Error al cargar temporadas: ${error.message}`, 'error');
+        seasonFilter.innerHTML = '<option value="todas">Error al cargar</option>';
+    }
+}
+
 // Event Listeners
 scanBtn.addEventListener('click', scanPlayers);
 updateAllBtn.addEventListener('click', updateAll);
 cancelBtn.addEventListener('click', cancelUpdate);
 clearLogsBtn.addEventListener('click', () => { logDisplay.innerHTML = '> Consola reseteada...'; });
+
+// Inicialización
+loadSeasons();
