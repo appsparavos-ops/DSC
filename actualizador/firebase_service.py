@@ -183,6 +183,56 @@ def get_players(db_ref):
         print(f"Error al obtener los jugadores: {e}")
         return None
 
+def get_seasons(db_ref):
+    """
+    Obtiene todas las temporadas de la base de datos desde /temporadas.
+    """
+    try:
+        seasons_ref = db.reference('temporadas')
+        data = seasons_ref.get()
+        if data is None:
+            return []
+        
+        # Las temporadas son las llaves del diccionario
+        seasons = sorted(list(data.keys()), reverse=True)
+        return seasons
+    except Exception as e:
+        print(f"Error al obtener las temporadas: {e}")
+        return []
+
+def get_seasonal_players(db_ref, season_name):
+    """
+    Obtiene los jugadores registrados en una temporada específica desde /registrosPorTemporada.
+    Se obtiene el mapa de datos personales para cada DNI encontrado.
+    """
+    try:
+        seasonal_ref = db.reference(f'registrosPorTemporada/{season_name}')
+        records = seasonal_ref.get()
+        if not records:
+            return {}
+
+        # Obtener todos los jugadores para cruzar datos personales
+        # Podríamos optimizar esto pidiendo solo los específicos, pero por ahora seguimos el patrón del proyecto
+        all_players = get_players(db_ref)
+        if not all_players:
+            return {}
+
+        result = {}
+        for push_id, record in records.items():
+            dni = str(record.get('_dni')).strip()
+            if dni in all_players:
+                # Combinamos los datos del registro estacional con los datos personales
+                result[dni] = all_players[dni]
+                # Aseguramos que el DNI esté en el resultado para consistencia
+                if 'datosPersonales' not in result[dni]:
+                    result[dni]['datosPersonales'] = {}
+                result[dni]['datosPersonales']['DNI'] = dni
+                
+        return result
+    except Exception as e:
+        print(f"Error al obtener jugadores de la temporada {season_name}: {e}")
+        return {}
+
 def update_player_fm(db_ref, dni, fm_desde, fm_hasta):
     """
     Actualiza la Ficha Médica (Desde y Hasta) para un jugador específico,
