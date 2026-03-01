@@ -35,6 +35,10 @@
                     class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
                 <input type="password" id="password-input" placeholder="Contraseña"
                     class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="text-right">
+                    <button id="forgot-password-btn" class="text-xs text-blue-600 hover:underline">Olvidé mi
+                        contraseña</button>
+                </div>
                 <p id="login-error" class="text-red-500 text-sm hidden"></p>
                 <button id="login-btn"
                     class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition duration-200">
@@ -139,28 +143,20 @@
                 </button>
             </div>
 
-            <!-- Botones de Navegación al Final
+            <!-- Botones de Navegación al Final -->
             <div class="flex justify-center gap-4 mt-12 pt-6 border-t border-gray-100">
-                <button id="navToIndex"
-                    class="py-2 px-6 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg shadow-md transition duration-200 text-xs uppercase flex items-center gap-2">
+
+                <button id="logout-btn-header"
+                    class="py-2 px-6 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg shadow-md transition duration-200 text-xs uppercase flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
                         stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
-                    Volver a Inicio
-                </button>  -->
-            <button id="logout-btn-header"
-                class="py-2 px-6 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg shadow-md transition duration-200 text-xs uppercase flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                Salir
-            </button>
+                    Salir
+                </button>
+            </div>
         </div>
-    </div>
     </div>
 
     <!-- Modal de Advertencia de Conflicto -->
@@ -231,7 +227,8 @@
     </div>
 
     <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg hidden">
+    <div id="toast"
+        class="fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg z-[100] hidden">
         <p id="toast-message"></p>
     </div>
 
@@ -268,6 +265,7 @@
             const autoAssignModal = document.getElementById('auto-assign-modal');
             const autoAssignList = document.getElementById('auto-assign-list');
             const confirmAutoAssignBtn = document.getElementById('confirm-auto-assign-btn');
+            const forgotPasswordBtn = document.getElementById('forgot-password-btn');
 
             // Nuevos elementos del modal de conflicto
             const conflictPlayersList = document.getElementById('conflict-players-list');
@@ -330,25 +328,43 @@
                 auth.onAuthStateChanged(user => {
                     document.body.classList.remove('uninitialized');
                     if (user) {
-                        database.ref('admins/' + user.uid).once('value').then(snapshot => {
-                            if (snapshot.exists()) {
-                                currentUser = user;
-                                loginModal.classList.add('hidden');
-                                mainContent.classList.remove('hidden');
-                                loadSeasons();
-                            } else {
-                                loginError.textContent = 'Acceso restringido a administradores.';
+                        database.ref('admins/' + user.uid).once('value')
+                            .then(snapshot => {
+                                if (snapshot.exists()) {
+                                    currentUser = user;
+                                    loginModal.classList.add('hidden');
+                                    mainContent.classList.remove('hidden');
+                                    loadSeasons();
+                                } else {
+                                    loginModal.classList.remove('hidden');
+                                    mainContent.classList.add('hidden');
+                                    loginError.textContent = 'No tienes las credenciales para ingresar';
+                                    loginError.classList.remove('hidden');
+                                    // No cerramos sesión para permitir volver a index.html
+                                }
+                            })
+                            .catch(error => {
+                                console.warn("Verificando permisos:", error.message);
+                                loginModal.classList.remove('hidden');
+                                mainContent.classList.add('hidden');
+                                loginError.textContent = 'No tienes las credenciales para ingresar';
                                 loginError.classList.remove('hidden');
-                                // No cerramos sesión para permitir volver a index.html
-                                ensureVolverBtnInLogin();
-                            }
-                        });
+                            });
                     } else {
                         loginModal.classList.remove('hidden');
                         mainContent.classList.add('hidden');
+                        // Limpiar campos de login y errores
+                        emailInput.value = '';
+                        passwordInput.value = '';
+                        loginError.textContent = '';
+                        loginError.classList.add('hidden');
                     }
                 });
             });
+
+            // Ocultar error al escribir
+            emailInput.addEventListener('input', () => loginError.classList.add('hidden'));
+            passwordInput.addEventListener('input', () => loginError.classList.add('hidden'));
 
             document.getElementById('logout-btn-header')?.addEventListener('click', () => {
                 if (confirm('¿Deseas cerrar la sesión?')) {
@@ -356,29 +372,31 @@
                 }
             });
 
-            const navToIndex = document.getElementById('navToIndex');
-            if (navToIndex) {
-                navToIndex.addEventListener('click', () => {
-                    window.location.href = 'index.html';
-                });
-            }
 
-            function ensureVolverBtnInLogin() {
-                if (!document.getElementById('volver-login-btn')) {
-                    const volverBtn = document.createElement('button');
-                    volverBtn.id = 'volver-login-btn';
-                    volverBtn.textContent = 'Volver a Inicio';
-                    volverBtn.className = 'w-full mt-2 py-2 px-4 bg-gray-500 hover:bg-gray-600 text-white font-semibold rounded-lg shadow-md transition duration-200';
-                    volverBtn.onclick = () => window.location.href = 'index.html';
-                    loginBtn.parentNode.appendChild(volverBtn);
-                }
-            }
+
+
 
             loginBtn.addEventListener('click', () => {
                 const email = emailInput.value;
                 const password = passwordInput.value;
                 loginError.classList.add('hidden');
                 auth.signInWithEmailAndPassword(email, password).catch(error => {
+                    loginError.textContent = "Error: " + error.message;
+                    loginError.classList.remove('hidden');
+                });
+            });
+
+            forgotPasswordBtn.addEventListener('click', () => {
+                const email = emailInput.value.trim();
+                loginError.classList.add('hidden');
+                if (!email) {
+                    loginError.textContent = "Por favor, ingresa tu correo electrónico para restablecer la contraseña.";
+                    loginError.classList.remove('hidden');
+                    return;
+                }
+                auth.sendPasswordResetEmail(email).then(() => {
+                    showToast("Se ha enviado un correo para restablecer tu contraseña.");
+                }).catch(error => {
                     loginError.textContent = "Error: " + error.message;
                     loginError.classList.remove('hidden');
                 });
