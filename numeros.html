@@ -83,7 +83,16 @@
                     </select>
                 </div>
                 <div>
-                    <label for="category-select" class="block text-sm font-medium text-gray-700">Categoría</label>
+                    <div class="flex items-center justify-between">
+                        <label for="category-select" class="block text-sm font-medium text-gray-700">Categoría</label>
+                        <div class="flex items-center gap-1.5">
+                            <input type="checkbox" id="all-teams-conflict-checkbox"
+                                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                            <label for="all-teams-conflict-checkbox"
+                                class="text-[10px] font-bold text-gray-500 uppercase cursor-pointer">Revisar Entre
+                                Equipos</label>
+                        </div>
+                    </div>
                     <select id="category-select"
                         class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         disabled>
@@ -266,6 +275,7 @@
             const autoAssignList = document.getElementById('auto-assign-list');
             const confirmAutoAssignBtn = document.getElementById('confirm-auto-assign-btn');
             const forgotPasswordBtn = document.getElementById('forgot-password-btn');
+            const allTeamsConflictCheckbox = document.getElementById('all-teams-conflict-checkbox');
 
             // Nuevos elementos del modal de conflicto
             const conflictPlayersList = document.getElementById('conflict-players-list');
@@ -310,6 +320,22 @@
                     'Liga Uruguaya de Basquet': 8, 'Liga Femenina de Basquet': 8
                 };
                 return ranks[cat] || 99;
+            }
+
+            function isLowerPriority(pIdentified, pOther) {
+                const rankIdentified = getCategoryRank(pIdentified.CATEGORIA);
+                const rankOther = getCategoryRank(pOther.CATEGORIA);
+
+                if (rankIdentified < rankOther) return true;
+                if (rankIdentified > rankOther) return false;
+
+                // Misma categoría, comparar equipos
+                const eqIdentified = (pIdentified.EQUIPO || '').toUpperCase();
+                const eqOther = (pOther.EQUIPO || '').toUpperCase();
+
+                if (eqIdentified.includes('FUSIONADO') && eqOther.includes('DEFENSOR SPORTING')) return true;
+
+                return false;
             }
 
             // --- Functions ---
@@ -512,7 +538,10 @@
                 }
 
                 const playersInTeam = allPlayersInSeason.filter(p => p.EQUIPO === team);
-                const categories = [...new Set(playersInTeam.map(p => p.CATEGORIA).filter(Boolean))].sort();
+                const categories = [...new Set(playersInTeam.map(p => p.CATEGORIA).filter(Boolean))];
+
+                // Ordenar categorías por rango (U11, U12...)
+                categories.sort((a, b) => getCategoryRank(a) - getCategoryRank(b));
 
                 categorySelect.innerHTML = '<option value="">Seleccione categoría...</option>';
                 categories.forEach(cat => categorySelect.add(new Option(cat, cat)));
@@ -682,11 +711,8 @@
                     // No verificar contra el jugador que estamos ignorando (útil para resolver conflictos mutuos)
                     if (ignoreIds.includes(p._pushId)) return false;
 
-                    // Si los jugadores pertenecen a distinto equipo, no hay conflicto
-                    if (p.EQUIPO !== currentPlayer.EQUIPO) return false;
-
-                    // Si los jugadores pertenecen a distinto equipo, no hay conflicto
-                    if (p.EQUIPO !== currentPlayer.EQUIPO) return false;
+                    // Si el checkbox de "Ambos Equipos" NO está marcado, filtrar por el mismo EQUIPO
+                    if (!allTeamsConflictCheckbox.checked && p.EQUIPO !== currentPlayer.EQUIPO) return false;
 
                     // Check if player `p` is in a related category
                     if (relatedCategories.includes(p.CATEGORIA)) {
@@ -765,12 +791,11 @@
 
                 allInvolved.forEach((player, idx) => {
                     const isCurrent = idx === 0;
-                    const rank = getCategoryRank(player.CATEGORIA);
-                    const otherRanks = allInvolved.filter((_, i) => i !== idx).map(p => getCategoryRank(p.CATEGORIA));
-                    const isLower = otherRanks.some(r => rank < r);
+                    const others = allInvolved.filter((_, i) => i !== idx);
+                    const isLower = others.some(other => isLowerPriority(player, other));
 
                     const div = document.createElement('div');
-                    div.className = `p-4 rounded-xl border-2 ${isLower ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-gray-50'}`;
+                    div.className = `p-4 rounded-xl border-2 ${isLower ? 'border-red-400 bg-red-50 shadow-inner' : 'border-gray-200 bg-gray-50'}`;
 
                     // Sugerencias para este jugador
                     const suggestions = findAvailableNumbers(player, 4);
@@ -781,8 +806,8 @@
                     div.innerHTML = `
                         <div class="flex justify-between items-start mb-3">
                             <div>
-                                <p class="font-bold text-gray-800">${player.NOMBRE} ${isCurrent ? '<span class="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full ml-2 uppercase">Editando</span>' : ''}</p>
-                                <p class="text-xs text-gray-500 uppercase font-semibold">${player.CATEGORIA} | ${player.EQUIPO}</p>
+                                <p class="font-bold text-gray-800 line-clamp-2 h-[2.5rem] leading-tight flex items-center">${player.NOMBRE} ${isCurrent ? '<span class="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full ml-2 uppercase">Editando</span>' : ''}</p>
+                                <p class="text-xs text-blue-600 uppercase font-bold">${player.CATEGORIA} | ${player.EQUIPO}</p>
                             </div>
                             <div class="text-right">
                                 <label class="block text-[10px] font-bold text-gray-400 uppercase">Número</label>
@@ -1099,8 +1124,8 @@
                 const p1 = item.player1;
                 const p2 = item.player2;
 
-                const rank1 = getCategoryRank(p1.CATEGORIA);
-                const rank2 = getCategoryRank(p2.CATEGORIA);
+                const isP1Lower = isLowerPriority(p1, p2);
+                const isP2Lower = isLowerPriority(p2, p1);
 
                 // Atributos dinámicos para manejar el offset de sugerencias por jugador
                 p1._suggestOffset = 0;
@@ -1120,8 +1145,9 @@
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Jugador 1 -->
-                <div class="${rank1 < rank2 ? 'bg-red-50 border-red-500' : 'bg-white border-gray-200'} p-4 rounded-lg shadow-sm border">
-                    <p class="font-bold text-gray-800 text-lg">${p1.NOMBRE}</p>
+                <div class="${isP1Lower ? 'bg-red-50 border-red-500' : 'bg-white border-gray-200'} p-4 rounded-lg shadow-sm border">
+                    <p class="font-bold text-gray-800 text-lg line-clamp-2 h-[3.5rem] leading-tight flex items-center">${p1.NOMBRE}</p>
+                    <p class="text-xs text-blue-600 font-bold uppercase">${p1.EQUIPO}</p>
                     <p class="text-sm text-gray-500 mb-3">${p1.CATEGORIA}</p>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Nuevo número:</label>
                     <input type="text" id="ver-input-${p1._pushId}" class="w-full px-3 py-2 border rounded-md text-center font-bold text-blue-600 bg-gray-100 cursor-not-allowed" value="${item.number}" readonly>
@@ -1133,8 +1159,9 @@
                 </div>
 
                 <!-- Jugador 2 -->
-                <div class="${rank2 < rank1 ? 'bg-red-50 border-red-500' : 'bg-white border-gray-200'} p-4 rounded-lg shadow-sm border">
-                    <p class="font-bold text-gray-800 text-lg">${p2.NOMBRE}</p>
+                <div class="${isP2Lower ? 'bg-red-50 border-red-500' : 'bg-white border-gray-200'} p-4 rounded-lg shadow-sm border">
+                    <p class="font-bold text-gray-800 text-lg line-clamp-2 h-[3.5rem] leading-tight flex items-center">${p2.NOMBRE}</p>
+                    <p class="text-xs text-blue-600 font-bold uppercase">${p2.EQUIPO}</p>
                     <p class="text-sm text-gray-500 mb-3">${p2.CATEGORIA}</p>
                     <label class="block text-xs font-semibold text-gray-400 uppercase mb-1">Nuevo número:</label>
                     <input type="text" id="ver-input-${p2._pushId}" class="w-full px-3 py-2 border rounded-md text-center font-bold text-blue-600 bg-gray-100 cursor-not-allowed" value="${item.number}" readonly>
