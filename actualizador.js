@@ -25,7 +25,7 @@ const statPending = document.getElementById('stat-pending');
 const statUpdated = document.getElementById('stat-updated');
 
 // Constantes
-const DAYS_THRESHOLD = 30;
+const DAYS_THRESHOLD = 60;
 
 // Estado
 let playersToUpdate = [];
@@ -318,3 +318,4 @@ clearLogsBtn.addEventListener('click', () => { logDisplay.innerHTML = '> Consola
 
 // Inicialización
 loadSeasons();
+
