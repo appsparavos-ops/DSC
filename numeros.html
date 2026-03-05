@@ -935,10 +935,12 @@
                 playersInCategory.forEach(player => {
                     const number = (player.Numeros && player.Numeros[player.CATEGORIA]) || player.Numero || '';
                     const name = (player.NOMBRE || '').replace(/"/g, '""'); // Escapar comillas en el nombre
+                    const dni = (player._dni || '').toString();
+                    const maskedDni = dni.length > 4 ? '****' + dni.substring(4) : '****';
 
                     const row = [
                         `"${name}"`,
-                        `"${player._dni || ''}"`,
+                        `"${maskedDni}"`,
                         `"${player.CATEGORIA || ''}"`,
                         `"${number}"`
                     ].join(";");
