@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,21 +11,99 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
-        .container { background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); max-width: 600px; margin: 50px auto; text-align: center; }
-        h1, h2 { color: #0056b3; margin-bottom: 20px; }
-        input[type="file"], input[type="email"], input[type="password"], input[type="text"] { display: block; margin: 10px auto; padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: calc(100% - 22px); }
-        button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background-color 0.3s ease; margin: 5px; }
-        button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #cccccc; cursor: not-allowed; }
-        #message { margin-top: 20px; padding: 10px; border-radius: 4px; background-color: #e9ecef; color: #333; min-height: 30px; text-align: left; word-wrap: break-word; }
-        .success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
-        .error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-        .hidden { display: none; }
-        .btn-danger { background-color: #dc3545; }
-        .btn-danger:hover { background-color: #c82333; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            margin: 50px auto;
+            text-align: center;
+        }
+
+        h1,
+        h2 {
+            color: #0056b3;
+            margin-bottom: 20px;
+        }
+
+        input[type="file"],
+        input[type="email"],
+        input[type="password"],
+        input[type="text"] {
+            display: block;
+            margin: 10px auto;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: calc(100% - 22px);
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #message {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #e9ecef;
+            color: #333;
+            min-height: 30px;
+            text-align: left;
+            word-wrap: break-word;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+        }
+
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Actualización de Datos</h1>
@@ -40,7 +119,6 @@
         <div id="choiceSection" class="hidden">
             <h2>Selecciona una acción</h2>
             <button id="choiceUploadButton">Subir Registros de Temporada</button>
-            <button id="choiceReplaceButton">Actualizar Datos Personales</button>
             <button id="choiceDeleteButton" class="btn-danger">Borrar Registro</button>
             <button id="logoutButton">Logout</button>
         </div>
@@ -48,7 +126,8 @@
         <div id="uploadSection" class="hidden">
             <h2 id="uploadTitle"></h2>
             <input type="text" id="seasonInput" placeholder="Temporada (ej. 2025)" class="hidden">
-            <input type="file" id="csvFile" accept=".csv, text/csv, application/csv, text/comma-separated-values, application/vnd.ms-excel">
+            <input type="file" id="csvFile"
+                accept=".csv, text/csv, application/csv, text/comma-separated-values, application/vnd.ms-excel">
             <button id="performActionButton" disabled>Ejecutar</button>
             <button id="backButton">Volver</button>
             <div id="message"></div>
@@ -75,11 +154,11 @@
         function getTimestampKey() {
             const now = new Date();
             const timestamp = now.getFullYear().toString() +
-                   String(now.getMonth() + 1).padStart(2, '0') +
-                   String(now.getDate()).padStart(2, '0') +
-                   String(now.getHours()).padStart(2, '0') +
-                   String(now.getMinutes()).padStart(2, '0') +
-                   String(now.getSeconds()).padStart(2, '0');
+                String(now.getMonth() + 1).padStart(2, '0') +
+                String(now.getDate()).padStart(2, '0') +
+                String(now.getHours()).padStart(2, '0') +
+                String(now.getMinutes()).padStart(2, '0') +
+                String(now.getSeconds()).padStart(2, '0');
             const randomPart = Math.random().toString(36).substring(2, 7); // 5 random chars
             return `${timestamp}-${randomPart}`;
         }
@@ -109,10 +188,9 @@
         const passwordInput = document.getElementById('passwordInput');
         const loginButton = document.getElementById('loginButton');
         const loginMessage = document.getElementById('loginMessage');
-        
+
         const choiceSection = document.getElementById('choiceSection');
         const choiceUploadButton = document.getElementById('choiceUploadButton');
-        const choiceReplaceButton = document.getElementById('choiceReplaceButton');
         const choiceDeleteButton = document.getElementById('choiceDeleteButton');
         const logoutButton = document.querySelector('#choiceSection #logoutButton');
 
@@ -184,16 +262,6 @@
             showMessage('Sube un CSV para añadir nuevos registros de temporada (altas, bajas, etc.). Esto creará nuevas entradas.', '');
         });
 
-        choiceReplaceButton.addEventListener('click', () => {
-            currentAction = 'replace';
-            choiceSection.classList.add('hidden');
-            uploadSection.classList.remove('hidden');
-            seasonInput.classList.add('hidden');
-            uploadTitle.textContent = 'Actualizar Datos Personales';
-            performActionButton.textContent = 'Actualizar Datos';
-            showMessage('Sube un CSV con DNI y los datos personales a actualizar. Esto NO afectará los datos de temporada.', '');
-        });
-
         choiceDeleteButton.addEventListener('click', () => {
             choiceSection.classList.add('hidden');
             deleteSection.classList.remove('hidden');
@@ -244,9 +312,6 @@
                 }
                 performActionButton.disabled = true;
                 uploadToFirebase(parsedData, season);
-            } else if (currentAction === 'replace') {
-                performActionButton.disabled = true;
-                replacePersonalData(parsedData);
             }
         });
 
@@ -277,10 +342,10 @@
                     values.length = headers.length;
                 }
                 const rowObject = headers.reduce((obj, header, index) => {
-                    if(header) obj[header] = values[index] || '';
+                    if (header) obj[header] = values[index] || '';
                     return obj;
                 }, {});
-                
+
                 // Normalizar nombres de columnas para DNI/NIF, CATEGORIA/CATEGORÍA, etc.
                 if (rowObject.NIF && !rowObject.DNI) {
                     rowObject.DNI = rowObject.NIF;
@@ -301,58 +366,16 @@
                 if (!rowObject.DNI) continue; // DNI is always mandatory
 
                 if (currentAction === 'upload' && !rowObject.TIPO) {
-                   console.warn('Skipping row for upload action due to missing TIPO:', rowObject);
-                   continue;
+                    console.warn('Skipping row for upload action due to missing TIPO:', rowObject);
+                    continue;
                 }
-                
+
                 data.push(rowObject);
             }
             return data;
         }
 
-        function replacePersonalData(data) {
-            showMessage('Procesando y actualizando datos personales...', '');
-            const allUpdates = {};
-            let processedCount = 0;
-            const personalKeys = ['NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
 
-            data.forEach(row => {
-                const dni = row.DNI.trim();
-                const tipo = row.TIPO ? row.TIPO.trim().toUpperCase() : 'JUGADOR';
-                const rootNode = tipo === 'ENTRENADOR/A' ? 'entrenadores' : 'jugadores';
-
-                let hasDataToUpdate = false;
-                personalKeys.forEach(key => {
-                    if (row[key] !== undefined && row[key] !== null) {
-                        const path = `/${rootNode}/${dni}/datosPersonales/${key}`;
-                        allUpdates[path] = row[key];
-                        hasDataToUpdate = true;
-                    }
-                });
-                if(hasDataToUpdate) {
-                    processedCount++;
-                }
-            });
-
-            if (Object.keys(allUpdates).length === 0) {
-                showMessage('No se encontraron datos para actualizar. Revisa que el CSV tenga DNI y columnas con datos personales.', 'error');
-                performActionButton.disabled = false;
-                return;
-            }
-
-            database.ref().update(allUpdates)
-                .then(() => {
-                    const message = `¡Datos personales de ${processedCount} registros procesados correctamente!`;
-                    showMessage(message, 'success');
-                    logAction('replace_personal_data', { count: processedCount, message: message });
-                    performActionButton.disabled = false;
-                })
-                .catch((error) => {
-                    showMessage(`Error al actualizar los datos: ${error.message}`, 'error');
-                    console.error("Error during Firebase bulk update: ", error);
-                    performActionButton.disabled = false;
-                });
-        }
 
         function parseDate(dateStr) {
             if (!dateStr) return null;
@@ -401,15 +424,15 @@
 
             const filteredData = Array.from(latestRecordsMap.values());
             showMessage(`CSV filtrado. ${filteredData.length} registros únicos para procesar.`, 'success');
-            
+
             // Re-utilizar el nombre 'data' para el resto de la función
             data = filteredData;
 
             showMessage('Verificando duplicados en Firebase...', '');
-            
+
             const temporadaRef = database.ref(`registrosPorTemporada/${manualSeason}`);
             let existingRecords = {};
-            
+
             try {
                 const snapshot = await temporadaRef.once('value');
                 if (snapshot.exists()) {
@@ -430,7 +453,7 @@
             }
 
             showMessage('Procesando y subiendo datos a Firebase...', '');
-            
+
             const allUpdates = {};
             let processedCount = 0;
             let skippedCount = 0;
@@ -481,7 +504,7 @@
                                 skippedCount++;
                                 return; // Saltar esta fila
                             }
-							// No es un duplicado, así que es una actualización. Reutilizamos el ID.
+                            // No es un duplicado, así que es una actualización. Reutilizamos el ID.
                             isUpdate = true;
                             targetPushId = match._pushId;
                         }
@@ -491,11 +514,15 @@
                 const seasonalData = {};
 
                 personalKeys.forEach(key => {
-                    if (row[key] !== undefined) {
+                    if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
                         allUpdates[`/${rootNode}/${dni}/datosPersonales/${key}`] = row[key];
                     }
                 });
-                seasonalKeys.forEach(key => { if (row[key] !== undefined) seasonalData[key] = row[key]; });
+                seasonalKeys.forEach(key => {
+                    if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
+                        seasonalData[key] = row[key];
+                    }
+                });
                 seasonalData.TEMPORADA = temporada;
 
                 // 3. Gestionar Números (Mezclar nuevos con existentes)
@@ -522,7 +549,7 @@
                 allUpdates[`/${rootNode}/${dni}/temporadas/${temporada}/${newPushKey}`] = seasonalData;
                 allUpdates[`/registrosPorTemporada/${temporada}/${newPushKey}`] = combinedDataForIndex;
                 allUpdates[`/temporadas/${temporada}`] = true;
-                
+
                 processedCount++;
             });
 
@@ -541,11 +568,11 @@
                     let msg = `¡${processedCount} registros se han procesado y subido correctamente a Firebase!`;
                     if (skippedCount > 0) msg += ` Se omitieron ${skippedCount} registros duplicados.`;
                     showMessage(msg, 'success');
-                    logAction('upload_season_data', { 
-                        season: manualSeason, 
-                        processed: processedCount, 
+                    logAction('upload_season_data', {
+                        season: manualSeason,
+                        processed: processedCount,
                         skipped: skippedCount,
-                        message: msg 
+                        message: msg
                     });
                     performActionButton.disabled = false;
                 })
@@ -564,12 +591,12 @@
         searchRecordsButton.addEventListener('click', () => {
             const season = deleteSeasonInput.value.trim();
             const dni = deleteDniInput.value.trim();
-            
+
             if (!season || !dni) {
                 showDeleteMessage('Por favor, ingresa Temporada y DNI.', 'error');
                 return;
             }
-            
+
             searchRecords(season, dni);
         });
 
@@ -584,7 +611,7 @@
 
             let type = 'jugadores';
             let snapshot = await database.ref(`jugadores/${dni}/temporadas/${season}`).once('value');
-            
+
             if (!snapshot.exists()) {
                 type = 'entrenadores';
                 snapshot = await database.ref(`entrenadores/${dni}/temporadas/${season}`).once('value');
@@ -597,7 +624,7 @@
 
             showDeleteMessage(`Se encontraron registros en ${type}.`, 'success');
             const records = snapshot.val();
-            
+
             Object.keys(records).forEach(key => {
                 const record = records[key];
                 const div = document.createElement('div');
@@ -606,12 +633,12 @@
                 div.style.marginBottom = '10px';
                 div.style.borderRadius = '4px';
                 div.style.backgroundColor = '#f9f9f9';
-                
+
                 let info = `<strong>ID:</strong> ${key}<br>`;
                 info += `<strong>Categoría:</strong> ${record.CATEGORIA || 'N/A'}<br>`;
                 info += `<strong>Equipo:</strong> ${record.EQUIPO || 'N/A'}<br>`;
                 info += `<strong>Estado:</strong> ${record['ESTADO LICENCIA'] || 'N/A'}<br>`;
-                
+
                 div.innerHTML = info;
 
                 const delBtn = document.createElement('button');
@@ -619,14 +646,14 @@
                 delBtn.className = 'btn-danger';
                 delBtn.style.marginTop = '10px';
                 delBtn.onclick = () => deleteRecord(season, dni, type, key, div);
-                
+
                 div.appendChild(delBtn);
                 recordsList.appendChild(div);
             });
         }
 
         function deleteRecord(season, dni, type, pushId, elementToRemove) {
-            if(!confirm('¿Estás seguro de que quieres eliminar este registro? Esta acción no se puede deshacer.')) return;
+            if (!confirm('¿Estás seguro de que quieres eliminar este registro? Esta acción no se puede deshacer.')) return;
 
             const updates = {};
             updates[`/registrosPorTemporada/${season}/${pushId}`] = null;
@@ -637,15 +664,15 @@
                     elementToRemove.remove();
                     const message = 'Registro eliminado correctamente.';
                     showDeleteMessage(message, 'success');
-                    logAction('delete_record', { 
-                        season: season, 
-                        dni: dni, 
-                        type: type, 
+                    logAction('delete_record', {
+                        season: season,
+                        dni: dni,
+                        type: type,
                         pushId: pushId,
                         message: message
                     });
                     if (recordsList.children.length === 0) {
-                         showDeleteMessage('No quedan registros para mostrar.', '');
+                        showDeleteMessage('No quedan registros para mostrar.', '');
                     }
                 })
                 .catch(error => {
@@ -654,4 +681,5 @@
         }
     </script>
 </body>
+
 </html>
