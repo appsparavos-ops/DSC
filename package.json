@@ -1,0 +1,12 @@
+{
+  "name": "actualizador-datos",
+  "version": "1.0.0",
+  "description": "Aplicación modular para la gestión de datos y temporadas",
+  "main": "actualizar.html",
+  "scripts": {
+    "start": "npx -y serve ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
