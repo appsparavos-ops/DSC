@@ -466,12 +466,12 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    if (toggleSearchButton) toggleSearchButton.addEventListener('click', () => searchBar.classList.toggle('hidden'));
+    if (toggleSearchButton) toggleSearchButton.addEventListener('click', (e) => { e.preventDefault(); searchBar.classList.toggle('hidden'); });
     if (nameSearchInput) nameSearchInput.addEventListener('input', applyFilters);
     if (dniSearchInput) dniSearchInput.addEventListener('input', applyFilters);
     if (categoryFilter) categoryFilter.addEventListener('change', applyFilters);
     if (equipoFilter) equipoFilter.addEventListener('change', applyFilters);
-    if (navToGestionNumeros) navToGestionNumeros.addEventListener('click', () => window.location.href = 'mantenimiento.html');
+    if (navToGestionNumeros) navToGestionNumeros.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'mantenimiento.html'; });
     if (seasonFilter) seasonFilter.addEventListener('change', () => {
         if (nameSearchInput) nameSearchInput.value = '';
         if (dniSearchInput) dniSearchInput.value = '';
@@ -486,9 +486,9 @@ document.addEventListener('DOMContentLoaded', function () {
             database.ref('preferenciasUsuarios/' + user.uid).update({ ultimaTemporadaSeleccionada: newSeason });
         }
     });
-    if (resetButton) resetButton.addEventListener('click', resetAll);
-    if (expiringButton) expiringButton.addEventListener('click', showExpiring);
-    if (printButton) printButton.addEventListener('click', generatePDF);
+    if (resetButton) resetButton.addEventListener('click', (e) => { e.preventDefault(); resetAll(); });
+    if (expiringButton) expiringButton.addEventListener('click', (e) => { e.preventDefault(); showExpiring(); });
+    if (printButton) printButton.addEventListener('click', (e) => { e.preventDefault(); generatePDF(); });
 
     function applyFilters() {
         if (printButton) printButton.classList.add('hidden');
@@ -583,11 +583,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const limitDate = new Date(); limitDate.setDate(today.getDate() + 60);
 
-        // Incluimos jugadores sin ficha ("" o nulo) además de los que vencen pronto
-        let expiringPlayers = allPlayers.filter(p =>
-            p.TIPO !== 'ENTRENADOR/A' &&
-            (!p['FM Hasta'] || p['FM Hasta'] === "" || parseDateDDMMYYYY(p['FM Hasta']) <= limitDate)
-        );
+        // Incluimos jugadores sin ficha ("", nulo, undefined o solo espacios) además de los que vencen pronto
+        let expiringPlayers = allPlayers.filter(p => {
+            if (p.TIPO === 'ENTRENADOR/A') return false;
+            const fmHasta = p['FM Hasta'];
+            // Si no tiene FM registrada o ha vencido
+            if (!fmHasta || fmHasta.toString().trim() === "" || fmHasta === "1/1/1900") return true;
+            const expDate = parseDateDDMMYYYY(fmHasta);
+            return !expDate || expDate <= limitDate;
+        });
 
         if (selectedEquipo) expiringPlayers = expiringPlayers.filter(p => p.EQUIPO === selectedEquipo);
         if (selectedCategory) expiringPlayers = expiringPlayers.filter(p => p.CATEGORIA === selectedCategory);
@@ -775,6 +779,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (customTitle && columns) {
             currentColumnsForPDF = columns;
+        } else {
+            currentColumnsForPDF = [];
         }
 
         const selectedCategory = categoryFilter ? categoryFilter.value : '';
@@ -1633,10 +1639,12 @@ document.addEventListener('DOMContentLoaded', function () {
     async function generatePDF() {
         const selectedCategory = categoryFilter ? categoryFilter.value : '';
 
-        if (selectedCategory) {
+        // Priorizar el reporte de Vencimientos si es el que se generó específicamente
+        if (currentColumnsForPDF.length === 3 && currentColumnsForPDF.includes('FM Hasta') && currentlyDisplayedPlayers.length > 0) {
+            await generateExpiringPDF();
+        } else if (selectedCategory) {
             await generateCategoryPDF(selectedCategory);
         } else if (currentlyDisplayedPlayers.length > 0 && currentColumnsForPDF.length > 0) {
-            // This is the "Vencimientos" case
             await generateExpiringPDF();
         } else {
             showToast("No hay datos para generar el PDF.", "error");
@@ -1883,21 +1891,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 let textColor = [0, 0, 0];
 
                 if (isBaja) {
-                    fillColor = [255, 224, 224]; // Light red for Baja
-                    fillColor = [220, 20, 60]; // Intense red
+                    fillColor = [220, 20, 60]; // Rojo intenso para Baja
                     textColor = [255, 255, 255];
                 } else if (player['TIPO'] === 'ENTRENADOR/A') {
-                    fillColor = [219, 234, 254]; // Blue background
-                } else if (expirationDate) {
+                    fillColor = [219, 234, 254]; // Azul para entrenadores
+                } else {
                     const today = new Date(); today.setHours(0, 0, 0, 0);
                     const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
                     const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
                     const endOfYear = new Date(today.getFullYear(), 11, 24);
 
-                    if (expirationDate < today) { fillColor = [254, 226, 226]; } // Red background
-                    else if (expirationDate <= thirtyDays) { fillColor = [255, 237, 213]; } // Orange background
-                    else if (expirationDate <= sixtyDays) { fillColor = [254, 249, 195]; } // Yellow background
-                    else if (expirationDate > endOfYear) { fillColor = [220, 252, 231]; } // Green background
+                    if (!expirationDate || expirationDate < today) {
+                        fillColor = [254, 226, 226]; // Rojo (Vencida o Sin Ficha)
+                    } else if (expirationDate <= thirtyDays) {
+                        fillColor = [255, 237, 213]; // Naranja (30 días)
+                    } else if (expirationDate <= sixtyDays) {
+                        fillColor = [254, 249, 195]; // Amarillo (60 días)
+                    } else if (expirationDate > endOfYear) {
+                        fillColor = [220, 252, 231]; // Verde
+                    }
                 }
 
                 let x = pageMargin;
