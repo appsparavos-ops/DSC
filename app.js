@@ -520,6 +520,55 @@ document.addEventListener('DOMContentLoaded', function () {
         return new Date(year, month - 1, day);
     }
 
+    // --- FUNCIONES AUXILIARES DE ORDENamiento ---
+    function isFemaleCategory(categoryName) {
+        if (!categoryName) return false;
+        const cat = categoryName.toLowerCase();
+        return cat.includes('femenino') || cat.includes('fem');
+    }
+
+    function getCategoryOrder(categoryName) {
+        if (!categoryName) return 999;
+        const cat = categoryName.toLowerCase();
+        if (cat.includes('mini')) return 10;
+        if (cat.includes('premini')) return 5;
+        if (cat.includes('u11')) return 11;
+        if (cat.includes('u12')) return 12;
+        if (cat.includes('u13')) return 13;
+        if (cat.includes('u14')) return 14;
+        if (cat.includes('u15')) return 15;
+        if (cat.includes('u16')) return 16;
+        if (cat.includes('u17')) return 17;
+        if (cat.includes('u18')) return 18;
+        if (cat.includes('u19')) return 19;
+        if (cat.includes('u20')) return 20;
+        if (cat.includes('u21')) return 21;
+        if (cat.includes('u22')) return 22;
+        if (cat.includes('u23')) return 23;
+        if (cat.includes('mayores') || cat.includes('primera')) return 50;
+        if (cat.includes('veteranos')) return 60;
+        return 100;
+    }
+
+    function globalCategorySort(a, b) {
+        const catA = a || '';
+        const catB = b || '';
+        const isFemA = isFemaleCategory(catA);
+        const isFemB = isFemaleCategory(catB);
+
+        // Femeninas primero
+        if (isFemA && !isFemB) return -1;
+        if (!isFemA && isFemB) return 1;
+
+        // Dentro del mismo género, por peso de edad
+        const orderA = getCategoryOrder(catA);
+        const orderB = getCategoryOrder(catB);
+        if (orderA !== orderB) return orderA - orderB;
+
+        // Si son iguales, alfabético
+        return catA.localeCompare(catB);
+    }
+
     function showExpiring() {
         if (printButton) printButton.classList.remove('hidden');
         const selectedSeason = seasonFilter ? seasonFilter.value : null;
@@ -534,48 +583,91 @@ document.addEventListener('DOMContentLoaded', function () {
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const limitDate = new Date(); limitDate.setDate(today.getDate() + 60);
 
-        let expiringPlayers = allPlayers.filter(p => p.TIPO !== 'ENTRENADOR/A' && p['FM Hasta'] && parseDateDDMMYYYY(p['FM Hasta']) <= limitDate);
-        const displayColumns = ['EQUIPO', 'CATEGORIA', 'DNI', 'NOMBRE', 'FM Hasta'];
-        let title = `Vencimientos para la Temporada ${selectedSeason}`;
+        // Incluimos jugadores sin ficha ("" o nulo) además de los que vencen pronto
+        let expiringPlayers = allPlayers.filter(p =>
+            p.TIPO !== 'ENTRENADOR/A' &&
+            (!p['FM Hasta'] || p['FM Hasta'] === "" || parseDateDDMMYYYY(p['FM Hasta']) <= limitDate)
+        );
 
-        const sortByDate = (a, b) => {
-            const dateA = parseDateDDMMYYYY(a['FM Hasta']);
-            const dateB = parseDateDDMMYYYY(b['FM Hasta']);
-            return dateA && dateB ? dateA - dateB : !dateA ? 1 : -1;
-        };
+        if (selectedEquipo) expiringPlayers = expiringPlayers.filter(p => p.EQUIPO === selectedEquipo);
+        if (selectedCategory) expiringPlayers = expiringPlayers.filter(p => p.CATEGORIA === selectedCategory);
 
-        if (selectedEquipo && selectedCategory) {
-            title += ` del Equipo: ${selectedEquipo} y Cat: ${selectedCategory}`;
-            expiringPlayers = expiringPlayers.filter(p => p.EQUIPO === selectedEquipo && p.CATEGORIA === selectedCategory);
-            expiringPlayers.sort(sortByDate);
-        } else if (selectedEquipo) {
-            title += ` del Equipo: ${selectedEquipo}`;
-            expiringPlayers = expiringPlayers.filter(p => p.EQUIPO === selectedEquipo);
-            expiringPlayers.sort((a, b) => {
-                const catComp = (a.CATEGORIA || '').localeCompare(b.CATEGORIA || '');
-                if (catComp !== 0) return catComp;
-                return sortByDate(a, b);
-            });
-        } else if (selectedCategory) {
-            title += ` de la Categoría: ${selectedCategory}`;
-            expiringPlayers = expiringPlayers.filter(p => p.CATEGORIA === selectedCategory);
-            expiringPlayers.sort((a, b) => {
-                const equipoComp = (a.EQUIPO || '').localeCompare(b.EQUIPO || '');
-                if (equipoComp !== 0) return equipoComp;
-                return sortByDate(a, b);
-            });
-        } else {
-            // "Todos los equipos"
-            expiringPlayers.sort((a, b) => {
-                const equipoComp = (a.EQUIPO || '').localeCompare(b.EQUIPO || '');
-                if (equipoComp !== 0) return equipoComp;
-                const catComp = (a.CATEGORIA || '').localeCompare(b.CATEGORIA || '');
-                if (catComp !== 0) return catComp;
-                return sortByDate(a, b);
-            });
+        const title = `Vencimientos y Sin Ficha - Temporada ${selectedSeason}`;
+
+        // Lógica de agrupamiento y presentación visual mejorada
+        tableContainer.innerHTML = '';
+        messageEl.style.display = 'none';
+
+        if (expiringPlayers.length === 0) {
+            messageEl.style.display = 'block';
+            messageEl.textContent = 'No hay vencimientos o fichas faltantes para los filtros seleccionados.';
+            return;
         }
 
-        displayPlayers(expiringPlayers, title, displayColumns);
+        if (printButton) printButton.classList.remove('hidden');
+
+        // Agrupar por EQUIPO
+        const playersByEquipo = {};
+        expiringPlayers.forEach(p => {
+            const eq = p.EQUIPO || 'SIN EQUIPO';
+            if (!playersByEquipo[eq]) playersByEquipo[eq] = [];
+            playersByEquipo[eq].push(p);
+        });
+
+        // Ordenar equipos alfabéticamente
+        const sortedEquipos = Object.keys(playersByEquipo).sort();
+
+        sortedEquipos.forEach(eqName => {
+            const eqContainer = document.createElement('div');
+            eqContainer.className = 'mb-10';
+
+            const h2 = document.createElement('h2');
+            h2.className = 'text-2xl font-bold text-blue-900 border-b-4 border-blue-900 mb-4 pb-2 uppercase';
+            h2.textContent = `EQUIPO: ${eqName}`;
+            eqContainer.appendChild(h2);
+
+            // Agrupar por CATEGORIA dentro de este equipo
+            const playersByCat = {};
+            playersByEquipo[eqName].forEach(p => {
+                const cat = p.CATEGORIA || 'SIN CATEGORIA';
+                if (!playersByCat[cat]) playersByCat[cat] = [];
+                playersByCat[cat].push(p);
+            });
+
+            // Ordenar categorías: Femeninas primero, luego por edad
+            const sortedCats = Object.keys(playersByCat).sort(globalCategorySort);
+
+            sortedCats.forEach(catName => {
+                const catSection = document.createElement('div');
+                catSection.className = 'ml-4 mb-6';
+
+                const h3 = document.createElement('h3');
+                h3.className = 'text-xl font-semibold text-gray-800 mb-2 border-l-4 border-blue-600 pl-3';
+                h3.textContent = `Categoría: ${catName}`;
+                catSection.appendChild(h3);
+
+                // Ordenar jugadores dentro de la categoría: Sin ficha primero, luego por fecha ascendente
+                const sortedPlayers = playersByCat[catName].sort((a, b) => {
+                    const dateA = parseDateDDMMYYYY(a['FM Hasta']);
+                    const dateB = parseDateDDMMYYYY(b['FM Hasta']);
+
+                    if (!dateA && !dateB) return (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
+                    if (!dateA) return -1;
+                    if (!dateB) return 1;
+                    return dateA - dateB;
+                });
+
+                // Pasamos explícitamente las columnas deseadas para este reporte
+                const reportColumns = ['DNI', 'NOMBRE', 'FM Hasta'];
+                catSection.appendChild(createTable(sortedPlayers, catName, reportColumns));
+                eqContainer.appendChild(catSection);
+            });
+
+            tableContainer.appendChild(eqContainer);
+        });
+
+        currentlyDisplayedPlayers = expiringPlayers;
+        currentColumnsForPDF = ['DNI', 'NOMBRE', 'FM Hasta'];
     }
 
     function resetAll() {
@@ -606,6 +698,78 @@ document.addEventListener('DOMContentLoaded', function () {
         if (dniTerm.length >= 2) addOptions(dniSuggestionsDatalist, players.map(p => String(p.DNI)).filter(d => d && d.toLowerCase().includes(dniTerm)));
     }
 
+    const createPlayerRow = (player, categoryContext, columns) => {
+        const row = document.createElement('tr');
+        row.className = 'clickable-row';
+        const originalIndex = currentlyDisplayedPlayers.findIndex(p => p._firebaseKey === player._firebaseKey);
+        row.addEventListener('click', () => showPlayerDetails(player, isEditModeActive, originalIndex, false));
+
+        const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
+        let colorClass = 'hover:bg-gray-100';
+        if (player['TIPO'] === 'ENTRENADOR/A') {
+            colorClass = 'bg-blue-100 text-blue-800 hover:bg-blue-200';
+        } else {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
+            const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+            const endOfYear = new Date(today.getFullYear(), 11, 24);
+
+            if (!expirationDate || expirationDate < today) {
+                colorClass = 'bg-red-100 text-red-800 hover:bg-red-200';
+            } else if (expirationDate <= thirtyDays) {
+                colorClass = 'bg-orange-100 text-orange-800 hover:bg-orange-200';
+            } else if (expirationDate <= sixtyDays) {
+                colorClass = 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
+            } else if (expirationDate > endOfYear) {
+                colorClass = 'bg-green-100 text-green-800 hover:bg-green-200';
+            }
+        }
+        row.classList.add(...colorClass.split(' '));
+
+        columns.forEach(colName => {
+            const td = document.createElement('td');
+            td.className = `px-2 py-2 text-sm ${colName === 'NOMBRE' ? 'truncate max-w-48' : 'whitespace-nowrap'}`;
+            if (colName === 'DNI' || colName === 'FM Hasta' || colName === 'Numero' || colName === 'EQUIPO' || colName === 'CATEGORIA' || colName === 'COMPETICION') {
+                td.classList.add('text-center');
+            }
+
+            let cellValue;
+            if (colName === 'CATEGORIA' && player.esAutorizado) {
+                cellValue = player.categoriaOrigen || player.CATEGORIA;
+            } else {
+                cellValue = (colName === 'Numero') ? ((player.Numeros && player.Numeros[categoryContext || player.CATEGORIA]) || player.Numero || '-') : (player[colName] || '-');
+            }
+
+            if ((colName === 'FM Hasta' || colName === 'FM DESDE') && cellValue === '1/1/1900') cellValue = '-';
+            if (colName === 'NOMBRE' && player['ESTADO LICENCIA'] === 'Baja') {
+                td.innerHTML = `<span class="text-red-600 font-bold mr-1">X</span>${cellValue || '-'}`;
+            } else {
+                td.textContent = cellValue || '-';
+            }
+            row.appendChild(td);
+        });
+        return row;
+    };
+
+    const createTable = (players, categoryContext, columns) => {
+        const table = document.createElement('table');
+        table.className = 'min-w-full divide-y divide-gray-200';
+        const thead = table.createTHead();
+        thead.className = 'bg-gray-50';
+        const headerRow = thead.insertRow();
+        columns.forEach(headerText => {
+            const th = document.createElement('th');
+            th.className = 'px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider';
+            th.textContent = headerText;
+            headerRow.appendChild(th);
+        });
+
+        const tbody = table.createTBody();
+        tbody.className = 'bg-white divide-y divide-gray-200';
+        players.forEach(player => tbody.appendChild(createPlayerRow(player, categoryContext, columns)));
+        return table;
+    };
+
     function displayPlayers(players, customTitle = '', columns) {
         if (!tableContainer || !messageEl) return;
 
@@ -617,72 +781,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const currentColumns = columns || COLUMN_ORDER;
         currentlyDisplayedPlayers = players;
 
-        const createPlayerRow = (player, categoryContext) => {
-            const row = document.createElement('tr');
-            row.className = 'clickable-row';
-            const originalIndex = currentlyDisplayedPlayers.findIndex(p => p._firebaseKey === player._firebaseKey);
-            row.addEventListener('click', () => showPlayerDetails(player, isEditModeActive, originalIndex, false));
-
-            const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
-            let colorClass = 'hover:bg-gray-100';
-            if (player['TIPO'] === 'ENTRENADOR/A') {
-                colorClass = 'bg-blue-100 text-blue-800 hover:bg-blue-200';
-            } else if (expirationDate) {
-                const today = new Date(); today.setHours(0, 0, 0, 0);
-                const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-                const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
-                const endOfYear = new Date(today.getFullYear(), 11, 24);
-                if (expirationDate < today) colorClass = 'bg-red-100 text-red-800 hover:bg-red-200';
-                else if (expirationDate <= thirtyDays) colorClass = 'bg-orange-100 text-orange-800 hover:bg-orange-200';
-                else if (expirationDate <= sixtyDays) colorClass = 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
-                else if (expirationDate > endOfYear) colorClass = 'bg-green-100 text-green-800 hover:bg-green-200';
-            }
-            row.classList.add(...colorClass.split(' '));
-
-            currentColumns.forEach(colName => {
-                const td = document.createElement('td');
-                td.className = `px-2 py-2 text-sm ${colName === 'NOMBRE' ? 'truncate max-w-48' : 'whitespace-nowrap'}`;
-                if (colName === 'DNI' || colName === 'FM Hasta' || colName === 'Numero' || colName === 'EQUIPO' || colName === 'CATEGORIA' || colName === 'COMPETICION') {
-                    td.classList.add('text-center');
-                }
-
-                let cellValue;
-                if (colName === 'CATEGORIA' && player.esAutorizado) {
-                    cellValue = player.categoriaOrigen || player.CATEGORIA;
-                } else {
-                    cellValue = (colName === 'Numero') ? ((player.Numeros && player.Numeros[categoryContext || player.CATEGORIA]) || player.Numero || '-') : (player[colName] || '-');
-                }
-
-                if ((colName === 'FM Hasta' || colName === 'FM DESDE') && cellValue === '1/1/1900') cellValue = '-';
-                if (colName === 'NOMBRE' && player['ESTADO LICENCIA'] === 'Baja') {
-                    td.innerHTML = `<span class="text-red-600 font-bold mr-1">X</span>${cellValue || '-'}`;
-                } else {
-                    td.textContent = cellValue || '-';
-                }
-                row.appendChild(td);
-            });
-            return row;
-        };
-
-        const createTable = (players, categoryContext) => {
-            const table = document.createElement('table');
-            table.className = 'min-w-full divide-y divide-gray-200';
-            const thead = table.createTHead();
-            thead.className = 'bg-gray-50';
-            const headerRow = thead.insertRow();
-            currentColumns.forEach(headerText => {
-                const th = document.createElement('th');
-                th.className = 'px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider';
-                th.textContent = headerText;
-                headerRow.appendChild(th);
-            });
-
-            const tbody = table.createTBody();
-            tbody.className = 'bg-white divide-y divide-gray-200';
-            players.forEach(player => tbody.appendChild(createPlayerRow(player, categoryContext)));
-            return table;
-        };
-
         tableContainer.innerHTML = '';
         if (players.length === 0 && !customTitle) {
             messageEl.style.display = 'block';
@@ -692,7 +790,7 @@ document.addEventListener('DOMContentLoaded', function () {
         messageEl.style.display = 'none';
 
         if (customTitle) {
-            tableContainer.appendChild(createTable(players, selectedCategory));
+            tableContainer.appendChild(createTable(players, selectedCategory, currentColumns));
         } else if (selectedCategory) {
             if (printButton) printButton.classList.remove('hidden');
             const playersInCategory = players
@@ -741,7 +839,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     return (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
                 });
 
-            const mainTable = createTable(playersInCategory, selectedCategory);
+            const mainTable = createTable(playersInCategory, selectedCategory, currentColumns);
             const tbody = mainTable.querySelector('tbody');
             if (coaches.length > 0) {
                 const coachHeaderRow = tbody.insertRow();
@@ -750,7 +848,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 cell.colSpan = currentColumns.length;
                 cell.textContent = 'Entrenadores';
                 cell.className = 'px-6 py-2 text-sm text-gray-700';
-                coaches.forEach(coach => tbody.appendChild(createPlayerRow(coach, selectedCategory)));
+                coaches.forEach(coach => tbody.appendChild(createPlayerRow(coach, selectedCategory, currentColumns)));
             }
             tableContainer.appendChild(mainTable);
 
@@ -763,13 +861,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 details.appendChild(summary);
                 const authorizedContainer = document.createElement('div');
                 authorizedContainer.className = 'p-4';
-                authorizedContainer.appendChild(createTable(authorizedPlayers, selectedCategory));
+                authorizedContainer.appendChild(createTable(authorizedPlayers, selectedCategory, currentColumns));
                 details.appendChild(authorizedContainer);
                 tableContainer.appendChild(details);
             }
 
         } else {
-            tableContainer.appendChild(createTable(players, selectedCategory));
+            tableContainer.appendChild(createTable(players, selectedCategory, currentColumns));
         }
     }
 
@@ -1557,7 +1655,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const doc = new jsPDF();
         const today = new Date();
         const formattedDate = today.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const title = `Vencimientos al ${formattedDate}`;
+        const titleText = `Vencimientos de Ficha Médica al ${formattedDate}`;
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
         const logoSize = 15;
@@ -1575,131 +1673,126 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         } catch (e) {
             console.error("No se pudo cargar el logo para el PDF:", e);
-            showToast("Advertencia: No se pudo cargar el logo.", "info");
         }
 
-        // Añadir logos y título
-        if (logoImage) {
-            const logoWidth = 10;
-            doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoWidth, logoSize);
-            doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
-        }
-        doc.setFontSize(16);
-        const titleWidth = doc.getStringUnitWidth(title) * doc.internal.getFontSize() / doc.internal.scaleFactor;
-        const titleX = (pageWidth - titleWidth) / 2;
-        doc.text(title, titleX, pageMargin + (logoSize / 2) + 3);
+        const drawHeader = (currentPageTitle) => {
+            if (logoImage) {
+                const logoWidth = 10;
+                doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoWidth, logoSize);
+                doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
+            }
+            doc.setFontSize(16);
+            doc.text(titleText, pageWidth / 2, pageMargin + logoSize / 2, { align: 'center' });
+            return pageMargin + logoSize + 10;
+        };
+
+        let yPosition = drawHeader();
 
         const maskDNI = (dni) => {
             const dniStr = String(dni || '');
             return dniStr.length > 4 ? '****' + dniStr.substring(4) : dniStr;
         };
 
-        try {
-            // Columnas y orden para el PDF de vencimientos
-            const columns = ["CATEGORIA", "DNI", "NOMBRE", "FM Hasta"];
+        const columns = ["DNI", "NOMBRE", "FM Hasta"];
+        const colWidths = { "DNI": 30, "NOMBRE": 120, "FM Hasta": 30 };
 
-            // Ordenar los jugadores por CATEGORIA y luego por FM HASTA
-            const sortedPlayers = [...currentlyDisplayedPlayers].sort((a, b) => {
-                const catComp = (a.CATEGORIA || '').localeCompare(b.CATEGORIA || '');
-                if (catComp !== 0) return catComp;
+        // Agrupar igual que en la vista
+        const playersByEquipo = {};
+        currentlyDisplayedPlayers.forEach(p => {
+            const eq = p.EQUIPO || 'SIN EQUIPO';
+            if (!playersByEquipo[eq]) playersByEquipo[eq] = [];
+            playersByEquipo[eq].push(p);
+        });
 
-                const dateA = parseDateDDMMYYYY(a['FM Hasta']);
-                const dateB = parseDateDDMMYYYY(b['FM Hasta']);
-                if (dateA && dateB) return dateA - dateB;
-                if (!dateA) return 1; // Pone los que no tienen fecha al final
-                if (!dateB) return -1;
-                return 0;
-            });
+        const sortedEquipos = Object.keys(playersByEquipo).sort();
 
-            // Definir anchos de columna
-            const columnWidths = {};
-            const baseWidth = (pageWidth - 2 * pageMargin);
-            columnWidths['CATEGORIA'] = baseWidth * 0.25;
-            columnWidths['DNI'] = baseWidth * 0.15;
-            columnWidths['NOMBRE'] = baseWidth * 0.45;
-            columnWidths['FM Hasta'] = baseWidth * 0.15;
+        sortedEquipos.forEach((eqName, eqIdx) => {
+            if (eqIdx > 0) {
+                if (yPosition + 30 > pageHeight) { doc.addPage(); yPosition = drawHeader(); }
+                else { yPosition += 10; }
+            }
 
-            let yPosition = pageMargin + logoSize + 8;
-            const rowHeight = 5;
-            const fontSize = 8;
-            let xPosition = pageMargin;
-
-            // Dibujar encabezados
-            doc.setFontSize(fontSize);
+            // Título de Equipo
+            doc.setFontSize(14);
             doc.setFont(undefined, 'bold');
-            columns.forEach((col) => {
-                const colWidth = columnWidths[col];
-                doc.setFillColor(25, 50, 100);
-                doc.setDrawColor(25, 50, 100);
-                doc.setTextColor(255, 255, 255);
-                doc.rect(xPosition, yPosition, colWidth, rowHeight, 'FD');
-                doc.text(col, xPosition + 0.5, yPosition + 3.5, { maxWidth: colWidth - 1, overflow: 'hidden', align: 'left' });
-                xPosition += colWidth;
+            doc.setTextColor(25, 50, 100);
+            doc.text(`EQUIPO: ${eqName}`, pageMargin, yPosition);
+            yPosition += 8;
+
+            const playersByCat = {};
+            playersByEquipo[eqName].forEach(p => {
+                const cat = p.CATEGORIA || 'SIN CATEGORIA';
+                if (!playersByCat[cat]) playersByCat[cat] = [];
+                playersByCat[cat].push(p);
             });
 
-            doc.setFont(undefined, 'normal');
-            doc.setTextColor(0, 0, 0);
-            doc.setDrawColor(0, 0, 0);
-            yPosition += rowHeight;
+            const sortedCats = Object.keys(playersByCat).sort(globalCategorySort);
 
-            // Dibujar filas
-            sortedPlayers.forEach((player) => {
-                if (yPosition > pageHeight - pageMargin) {
-                    doc.addPage();
-                    yPosition = pageMargin;
-                    // Aquí se podría redibujar el header si se quisiera en cada página nueva
-                }
+            sortedCats.forEach(catName => {
+                if (yPosition + 25 > pageHeight) { doc.addPage(); yPosition = drawHeader(); }
 
-                const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
-                let fillColor = [255, 255, 255];
-                let textColor = [0, 0, 0];
+                doc.setFontSize(11);
+                doc.setFont(undefined, 'bold');
+                doc.setTextColor(60, 60, 60);
+                doc.text(`Categoría: ${catName}`, pageMargin + 5, yPosition);
+                yPosition += 6;
 
-                if (player['ESTADO LICENCIA'] === 'Baja') {
-                    fillColor = [220, 20, 60]; // Rojo para Baja
-                    textColor = [255, 255, 255];
-                } else if (player['TIPO'] === 'ENTRENADOR/A') {
-                    fillColor = [219, 234, 254]; // Azul para Entrenador
-                } else if (expirationDate) {
-                    const today = new Date(); today.setHours(0, 0, 0, 0);
-                    const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-                    const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
-                    const endOfYear = new Date(today.getFullYear(), 11, 24);
-
-                    if (expirationDate < today) { fillColor = [254, 226, 226]; } // Red background
-                    else if (expirationDate <= thirtyDays) { fillColor = [255, 237, 213]; } // Orange
-                    else if (expirationDate <= sixtyDays) { fillColor = [254, 249, 195]; } // Yellow
-                    else if (expirationDate > endOfYear) { fillColor = [220, 252, 231]; } // Green
-                }
-
-                xPosition = pageMargin;
-                doc.setFont(undefined, 'normal');
-                doc.setTextColor(0, 0, 0);
-                columns.forEach((colName) => {
-                    const colWidth = columnWidths[colName];
-                    let cellValue;
-                    if (colName === 'DNI') {
-                        cellValue = maskDNI(player[colName]);
-                    } else if (colName === 'NOMBRE' && player['ESTADO LICENCIA'] === 'Baja') {
-                        cellValue = `${player[colName] || '-'} (Baja)`;
-                    } else {
-                        cellValue = player[colName] || '-';
-                    }
-
-                    doc.setFillColor(...fillColor);
-                    doc.setTextColor(...textColor);
-                    doc.rect(xPosition, yPosition, colWidth, rowHeight, 'FD');
-                    doc.text(String(cellValue), xPosition + 0.5, yPosition + 3.5, { maxWidth: colWidth - 1, overflow: 'hidden' });
-                    xPosition += colWidth;
+                const sortedCategoryPlayers = playersByCat[catName].sort((a, b) => {
+                    const dateA = parseDateDDMMYYYY(a['FM Hasta']);
+                    const dateB = parseDateDDMMYYYY(b['FM Hasta']);
+                    if (!dateA && !dateB) return (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
+                    if (!dateA) return -1;
+                    if (!dateB) return 1;
+                    return dateA - dateB;
                 });
-                yPosition += rowHeight;
-            });
 
-            doc.save(`vencimientos_${formattedDate}.pdf`);
-            showToast("PDF de vencimientos generado.", "success");
-        } catch (error) {
-            console.error("Error al generar PDF:", error);
-            showToast(`Error al generar PDF: ${error.message}`, "error");
-        }
+                const tableData = sortedCategoryPlayers.map(p => [
+                    maskDNI(p.DNI),
+                    p.NOMBRE || '-',
+                    p['FM Hasta'] || 'SIN FICHA'
+                ]);
+
+                doc.autoTable({
+                    startY: yPosition,
+                    head: [columns],
+                    body: tableData,
+                    margin: { left: pageMargin + 10 },
+                    theme: 'grid',
+                    headStyles: { fillColor: [25, 50, 100], textColor: 255 },
+                    columnStyles: {
+                        0: { cellWidth: colWidths["DNI"] },
+                        1: { cellWidth: colWidths["NOMBRE"] },
+                        2: { cellWidth: colWidths["FM Hasta"] }
+                    },
+                    didParseCell: (data) => {
+                        if (data.section === 'body') {
+                            const playerIndex = data.row.index;
+                            const player = sortedCategoryPlayers[playerIndex];
+                            const expDate = parseDateDDMMYYYY(player['FM Hasta']);
+
+                            const today = new Date(); today.setHours(0, 0, 0, 0);
+                            const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
+                            const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+
+                            if (!expDate || expDate < today) {
+                                data.cell.styles.fillColor = [254, 226, 226]; // Red-100
+                            } else if (expDate <= thirtyDays) {
+                                data.cell.styles.fillColor = [255, 237, 213]; // Orange-100
+                            } else if (expDate <= sixtyDays) {
+                                data.cell.styles.fillColor = [254, 249, 195]; // Yellow-100
+                            }
+                        }
+                    },
+                    didDrawPage: (data) => {
+                        yPosition = data.cursor.y;
+                    }
+                });
+                yPosition = doc.lastAutoTable.finalY + 8;
+            });
+        });
+
+        doc.save(`reporte_fichas_${formattedDate}.pdf`);
+        showToast("PDF de fichas generado.", "success");
     }
 
     // This is the full implementation of generateCategoryPDF, including the nested helpers.
