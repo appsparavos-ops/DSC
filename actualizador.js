@@ -58,7 +58,7 @@ function formatDate(date) {
 async function scanPlayers() {
     const selectedSeason = seasonFilter.value;
     const url = selectedSeason === 'todas' ? PLAYERS_URL : `${PLAYERS_URL}?season=${selectedSeason}`;
-    
+
     log(`Conectando con Backend en: ${API_BASE_URL}...`, 'info');
     scanBtn.disabled = true;
     scanBtn.classList.add('opacity-50');
@@ -146,7 +146,7 @@ function renderPlayers() {
                 statusClass = 'bg-gray-100 text-gray-600';
                 break;
             case 'fail':
-                statusText = 'Fallo';
+                statusText = 'El jugador no figura en la SND';
                 statusClass = 'bg-red-100 text-red-600';
                 break;
         }
@@ -292,17 +292,17 @@ async function loadSeasons() {
     try {
         const response = await fetch(SEASONS_URL);
         if (!response.ok) throw new Error('No se pudieron cargar las temporadas');
-        
+
         const seasons = await response.json();
         seasonFilter.innerHTML = '<option value="todas">Todas las temporadas</option>';
-        
+
         seasons.forEach(s => {
             const option = document.createElement('option');
             option.value = s;
             option.textContent = s;
             seasonFilter.appendChild(option);
         });
-        
+
         log('Temporadas cargadas con éxito.', 'info');
     } catch (error) {
         log(`Error al cargar temporadas: ${error.message}`, 'error');
