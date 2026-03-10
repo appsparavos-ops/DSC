@@ -5,8 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Actualizador de Fichas Médicas</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/icon.ico"
-        type="image/ico">
+    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/icon.ico" type="image/ico">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <!-- Firebase -->
@@ -69,35 +68,45 @@
                 </div>
             </div>
             <div class="flex flex-wrap justify-center gap-3">
-            <div class="flex flex-wrap justify-center gap-3 items-center">
-                <div class="relative">
-                    <select id="season-filter" 
-                        class="bg-white/90 border border-indigo-200 text-gray-700 px-4 py-3 rounded-xl font-bold shadow-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none appearance-none pr-10 cursor-pointer">
-                        <option value="todas">Cargando temporadas...</option>
-                    </select>
-                    <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-indigo-500">
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                        </svg>
+                <div class="flex flex-wrap justify-center gap-3 items-center">
+                    <div class="relative">
+                        <select id="season-filter"
+                            class="bg-white/90 border border-indigo-200 text-gray-700 px-4 py-3 rounded-xl font-bold shadow-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none appearance-none pr-10 cursor-pointer">
+                            <option value="todas">Cargando temporadas...</option>
+                        </select>
+                        <div
+                            class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-indigo-500">
+                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
                     </div>
+                    <a href="mantenimiento.html"
+                        class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center gap-2">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        Volver
+                    </a>
+                    <button id="scan-btn"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center gap-2">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        Escanear
+                    </button>
+                    <button id="update-all-btn"
+                        class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg hidden flex items-center gap-2">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Actualizar Todos
+                    </button>
                 </div>
-                <button id="scan-btn"
-                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center gap-2">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    Escanear
-                </button>
-                <button id="update-all-btn"
-                    class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg hidden flex items-center gap-2">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Actualizar Todos
-                </button>
-            </div>
         </header>
 
         <!-- Stats & Actions Grid -->

@@ -471,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (dniSearchInput) dniSearchInput.addEventListener('input', applyFilters);
     if (categoryFilter) categoryFilter.addEventListener('change', applyFilters);
     if (equipoFilter) equipoFilter.addEventListener('change', applyFilters);
-    if (navToGestionNumeros) navToGestionNumeros.addEventListener('click', () => window.location.href = 'numeros.html');
+    if (navToGestionNumeros) navToGestionNumeros.addEventListener('click', () => window.location.href = 'mantenimiento.html');
     if (seasonFilter) seasonFilter.addEventListener('change', () => {
         if (nameSearchInput) nameSearchInput.value = '';
         if (dniSearchInput) dniSearchInput.value = '';
