@@ -40,6 +40,25 @@ let rosterData = { jugadores: {} };
 let rosterRef = null;
 let currentSeasonListener = null;
 
+const categoryRules = {
+    'U11 Mixta': { min: 9, max: 12 },
+    'U12 Mixta': { min: 10, max: 12 },
+    'U14 Masculino': { min: 10, max: 12 },
+    'U16 Masculino': { min: 5, max: 12 },
+    'U18 Masculino': { min: 5, max: 12 },
+    'U20 Masculino': { min: 5, max: 12 },
+    'U11 Femenino': { min: 8, max: 12 },
+    'U12 Femenino': { min: 8, max: 12 },
+    'U14 Femenino': { min: 5, max: 12 },
+    'U16 Femenino': { min: 5, max: 12 },
+    'U19 Femenino': { min: 5, max: 12 }
+};
+
+function normalizeCategory(cat) {
+    if (!cat) return "";
+    return cat.trim().replace(/ Femenina$/, ' Femenino');
+}
+
 // Helpers
 function parseDateDDMMYYYY(dateString) {
     if (!dateString || typeof dateString !== 'string') return null;
@@ -297,6 +316,21 @@ function renderPlayers() {
     }
 
     selectedCountEl.textContent = `${count} Seleccionados`;
+
+    // Aplicar reglas de color por categoría
+    const normalizedCat = normalizeCategory(category);
+    const rule = categoryRules[normalizedCat];
+
+    selectedCountEl.classList.remove('bg-green-600', 'bg-red-600', 'bg-blue-600');
+    if (rule) {
+        if (count >= rule.min && count <= rule.max) {
+            selectedCountEl.classList.add('bg-green-600');
+        } else {
+            selectedCountEl.classList.add('bg-red-600');
+        }
+    } else {
+        selectedCountEl.classList.add('bg-blue-600');
+    }
 }
 
 function createPlayerRow(p, duplicateNumbers = []) {
