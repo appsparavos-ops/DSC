@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roster de Partido - Defensor Sporting Club</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <!-- Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .font-outfit {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .bg-gradient-dsc {
+            background: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%);
+        }
+
+        /* Custom styles for inputs */
+        input:disabled {
+            background-color: #f3f4f6;
+            cursor: not-allowed;
+        }
+
+        .checkbox-lock {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        /* Micro-animations */
+        .player-row {
+            transition: all 0.2s ease;
+        }
+
+        .player-row:hover {
+            background-color: rgba(59, 130, 246, 0.05);
+        }
+
+        .selected-row {
+            background-color: rgba(59, 130, 246, 0.1) !important;
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-dsc min-h-screen text-gray-900 pb-10">
+    <!-- Header -->
+    <header class="p-6 flex flex-col items-center gap-4">
+        <div class="flex items-center gap-4">
+            <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="Logo DSC"
+                class="h-16 sm:h-24 drop-shadow-lg">
+        </div>
+        <h1
+            class="text-2xl sm:text-4xl font-extrabold text-white font-outfit uppercase tracking-wider text-center drop-shadow-md">
+            Roster de Partido</h1>
+        <p class="text-blue-200 font-medium text-sm sm:text-base -mt-2">Planilla de Juego en Tiempo Real</p>
+    </header>
+
+    <main class="container mx-auto px-4 max-w-4xl">
+        <!-- Selectores -->
+        <div class="glass-card rounded-2xl p-6 shadow-2xl mb-8">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-blue-900 uppercase mb-2 ml-1">Temporada</label>
+                    <select id="seasonSelect"
+                        class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm">
+                        <option value="">Cargando...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-blue-900 uppercase mb-2 ml-1">Equipo</label>
+                    <select id="teamSelect"
+                        class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm">
+                        <option value="">Selecciona equipo</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-blue-900 uppercase mb-2 ml-1">Categoría</label>
+                    <select id="categorySelect"
+                        class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm">
+                        <option value="">Selecciona categoría</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de Jugadores -->
+        <div id="rosterContainer"
+            class="glass-card rounded-2xl shadow-2xl overflow-hidden hidden transition-all duration-500">
+            <div class="p-4 bg-blue-900/90 backdrop-blur-md text-white flex justify-between items-center">
+                <div>
+                    <h2 id="rosterTitle" class="font-bold text-lg leading-tight">Jugadores</h2>
+                    <p id="rosterSubtitle" class="text-blue-200 text-xs">Gestiona la selección y números para el partido
+                    </p>
+                </div>
+                <div id="selectedCount"
+                    class="bg-blue-600 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg border border-blue-400/30">
+                    0 Seleccionados</div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50/50 border-b border-gray-200">
+                            <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                Jugador</th>
+                            <th class="px-4 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                FM</th>
+                            <th class="px-4 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                Nº</th>
+                            <th class="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                Lista</th>
+                        </tr>
+                    </thead>
+                    <tbody id="playersTableBody" class="divide-y divide-gray-100">
+                        <!-- Filas dinámicas -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Sección de Refuerzos (Desplegable) -->
+            <div id="authorizedSection" class="hidden border-t border-gray-100 p-6 bg-gray-50/50">
+                <button onclick="toggleAuthorizedList()"
+                    class="flex items-center justify-between w-full group focus:outline-none">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                        </div>
+                        <div class="text-left">
+                            <h3 class="font-bold text-gray-800">Jugadores Autorizados / Refuerzos</h3>
+                            <p class="text-xs text-gray-500" id="authorizedCount">0 Jugadores disponibles</p>
+                        </div>
+                    </div>
+                    <svg id="authorizedChevron" xmlns="http://www.w3.org/2000/svg"
+                        class="h-6 w-6 text-gray-400 transition-transform group-hover:text-orange-500" fill="none"
+                        viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+
+                <div id="authorizedList"
+                    class="hidden mt-6 overflow-hidden bg-white rounded-2xl border border-gray-100 shadow-sm">
+                    <table class="w-full text-left border-collapse">
+                        <tbody id="authorizedTableBody">
+                            <!-- Se rellena vía JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="glass-card rounded-2xl p-16 text-center shadow-2xl">
+            <div class="text-blue-900/10 mb-6">
+                <svg class="w-24 h-24 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+            </div>
+            <h3 class="text-xl font-bold text-blue-900 mb-2">Configura tu Roster</h3>
+            <p class="text-gray-500 max-w-md mx-auto">Selecciona la temporada, el equipo y la categoría para ver los
+                jugadores disponibles y armar la planilla.</p>
+        </div>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toast"
+        class="fixed bottom-8 left-1/2 transform -translate-x-1/2 translate-y-24 opacity-0 transition-all duration-300 ease-out z-50">
+        <div id="toastMessage"
+            class="bg-gray-900/95 backdrop-blur-md text-white px-8 py-4 rounded-2xl shadow-2xl font-semibold flex items-center gap-3">
+            <span id="toastIcon"></span>
+            <span id="toastText"></span>
+        </div>
+    </div>
+
+    <script src="roster.js"></script>
+</body>
+
+</html>
