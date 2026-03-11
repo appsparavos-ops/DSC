@@ -22,6 +22,7 @@ const GUEST_PW = "invitado123";
 const seasonSelect = document.getElementById('seasonSelect');
 const teamSelect = document.getElementById('teamSelect');
 const categorySelect = document.getElementById('categorySelect');
+const dateSelect = document.getElementById('dateSelect');
 const rosterContainer = document.getElementById('rosterContainer');
 const emptyState = document.getElementById('emptyState');
 const playersTableBody = document.getElementById('playersTableBody');
@@ -39,6 +40,13 @@ let allPlayers = [];
 let rosterData = { jugadores: {} };
 let rosterRef = null;
 let currentSeasonListener = null;
+
+// Inicializar fecha con hoy
+const today = new Date();
+const yyyy = today.getFullYear();
+const mm = String(today.getMonth() + 1).padStart(2, '0');
+const dd = String(today.getDate()).padStart(2, '0');
+dateSelect.value = `${yyyy}-${mm}-${dd}`;
 
 const categoryRules = {
     'U11 Mixta': { min: 9, max: 12 },
@@ -217,13 +225,18 @@ function populateFilters() {
 function setupRosterSync() {
     const season = seasonSelect.value;
     const team = teamSelect.value;
+    const dateVal = dateSelect.value;
     const category = categorySelect.value;
 
-    if (!season || !team || !category) {
+    if (!season || !team || !dateVal || !category) {
         rosterContainer.classList.add('hidden');
         emptyState.classList.remove('hidden');
         return;
     }
+
+    // Formatear fecha a mmdd para la ruta de Firebase
+    const dateParts = dateVal.split('-');
+    const mmdd = dateParts[1] + dateParts[2];
 
     if (rosterRef) rosterRef.off();
 
@@ -231,7 +244,7 @@ function setupRosterSync() {
     emptyState.classList.add('hidden');
     renderPlayers();
 
-    rosterRef = database.ref('/rosters').child(season).child(team).child(category);
+    rosterRef = database.ref('/rosters').child(season).child(team).child(mmdd).child(category);
 
     rosterRef.on('value', snapshot => {
         const val = snapshot.val();
@@ -260,7 +273,27 @@ function renderPlayers() {
         const isAuthCategory = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category);
 
         return isSameTeam && (isMainCategory || isAuthCategory);
-    }).sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
+    }).sort((a, b) => {
+        const dniA = String(a.DNI);
+        const dniB = String(b.DNI);
+        const entryA = (rosterData.jugadores && rosterData.jugadores[dniA]) || { seleccionado: false, numero: "" };
+        const entryB = (rosterData.jugadores && rosterData.jugadores[dniB]) || { seleccionado: false, numero: "" };
+
+        const numA = entryA.numero || a.NUMERO_TEMPORADA || "";
+        const numB = entryB.numero || b.NUMERO_TEMPORADA || "";
+
+        // Si ambos tienen número, ordenar numéricamente
+        if (numA !== "" && numB !== "") {
+            return parseInt(numA, 10) - parseInt(numB, 10);
+        }
+
+        // Si solo uno tiene número, ese va primero
+        if (numA !== "") return -1;
+        if (numB !== "") return 1;
+
+        // Si ninguno tiene número, ordenar por nombre
+        return (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
+    });
 
     // Separar Titulares de Autorizados (Refuerzos)
     // Titulares: Son de la categoría Y no son marca "esAutorizado"
@@ -343,6 +376,10 @@ function createPlayerRow(p, duplicateNumbers = []) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const isExpired = !expDate || expDate < today;
 
+    // Validación de Licencia FUBB
+    const estadoLicencia = String(p['ESTADO LICENCIA'] || '').trim().toUpperCase();
+    const isFUBBInvalid = estadoLicencia !== 'DILIGENCIADO';
+
     let fmColorClass = 'text-green-600';
     if (isExpired) fmColorClass = 'text-red-600 font-bold';
     else {
@@ -355,12 +392,16 @@ function createPlayerRow(p, duplicateNumbers = []) {
     const isConflict = rosterEntry.seleccionado && numeroAMostrar && duplicateNumbers.includes(String(numeroAMostrar).trim());
     const inputStyle = isConflict ? 'border-red-500 bg-red-50 focus:ring-red-500/20' : 'border-gray-200 focus:ring-blue-500/20';
 
+    const isDisabled = isExpired || isFUBBInvalid;
+    const disabledText = isExpired ? 'Inhabilitado (FM)' : 'No Habilitado en FUBB';
+
     const tr = document.createElement('tr');
     tr.className = `player-row border-b border-gray-50 ${rosterEntry.seleccionado ? 'selected-row' : ''}`;
     tr.dataset.seleccionado = rosterEntry.seleccionado;
     tr.innerHTML = `
         <td class="px-6 py-4">
             <div class="font-semibold text-gray-800">${p.NOMBRE || 'N/N'}</div>
+            ${isFUBBInvalid ? `<div class="text-[10px] text-red-500 font-bold uppercase mt-0.5">${estadoLicencia || 'SIN LICENCIA'}</div>` : ''}
         </td>
         <td class="px-4 py-4 text-center">
             <span class="text-sm ${fmColorClass}">${p['FM Hasta'] || 'SIN FICHA'}</span>
@@ -370,7 +411,7 @@ function createPlayerRow(p, duplicateNumbers = []) {
                 <input type="text" value="${numeroAMostrar}" 
                     class="w-12 text-center border ${inputStyle} rounded-xl py-2 font-bold text-blue-900 outline-none transition-all shadow-sm"
                     onchange="updateNumber('${dni}', this.value)"
-                    ${isExpired ? 'disabled' : ''}>
+                    ${isDisabled ? 'disabled' : ''}>
                 ${isConflict ? `
                     <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[9px] text-red-600 font-bold whitespace-nowrap bg-white px-1">
                         Número Repetido
@@ -379,8 +420,8 @@ function createPlayerRow(p, duplicateNumbers = []) {
             </div>
         </td>
         <td class="px-6 py-4 text-right">
-            ${isExpired ? `
-                <span class="text-[10px] bg-red-100 text-red-600 px-3 py-1.5 rounded-full font-bold uppercase tracking-wider">Inhabilitado</span>
+            ${isDisabled ? `
+                <span class="text-[10px] bg-red-100 text-red-600 px-3 py-1.5 rounded-full font-bold uppercase tracking-wider">${disabledText}</span>
             ` : `
                 <input type="checkbox" ${rosterEntry.seleccionado ? 'checked' : ''} 
                     class="w-6 h-6 rounded-lg border-gray-300 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
@@ -437,6 +478,7 @@ teamSelect.addEventListener('change', () => {
     populateFilters();
     setupRosterSync();
 });
+dateSelect.addEventListener('change', setupRosterSync);
 categorySelect.addEventListener('change', setupRosterSync);
 
 signInGuest();

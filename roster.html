@@ -78,22 +78,27 @@
     <main class="container mx-auto px-4 max-w-4xl">
         <!-- Selectores -->
         <div class="glass-card rounded-2xl p-6 shadow-2xl mb-8">
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                <div class="sm:col-span-2">
                     <label class="block text-xs font-bold text-blue-900 uppercase mb-2 ml-1">Temporada</label>
                     <select id="seasonSelect"
                         class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm">
                         <option value="">Cargando...</option>
                     </select>
                 </div>
-                <div>
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-bold text-blue-900 uppercase mb-2 ml-1">Fecha</label>
+                    <input type="date" id="dateSelect"
+                        class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm">
+                </div>
+                <div class="sm:col-span-4">
                     <label class="block text-xs font-bold text-blue-900 uppercase mb-2 ml-1">Equipo</label>
                     <select id="teamSelect"
                         class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm">
                         <option value="">Selecciona equipo</option>
                     </select>
                 </div>
-                <div>
+                <div class="sm:col-span-4">
                     <label class="block text-xs font-bold text-blue-900 uppercase mb-2 ml-1">Categoría</label>
                     <select id="categorySelect"
                         class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm">
