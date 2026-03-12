@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const playerDetailView = document.getElementById('playerDetailView');
 
     let allPlayers = [], originalHeaders = [], currentlyDisplayedPlayers = [], currentColumnsForPDF = [];
+    let currentSortCol = 'Numero', currentSortDir = 'asc';
     let isEditModeActive = false, currentUserRole = null, currentPlayerIndex = -1, currentSeasonListener = null;
 
     // --- LÓGICA DE BITÁCORA ---
@@ -770,8 +771,27 @@ document.addEventListener('DOMContentLoaded', function () {
         const headerRow = thead.insertRow();
         columns.forEach(headerText => {
             const th = document.createElement('th');
-            th.className = 'px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider';
-            th.textContent = headerText;
+            const isSortable = ['NOMBRE', 'Numero', 'FM Hasta'].includes(headerText);
+            th.className = `px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${isSortable ? 'cursor-pointer hover:bg-gray-100 hover:text-blue-600 transition-colors' : ''}`;
+            
+            let displayText = headerText;
+            if (headerText === currentSortCol) {
+                displayText += currentSortDir === 'asc' ? ' ↑' : ' ↓';
+                th.classList.add('text-blue-600', 'font-bold');
+            }
+            th.textContent = displayText;
+
+            if (isSortable) {
+                th.onclick = () => {
+                    if (currentSortCol === headerText) {
+                        currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSortCol = headerText;
+                        currentSortDir = 'asc';
+                    }
+                    applyFilters(); // Re-renderiza con el nuevo orden
+                };
+            }
             headerRow.appendChild(th);
         });
 
@@ -802,25 +822,20 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         messageEl.style.display = 'none';
 
-        if (customTitle) {
-            tableContainer.appendChild(createTable(players, selectedCategory, currentColumns));
-        } else if (selectedCategory) {
-            if (printButton) printButton.classList.remove('hidden');
-            const playersInCategory = players
-                .filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A')
-                .sort((a, b) => {
-                    const aIsBaja = a['ESTADO LICENCIA'] === 'Baja';
-                    const bIsBaja = b['ESTADO LICENCIA'] === 'Baja';
+        const sortPlayers = (playersToSort, category) => {
+            return playersToSort.sort((a, b) => {
+                const aIsBaja = a['ESTADO LICENCIA'] === 'Baja';
+                const bIsBaja = b['ESTADO LICENCIA'] === 'Baja';
 
-                    if (aIsBaja && !bIsBaja) {
-                        return 1;
-                    }
-                    if (!aIsBaja && bIsBaja) {
-                        return -1;
-                    }
+                if (aIsBaja && !bIsBaja) return 1;
+                if (!aIsBaja && bIsBaja) return -1;
 
-                    const getSortVal = (p) => {
-                        const raw = (p.Numeros && p.Numeros[selectedCategory]) || p.Numero;
+                let comparison = 0;
+                if (currentSortCol === 'NOMBRE') {
+                    comparison = (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
+                } else if (currentSortCol === 'Numero') {
+                    const getNumVal = (p) => {
+                        const raw = (p.Numeros && p.Numeros[category || p.CATEGORIA]) || p.Numero;
                         if (raw === undefined || raw === null || raw === '') return Infinity;
                         const s = String(raw).trim();
                         if (s === '0') return -2;
@@ -828,29 +843,33 @@ document.addEventListener('DOMContentLoaded', function () {
                         const n = parseInt(s, 10);
                         return isNaN(n) ? Infinity : n;
                     };
-                    return getSortVal(a) - getSortVal(b);
-                });
+                    comparison = getNumVal(a) - getNumVal(b);
+                } else if (currentSortCol === 'FM Hasta') {
+                    const getDateVal = (p) => {
+                        const d = p['FM Hasta'];
+                        if (!d || d === '1/1/1900' || d === '-') return new Date(0);
+                        const parts = d.split('/');
+                        if (parts.length !== 3) return new Date(0);
+                        return new Date(parts[2], parts[1] - 1, parts[0]);
+                    };
+                    comparison = getDateVal(a) - getDateVal(b);
+                }
 
+                return currentSortDir === 'asc' ? comparison : -comparison;
+            });
+        };
+
+        if (customTitle) {
+            tableContainer.appendChild(createTable(sortPlayers(players, selectedCategory), selectedCategory, currentColumns));
+        } else if (selectedCategory) {
+            if (printButton) printButton.classList.remove('hidden');
+            const playersInCategory = sortPlayers(players.filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A'), selectedCategory);
             const coaches = players.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A');
-
-            const authorizedPlayers = players
-                .filter(p => {
-                    const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) && p.CATEGORIA !== selectedCategory;
-                    const isCrossSeasonAuth = p.esAutorizado && p.CATEGORIA === selectedCategory;
-                    return isSameSeasonAuth || isCrossSeasonAuth;
-                })
-                .sort((a, b) => {
-                    const aIsBaja = a['ESTADO LICENCIA'] === 'Baja';
-                    const bIsBaja = b['ESTADO LICENCIA'] === 'Baja';
-
-                    if (aIsBaja && !bIsBaja) {
-                        return 1;
-                    }
-                    if (!aIsBaja && bIsBaja) {
-                        return -1;
-                    }
-                    return (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
-                });
+            const authorizedPlayers = sortPlayers(players.filter(p => {
+                const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) && p.CATEGORIA !== selectedCategory;
+                const isCrossSeasonAuth = p.esAutorizado && p.CATEGORIA === selectedCategory;
+                return isSameSeasonAuth || isCrossSeasonAuth;
+            }), selectedCategory);
 
             const mainTable = createTable(playersInCategory, selectedCategory, currentColumns);
             const tbody = mainTable.querySelector('tbody');
