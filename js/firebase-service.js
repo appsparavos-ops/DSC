@@ -32,16 +32,16 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
     let existingRecords = {};
 
     const snapshot = await temporadaRef.once('value');
-    if (snapshot.exists()) {
-        const val = snapshot.val();
-        Object.values(val).forEach(record => {
-            const dni = record._dni || record.DNI;
-            if (dni) {
-                if (!existingRecords[dni]) existingRecords[dni] = [];
-                existingRecords[dni].push(record);
-            }
-        });
-    }
+    const val = snapshot.val() || {};
+    const unmatchedPushIds = new Set(Object.keys(val));
+
+    Object.values(val).forEach(record => {
+        const dni = record._dni || record.DNI;
+        if (dni) {
+            if (!existingRecords[dni]) existingRecords[dni] = [];
+            existingRecords[dni].push(record);
+        }
+    });
 
     const allUpdates = {};
     let processedCount = 0;
@@ -68,6 +68,7 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
 
             const match = existingRecords[dni].find(r => r.CATEGORIA === categoria);
             if (match) {
+                unmatchedPushIds.delete(match._pushId);
                 const recEstado = match['ESTADO LICENCIA'] || '';
                 if (recEstado === estadoLicencia) {
                     skippedCount++;
@@ -111,6 +112,19 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
         allUpdates[`/temporadas/${temporada}`] = true;
 
         processedCount++;
+    });
+
+    // Procesar registros que están en Firebase pero no en el CSV (Marcar como SIN INSCRIBIR)
+    unmatchedPushIds.forEach(pushId => {
+        const record = val[pushId];
+        // Solo actualizar si no está ya marcado como SIN INSCRIBIR
+        if (record['ESTADO LICENCIA'] !== 'SIN INSCRIBIR') {
+            const dni = record._dni || record.DNI;
+            const type = record._tipo || (record.TIPO?.trim().toUpperCase() === 'ENTRENADOR/A' ? 'entrenadores' : 'jugadores');
+
+            allUpdates[`/${type}/${dni}/temporadas/${manualSeason}/${pushId}/ESTADO LICENCIA`] = 'SIN INSCRIBIR';
+            allUpdates[`/registrosPorTemporada/${manualSeason}/${pushId}/ESTADO LICENCIA`] = 'SIN INSCRIBIR';
+        }
     });
 
     if (Object.keys(allUpdates).length > 0) {
