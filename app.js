@@ -497,8 +497,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const selectedCategory = categoryFilter ? categoryFilter.value : '';
         const selectedEquipo = equipoFilter ? equipoFilter.value : '';
 
-        populateCategoryFilter(allPlayers);
-        populateEquipoFilter(allPlayers);
+        // Poblar filtros DINÁMICAMENTE basados en la selección cruzada
+        // Para el filtro de categorías, consideramos el equipo seleccionado
+        const playersForCategoryList = allPlayers.filter(p => !selectedEquipo || p.EQUIPO === selectedEquipo);
+        populateCategoryFilter(playersForCategoryList);
+
+        // Para el filtro de equipos, consideramos la categoría seleccionada
+        const playersForEquipoList = allPlayers.filter(p => !selectedCategory || p.CATEGORIA === selectedCategory || (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) || (p.esAutorizado && p.CATEGORIA === selectedCategory));
+        populateEquipoFilter(playersForEquipoList);
+
         updateSearchSuggestions(allPlayers);
 
         let filteredPlayers = allPlayers.filter(p =>
@@ -914,13 +921,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function populateEquipoFilter(players) {
         if (!equipoFilter) return;
+
         const currentValue = equipoFilter.value;
+
+        // Get all unique, sorted teams from the provided list
         const equipos = [...new Set(players.map(p => p.EQUIPO).filter(Boolean))].sort();
-        const existingOptions = new Set(Array.from(equipoFilter.options).map(o => o.value));
+
+        // Preserve the placeholder option (the first option)
+        const placeholderText = equipoFilter.options[0].text;
+        const placeholderValue = equipoFilter.options[0].value;
+
+        // Clear dropdown
+        equipoFilter.innerHTML = '';
+
+        // Add placeholder back
+        equipoFilter.appendChild(new Option(placeholderText, placeholderValue));
+
+        // Add sorted teams
         equipos.forEach(eq => {
-            if (!existingOptions.has(eq)) equipoFilter.appendChild(new Option(eq, eq));
+            equipoFilter.appendChild(new Option(eq, eq));
         });
-        equipoFilter.value = currentValue;
+
+        // Restore selection if possible
+        try {
+            equipoFilter.value = currentValue;
+        } catch (e) {}
     }
 
     function createDetailHtml(key, value, fmHastaFrameClass) {
@@ -1597,8 +1622,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const dni = originalPlayer.DNI;
-        const tipo = originalPlayer.TIPO;
-        const dbNode = (tipo === 'JUGADOR/A' || tipo === 'jugadores') ? 'jugadores' : 'entrenadores';
+        const dbNode = originalPlayer._tipo || ((originalPlayer.TIPO || "").toUpperCase().includes("JUGADOR") ? "jugadores" : "entrenadores");
         const pushId = database.ref().push().key;
 
         const combinedDataForIndex = {
@@ -1643,12 +1667,44 @@ document.addEventListener('DOMContentLoaded', function () {
         if (currentColumnsForPDF.length === 3 && currentColumnsForPDF.includes('FM Hasta') && currentlyDisplayedPlayers.length > 0) {
             await generateExpiringPDF();
         } else if (selectedCategory) {
-            await generateCategoryPDF(selectedCategory);
+            // Mostrar modal de opciones para el PDF de categoría
+            showPDFOptionsModal(selectedCategory);
         } else if (currentlyDisplayedPlayers.length > 0 && currentColumnsForPDF.length > 0) {
             await generateExpiringPDF();
         } else {
             showToast("No hay datos para generar el PDF.", "error");
         }
+    }
+
+    function showPDFOptionsModal(selectedCategory) {
+        const modal = document.getElementById('pdfOptionsModal');
+        const btnYes = document.getElementById('pdfOptionYes');
+        const btnNo = document.getElementById('pdfOptionNo');
+        const btnCancel = document.getElementById('pdfOptionCancel');
+
+        if (!modal || !btnYes || !btnNo || !btnCancel) return;
+
+        modal.classList.remove('hidden');
+
+        // Handlers temporales
+        const handleYes = async () => {
+            closeModal();
+            await generateCategoryPDF(selectedCategory, true);
+        };
+        const handleNo = async () => {
+            closeModal();
+            await generateCategoryPDF(selectedCategory, false);
+        };
+        const closeModal = () => {
+            modal.classList.add('hidden');
+            btnYes.removeEventListener('click', handleYes);
+            btnNo.removeEventListener('click', handleNo);
+            btnCancel.removeEventListener('click', closeModal);
+        };
+
+        btnYes.addEventListener('click', handleYes);
+        btnNo.addEventListener('click', handleNo);
+        btnCancel.addEventListener('click', closeModal);
     }
 
     async function generateExpiringPDF() {
@@ -1757,7 +1813,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const tableData = sortedCategoryPlayers.map(p => [
                     maskDNI(p.DNI),
                     p.NOMBRE || '-',
-                    p['FM Hasta'] || 'SIN FICHA'
+                    p['FM Hasta'] || 'Sin Ficha'
                 ]);
 
                 doc.autoTable({
@@ -1799,12 +1855,39 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
 
+        drawPDFFooter(doc);
         doc.save(`reporte_fichas_${formattedDate}.pdf`);
         showToast("PDF de fichas generado.", "success");
     }
 
+    function drawPDFFooter(doc) {
+        const user = auth.currentUser;
+        let emailPrefix = user && user.email ? user.email.split('@')[0] : 'usuario';
+        // Normalizar nombre: Capitalizar primera letra
+        emailPrefix = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+        
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        // Sin comillas y nombre normalizado
+        const footerText = `Informe realizado por ${emailPrefix} el ${day}/${month}/${year} a las ${hours}:${minutes}`;
+
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(128, 128, 128);
+            doc.text(footerText, 15, doc.internal.pageSize.getHeight() - 10);
+            doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.getWidth() - 15, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+        }
+    }
+
     // This is the full implementation of generateCategoryPDF, including the nested helpers.
-    async function generateCategoryPDF(selectedCategory) { // MODIFIED
+    async function generateCategoryPDF(selectedCategory, includeLicense = false) {
         if (typeof window.jspdf === 'undefined') {
             return showToast("Librería PDF no disponible.", "error");
         }
@@ -1849,16 +1932,29 @@ document.addEventListener('DOMContentLoaded', function () {
             return y + 8;
         };
 
+        const columns = ['DNI', 'NOMBRE'];
+        if (includeLicense) columns.push('ESTADO LICENCIA');
+        columns.push('FM Hasta', 'Numero');
+
         const drawTableForCategory = (columns, data, startY) => {
             let y = startY;
             const rowHeight = 6, headerHeight = 7, fontSize = 8;
             const baseWidth = pageWidth - 2 * pageMargin;
-            const columnWidths = {
-                'DNI': baseWidth * 0.15,
-                'NOMBRE': baseWidth * 0.55,
-                'FM Hasta': baseWidth * 0.15,
-                'Numero': baseWidth * 0.15
-            };
+            
+            // Ajustar anchos proporcionalmente
+            const columnWidths = {};
+            if (includeLicense) {
+                columnWidths['DNI'] = baseWidth * 0.12;
+                columnWidths['NOMBRE'] = baseWidth * 0.43;
+                columnWidths['ESTADO LICENCIA'] = baseWidth * 0.20;
+                columnWidths['FM Hasta'] = baseWidth * 0.13;
+                columnWidths['Numero'] = baseWidth * 0.12;
+            } else {
+                columnWidths['DNI'] = baseWidth * 0.15;
+                columnWidths['NOMBRE'] = baseWidth * 0.55;
+                columnWidths['FM Hasta'] = baseWidth * 0.15;
+                columnWidths['Numero'] = baseWidth * 0.15;
+            }
 
             const drawHeader = () => {
                 let x = pageMargin;
@@ -1930,7 +2026,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     } else if (colName === 'NOMBRE' && isBaja) {
                         cellValue = `${player.NOMBRE || ''} - Baja`;
                     }
-                    if (colName === 'FM Hasta' && cellValue === '1/1/1900') cellValue = '-';
+                    if (colName === 'FM Hasta' && (cellValue === '1/1/1900' || cellValue === '-')) cellValue = 'Sin Ficha';
 
                     doc.rect(x, y, colWidth, rowHeight, 'FD');
                     doc.text(String(cellValue), x + 2, y + 4, { maxWidth: colWidth - 4 });
@@ -1942,7 +2038,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return y;
         };
 
-        const columns = ['DNI', 'NOMBRE', 'FM Hasta', 'Numero'];
 
         if (playersInCategory.length > 0) {
             const teams = [...new Set(playersInCategory.map(p => p.EQUIPO || 'Sin Equipo'))].sort();
@@ -1965,7 +2060,17 @@ document.addEventListener('DOMContentLoaded', function () {
             yPosition = drawTableForCategory(columns, authorizedPlayers, yPosition);
         }
 
-        doc.save(`${selectedCategory}.pdf`);
+        drawPDFFooter(doc);
+        
+        // Personalizar nombre de archivo según equipo
+        let fileName = selectedCategory;
+        if (selectedEquipo === 'DEFENSOR SPORTING') {
+            fileName += ' DSC';
+        } else if (selectedEquipo === 'FUSIONADO') {
+            fileName += ' FUS';
+        }
+        
+        doc.save(`${fileName}.pdf`);
         showToast("PDF generado.", "success");
     }
 
