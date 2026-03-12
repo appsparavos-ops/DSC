@@ -70,7 +70,10 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
             if (match) {
                 unmatchedPushIds.delete(match._pushId);
                 const recEstado = match['ESTADO LICENCIA'] || '';
-                if (recEstado === estadoLicencia) {
+                const recEquipo = match['EQUIPO'] || '';
+                const rowEquipo = row['EQUIPO'] ? row['EQUIPO'].trim() : '';
+
+                if (recEstado === estadoLicencia && recEquipo === rowEquipo) {
                     skippedCount++;
                     return;
                 }
