@@ -71,7 +71,7 @@ document.getElementById('loginButton').addEventListener('click', async () => {
     }
     try {
         const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        logAction('login', { email: userCredential.user.email, origin: 'actualizar.html' });
+        await logAction('login', { email: userCredential.user.email, origin: 'actualizar.html' });
     } catch (error) {
         showUIFeedback(`Error: ${error.message}`, 'error', loginMessage);
     }
@@ -146,7 +146,13 @@ performActionButton.addEventListener('click', async () => {
     if (currentAction === 'upload') {
         let season = seasonSelect.value;
         if (season === 'new') {
-            season = seasonInput.value.trim();
+            const rawSeason = seasonInput.value.trim();
+            const normalized = validateAndNormalizeSeason(rawSeason);
+            if (!normalized) {
+                showUIFeedback('Formato de temporada inválido. Use "20XX" o "20XX-20XX+1" (ej. 2025 o 2025-2026).', 'error');
+                return;
+            }
+            season = normalized;
         }
 
         if (!season) {
@@ -278,4 +284,25 @@ async function loadSeasons(uid) {
         console.error("Error cargando temporadas:", error);
         showUIFeedback('Error al cargar temporadas.', 'error');
     }
+}
+
+function validateAndNormalizeSeason(input) {
+    // Formatos válidos: "20XX" o "20XX-20YY" donde 20YY = 20XX + 1
+    const singleYearRegex = /^20\d{2}$/;
+    const rangeYearRegex = /^(20\d{2})-(20\d{2})$/;
+
+    if (singleYearRegex.test(input)) {
+        return input;
+    }
+
+    const match = input.match(rangeYearRegex);
+    if (match) {
+        const year1 = parseInt(match[1]);
+        const year2 = parseInt(match[2]);
+        if (year2 === year1 + 1) {
+            return input;
+        }
+    }
+
+    return null;
 }
