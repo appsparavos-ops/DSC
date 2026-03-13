@@ -35,7 +35,7 @@
         <div id="choiceSection" class="hidden">
             <button id="choiceUploadButton">Subir Registros de Temporada</button>
             <button id="choiceDeleteButton" class="btn-danger">Borrar Registro</button>
-            <a href="mantenimiento.html" class="btn-nav"
+            <a href="../mantenimiento.html" class="btn-nav"
                 style="display: inline-block; padding: 10px 20px; text-decoration: none; background: #4f46e5; color: white; border-radius: 8px; font-weight: 600; margin-top: 10px;">Menú</a>
             <button id="logoutButton">Cerrar Sesión</button>
         </div>
@@ -44,12 +44,20 @@
         <div id="uploadSection" class="hidden">
             <h3 id="uploadTitle" style="margin-bottom: 20px; font-weight: 600;">Subir Registros</h3>
             <div class="input-group">
-                <input type="text" id="seasonInput" placeholder="Temporada (ej. 2025)" class="hidden">
+                <div id="seasonContainer" style="display: flex; gap: 10px; width: 100%;">
+                    <select id="seasonSelect" style="flex: 1; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #f8fafc; color: #1e293b; font-size: 14px;">
+                        <option value="">Cargando temporadas...</option>
+                        <option value="new">+ Nueva Temporada</option>
+                    </select>
+                    <input type="text" id="seasonInput" placeholder="Nueva (ej. 2025)" class="hidden" style="flex: 1;">
+                </div>
                 <input type="file" id="csvFile"
                     accept=".csv, text/csv, application/csv, text/comma-separated-values, application/vnd.ms-excel">
             </div>
             <button id="performActionButton" disabled>Ejecutar Acción</button>
             <button id="backButton">Volver</button>
+            <a href="../mantenimiento.html" class="btn-nav"
+                style="display: inline-block; padding: 10px 20px; text-decoration: none; background: #4f46e5; color: white; border-radius: 8px; font-weight: 600; margin-top: 10px;">Mantenimiento</a>
             <div id="message"></div>
         </div>
 
@@ -57,12 +65,16 @@
         <div id="deleteSection" class="hidden">
             <h3 style="margin-bottom: 20px; font-weight: 600;">Borrar Registro</h3>
             <div class="input-group">
-                <input type="text" id="deleteSeasonInput" placeholder="Temporada (ej. 2025)">
+                <select id="deleteSeasonSelect" style="flex: 1; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #f8fafc; color: #1e293b; font-size: 14px;">
+                    <option value="">Cargando temporadas...</option>
+                </select>
                 <input type="text" id="deleteDniInput" placeholder="DNI o Nombre del Jugador">
             </div>
             <button id="searchRecordsButton">Buscar Registros</button>
             <div id="recordsList"></div>
             <button id="backFromDeleteButton">Volver</button>
+            <a href="../mantenimiento.html" class="btn-nav"
+                style="display: inline-block; padding: 10px 20px; text-decoration: none; background: #4f46e5; color: white; border-radius: 8px; font-weight: 600; margin-top: 10px;">Mantenimiento</a>
             <div id="deleteMessage"></div>
         </div>
     </div>

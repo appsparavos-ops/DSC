@@ -200,3 +200,14 @@ export async function deleteSeasonRecord(season, dni, type, pushId) {
     await database.ref().update(updates);
     await logAction('delete_record', { season, dni, type, pushId });
 }
+
+export async function getSeasons() {
+    const snapshot = await database.ref('temporadas').once('value');
+    if (!snapshot.exists()) return [];
+    return Object.keys(snapshot.val()).sort((a, b) => b.localeCompare(a)); // Orden descendente (ej. 2025, 2024...)
+}
+
+export async function getUserPreference(uid) {
+    const snapshot = await database.ref(`preferenciasUsuarios/${uid}/temporada`).once('value');
+    return snapshot.val() || null;
+}

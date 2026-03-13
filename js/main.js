@@ -2,7 +2,7 @@
  * Lógica principal de la UI.
  */
 import { parseCSV, filterLatestRecords } from './utils.js';
-import { logAction, uploadSeasonData, searchRecordsBySeason, deleteSeasonRecord } from './firebase-service.js';
+import { logAction, uploadSeasonData, searchRecordsBySeason, deleteSeasonRecord, getSeasons, getUserPreference } from './firebase-service.js';
 
 const auth = firebase.auth();
 
@@ -14,9 +14,10 @@ const deleteSection = document.getElementById('deleteSection');
 
 const emailInput = document.getElementById('emailInput');
 const passwordInput = document.getElementById('passwordInput');
-const seasonInput = document.getElementById('seasonInput');
 const csvFile = document.getElementById('csvFile');
-const deleteSeasonInput = document.getElementById('deleteSeasonInput');
+const seasonSelect = document.getElementById('seasonSelect');
+const seasonInput = document.getElementById('seasonInput');
+const deleteSeasonSelect = document.getElementById('deleteSeasonSelect');
 const deleteDniInput = document.getElementById('deleteDniInput');
 
 const loginMessage = document.getElementById('loginMessage');
@@ -34,6 +35,7 @@ auth.onAuthStateChanged(user => {
     if (user) {
         showSection(choiceSection);
         clearMessages();
+        loadSeasons(user.uid);
     } else {
         showSection(loginSection);
         emailInput.value = '';
@@ -80,7 +82,7 @@ document.getElementById('logoutButton').addEventListener('click', () => auth.sig
 document.getElementById('choiceUploadButton').addEventListener('click', () => {
     currentAction = 'upload';
     showSection(uploadSection);
-    seasonInput.classList.remove('hidden');
+    // seasonSelect ya es visible por defecto en uploadSection (como parte de seasonContainer)
     document.getElementById('uploadTitle').textContent = 'Subir Registros de Temporada';
     performActionButton.textContent = 'Subir a Firebase';
     showUIFeedback('Sube un CSV para añadir nuevos registros de temporada.', '');
@@ -88,7 +90,7 @@ document.getElementById('choiceUploadButton').addEventListener('click', () => {
 
 document.getElementById('choiceDeleteButton').addEventListener('click', () => {
     showSection(deleteSection);
-    deleteSeasonInput.value = '';
+    // deleteSeasonSelect se mantiene con lo cargado en loadSeasons
     deleteDniInput.value = '';
     recordsList.innerHTML = '';
 });
@@ -97,12 +99,24 @@ document.getElementById('backButton').addEventListener('click', () => {
     showSection(choiceSection);
     csvFile.value = '';
     seasonInput.value = '';
+    seasonSelect.value = '';
+    seasonInput.classList.add('hidden');
     performActionButton.disabled = true;
     parsedData = [];
     currentAction = null;
 });
 
 document.getElementById('backFromDeleteButton').addEventListener('click', () => showSection(choiceSection));
+
+seasonSelect.addEventListener('change', () => {
+    if (seasonSelect.value === 'new') {
+        seasonInput.classList.remove('hidden');
+        seasonInput.focus();
+    } else {
+        seasonInput.classList.add('hidden');
+        seasonInput.value = '';
+    }
+});
 
 csvFile.addEventListener('change', (event) => {
     const file = event.target.files[0];
@@ -130,9 +144,13 @@ performActionButton.addEventListener('click', async () => {
     }
 
     if (currentAction === 'upload') {
-        const season = seasonInput.value.trim();
+        let season = seasonSelect.value;
+        if (season === 'new') {
+            season = seasonInput.value.trim();
+        }
+
         if (!season) {
-            showUIFeedback('Ingresa la temporada.', 'error');
+            showUIFeedback('Por favor, selecciona o ingresa una temporada.', 'error');
             return;
         }
 
@@ -154,7 +172,7 @@ performActionButton.addEventListener('click', async () => {
 });
 
 document.getElementById('searchRecordsButton').addEventListener('click', async () => {
-    const season = deleteSeasonInput.value.trim();
+    const season = deleteSeasonSelect.value;
     const query = deleteDniInput.value.trim();
     if (!season || !query) {
         showUIFeedback('Ingresa Temporada y DNI/Nombre.', 'error', deleteMessageDiv);
@@ -207,3 +225,57 @@ document.getElementById('searchRecordsButton').addEventListener('click', async (
         showUIFeedback(`Error: ${error.message}`, 'error', deleteMessageDiv);
     }
 });
+
+async function loadSeasons(uid) {
+    try {
+        const [seasons, prefSeason] = await Promise.all([
+            getSeasons(),
+            getUserPreference(uid)
+        ]);
+
+        // Guardar la opción "Nueva"
+        const newOption = seasonSelect.querySelector('option[value="new"]');
+        seasonSelect.innerHTML = '';
+        deleteSeasonSelect.innerHTML = '';
+        
+        if (seasons.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = "";
+            opt.textContent = "Sin temporadas";
+            seasonSelect.appendChild(opt);
+
+            const optDel = document.createElement('option');
+            optDel.value = "";
+            optDel.textContent = "Sin temporadas";
+            deleteSeasonSelect.appendChild(optDel);
+        } else {
+            seasons.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s;
+                opt.textContent = s;
+                seasonSelect.appendChild(opt);
+
+                const optDel = document.createElement('option');
+                optDel.value = s;
+                optDel.textContent = s;
+                deleteSeasonSelect.appendChild(optDel);
+            });
+        }
+        seasonSelect.appendChild(newOption);
+
+        if (prefSeason && seasons.includes(prefSeason)) {
+            seasonSelect.value = prefSeason;
+            deleteSeasonSelect.value = prefSeason;
+        } else if (seasons.length > 0) {
+            seasonSelect.value = seasons[0];
+            deleteSeasonSelect.value = seasons[0];
+        } else {
+            seasonSelect.value = 'new';
+            seasonInput.classList.remove('hidden');
+        }
+        
+    } catch (error) {
+        console.error("Error cargando temporadas:", error);
+        showUIFeedback('Error al cargar temporadas.', 'error');
+    }
+}
