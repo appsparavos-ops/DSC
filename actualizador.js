@@ -146,7 +146,7 @@ function renderPlayers() {
                 statusClass = 'bg-gray-100 text-gray-600';
                 break;
             case 'fail':
-                statusText = 'El jugador no figura en la SND';
+                statusText = 'Fallo';
                 statusClass = 'bg-red-100 text-red-600';
                 break;
         }
@@ -270,6 +270,204 @@ async function updateAll() {
     updateAllBtn.disabled = false;
     updateAllBtn.classList.remove('opacity-50');
     cancelBtn.classList.add('hidden');
+
+    // Generar PDF con los resultados de la actualización masiva
+    generatePDFReport();
+}
+
+function cancelUpdate() {
+    log('Cancelando proceso...', 'error');
+    isCancelled = true;
+    if (abortController) {
+        abortController.abort();
+    }
+    cancelBtn.disabled = true;
+    cancelBtn.classList.add('opacity-50');
+    setTimeout(() => {
+        cancelBtn.disabled = false;
+        cancelBtn.classList.remove('opacity-50');
+        cancelBtn.classList.add('hidden');
+    }, 1000);
+}
+
+// Cargar temporadas al iniciar
+async function loadSeasons() {
+    try {
+        const response = await fetch(SEASONS_URL);
+        if (!response.ok) throw new Error('No se pudieron cargar las temporadas');
+
+        const seasons = await response.json();
+        seasonFilter.innerHTML = '<option value="todas">Todas las temporadas</option>';
+
+        seasons.forEach(s => {
+            const option = document.createElement('option');
+            option.value = s;
+            option.textContent = s;
+            seasonFilter.appendChild(option);
+        });
+
+        log('Temporadas cargadas con éxito.', 'info');
+    } catch (error) {
+        log(`Error al cargar temporadas: ${error.message}`, 'error');
+        seasonFilter.innerHTML = '<option value="todas">Error al cargar</option>';
+    }
+}
+
+// Event Listeners
+scanBtn.addEventListener('click', scanPlayers);
+updateAllBtn.addEventListener('click', updateAll);
+cancelBtn.addEventListener('click', cancelUpdate);
+clearLogsBtn.addEventListener('click', () => { logDisplay.innerHTML = '> Consola reseteada...'; });
+
+    playersToUpdate.forEach((p, index) => {
+        let statusText = '';
+        let statusClass = '';
+
+        switch (p.status) {
+            case 'pending':
+                statusText = 'Pendiente';
+                statusClass = 'bg-orange-100 text-orange-600';
+                break;
+            case 'updating':
+                statusText = 'Actualizando';
+                statusClass = 'bg-blue-100 text-blue-600 animate-pulse';
+                break;
+            case 'success':
+                statusText = `Éxito actualizada ${p.vencimiento}`;
+                statusClass = 'bg-green-100 text-green-600';
+                break;
+            case 'no_change':
+                statusText = 'El Jugador no actualizó';
+                statusClass = 'bg-gray-100 text-gray-600';
+                break;
+            case 'fail':
+                statusText = 'Fallo';
+                statusClass = 'bg-red-100 text-red-600';
+                break;
+        }
+
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-50/50 transition-colors';
+        row.innerHTML = `
+            <td class="px-6 py-4 font-bold text-gray-700">${p.nombre}</td>
+            <td class="px-6 py-4 font-mono text-xs text-gray-500">${p.dni}</td>
+            <td class="px-6 py-4 text-sm text-gray-600">${p.vencimiento}</td>
+            <td class="px-6 py-4">
+                <span class="status-badge ${statusClass}">${statusText}</span>
+            </td>
+            <td class="px-6 py-4 text-center">
+                <button onclick="updateSinglePlayer(${index})" class="text-indigo-600 hover:text-indigo-900 font-bold p-2 rounded-lg hover:bg-indigo-50 transition-colors">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                </button>
+            </td>
+        `;
+        playerListBody.appendChild(row);
+    });
+}
+
+function updateStats(total, pending) {
+    statTotal.textContent = total;
+    statPending.textContent = pending;
+    statUpdated.textContent = updatedCount;
+}
+
+async function updateSinglePlayer(index) {
+    const player = playersToUpdate[index];
+    if (player.status === 'success' || player.status === 'no_change' || player.status === 'updating' || isCancelled) return;
+
+    player.status = 'updating';
+    renderPlayers();
+    loadingSpinner.classList.remove('hidden');
+    log(`Buscando datos APS para: ${player.nombre}...`, 'info');
+
+    abortController = new AbortController();
+
+    try {
+        const response = await fetch(SCRAPE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dni: player.dni }),
+            signal: abortController.signal
+        });
+
+        if (!response.ok) throw new Error('Servicio de scraping no disponible');
+
+        const result = await response.json();
+
+        if (result.success && result.desde && result.hasta) {
+            // Comparar fecha obtenida con la existente
+            if (result.hasta === player.vencimiento) {
+                player.status = 'no_change';
+                log(`${player.nombre} no tiene nueva fecha.`, 'warn');
+            } else {
+                log(`¡Nueva fecha encontrada (${result.hasta})! Actualizando Firebase para ${player.nombre}...`, 'info');
+
+                const updateResponse = await fetch(UPDATE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        dni: player.dni,
+                        desde: result.desde,
+                        hasta: result.hasta
+                    })
+                });
+
+                if (!updateResponse.ok) throw new Error('Error al actualizar en Firebase.');
+                const updateResult = await updateResponse.json();
+
+                if (!updateResult.success) throw new Error('El servidor reportó un fallo al actualizar Firebase.');
+
+                player.status = 'success';
+                player.vencimiento = result.hasta;
+                updatedCount++;
+                statUpdated.textContent = updatedCount;
+                log(`${player.nombre} actualizado con éxito hasta ${result.hasta}`, 'info');
+            }
+        } else {
+            player.status = 'fail';
+            log(`No se encontraron datos para ${player.nombre} en APS.`, 'warn');
+        }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            log(`Proceso de ${player.nombre} cancelado.`, 'warn');
+            player.status = 'pending';
+        } else {
+            player.status = 'fail';
+            log(`Error con ${player.nombre}: ${error.message}`, 'error');
+        }
+    } finally {
+        renderPlayers();
+        loadingSpinner.classList.add('hidden');
+        abortController = null;
+    }
+}
+
+async function updateAll() {
+    log('Iniciando actualización masiva...', 'warn');
+    isCancelled = false;
+    updateAllBtn.disabled = true;
+    updateAllBtn.classList.add('opacity-50');
+    cancelBtn.classList.remove('hidden');
+
+    for (let i = 0; i < playersToUpdate.length; i++) {
+        if (isCancelled) break;
+        if (playersToUpdate[i].status === 'pending' || playersToUpdate[i].status === 'fail') {
+            await updateSinglePlayer(i);
+        }
+    }
+
+    if (isCancelled) {
+        log('Actualización masiva cancelada por el usuario.', 'error');
+    } else {
+        log('Proceso de actualización masiva finalizado.', 'info');
+    }
+
+    updateAllBtn.disabled = false;
+    updateAllBtn.classList.remove('opacity-50');
+    cancelBtn.classList.add('hidden');
+
+    // Generar PDF con los resultados de la actualización masiva
+    generatePDFReport();
 }
 
 function cancelUpdate() {
@@ -319,3 +517,96 @@ clearLogsBtn.addEventListener('click', () => { logDisplay.innerHTML = '> Consola
 // Inicialización
 loadSeasons();
 
+// Generación de Reporte PDF
+function generatePDFReport() {
+    if (!window.jspdf) {
+        log('Error: La librería jsPDF no está cargada.', 'error');
+        return;
+    }
+
+    log('Generando reporte PDF de actualización...', 'info');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Título y Fecha
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = today.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    
+    // Obtener temporada seleccionada
+    const seasonFilter = document.getElementById('season-filter');
+    const selectedSeasonText = seasonFilter.options[seasonFilter.selectedIndex].text;
+    const selectedSeasonValue = seasonFilter.value;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("Reporte de Actualización de Fichas Médicas", 14, 20);
+    
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Fecha de generación: ${dateStr} ${timeStr}`, 14, 28);
+    doc.text(`Temporada: ${selectedSeasonText}`, 14, 34);
+    
+    const actualizados = playersToUpdate.filter(p => p.status === 'success');
+    const noActualizados = playersToUpdate.filter(p => p.status !== 'success');
+
+    let currentY = 42;
+
+    // Tabla de Actualizados
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(`Jugadores Actualizados (${actualizados.length})`, 14, currentY);
+    currentY += 5;
+
+    if (actualizados.length > 0) {
+        doc.autoTable({
+            startY: currentY,
+            head: [['Nombre', 'FM Hasta']],
+            body: actualizados.map(p => [p.nombre, p.vencimiento]),
+            theme: 'grid',
+            headStyles: { fillColor: [76, 175, 80] },
+            margin: { left: 14 }
+        });
+        currentY = doc.lastAutoTable.finalY + 15;
+    } else {
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "italic");
+        doc.text("Ningún jugador fue actualizado.", 14, currentY + 5);
+        currentY += 15;
+    }
+
+    // Verificar salto de página
+    if (currentY > 250) {
+        doc.addPage();
+        currentY = 20;
+    }
+
+    // Tabla de No Actualizados
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(`Jugadores Sin Actualizar (${noActualizados.length})`, 14, currentY);
+    currentY += 5;
+
+    if (noActualizados.length > 0) {
+        doc.autoTable({
+            startY: currentY,
+            head: [['Nombre', 'FM Hasta', 'Motivo']],
+            body: noActualizados.map(p => {
+                let statusText = 'Pendiente / Cancelado';
+                if (p.status === 'no_change') statusText = 'Misma fecha / Sin cambios';
+                if (p.status === 'fail') statusText = 'Fallo al buscar en APS / No encontrado';
+                return [p.nombre, p.vencimiento, statusText];
+            }),
+            theme: 'grid',
+            headStyles: { fillColor: [244, 67, 54] },
+            margin: { left: 14 }
+        });
+    } else {
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "italic");
+        doc.text("Todos los jugadores listados fueron actualizados exitosamente.", 14, currentY + 5);
+    }
+    
+    doc.save(`Reporte_Actualizacion_${selectedSeasonValue !== 'todas' ? selectedSeasonValue : 'Todas'}_${dateStr.replace(/\//g, '-')}.pdf`);
+    log("Reporte PDF de actualización descargado con éxito.", "info");
+}
