@@ -412,6 +412,6 @@ function generatePDFReport() {
         doc.text("Todos los jugadores listados fueron actualizados exitosamente.", 14, currentY + 5);
     }
 
-    doc.save(`Reporte_Actualizacion_${selectedSeasonValue !== 'todas' ? selectedSeasonValue : 'Todas'}_${dateStr.replace(/\//g, '-')}.pdf`);
+    doc.save(`Reporte_Actualizacion_Fichas_Medicas_${selectedSeasonValue !== 'todas' ? selectedSeasonValue : 'Todas'}_${dateStr.replace(/\//g, '-')}.pdf`);
     log("Reporte PDF de actualización descargado con éxito.", "info");
 }
