@@ -146,7 +146,7 @@ function renderPlayers() {
                 statusClass = 'bg-gray-100 text-gray-600';
                 break;
             case 'fail':
-                statusText = 'Fallo';
+                statusText = 'No figura en SND';
                 statusClass = 'bg-red-100 text-red-600';
                 break;
         }
@@ -332,12 +332,12 @@ function generatePDFReport() {
     log('Generando reporte PDF de actualización...', 'info');
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    
+
     // Título y Fecha
     const today = new Date();
     const dateStr = today.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const timeStr = today.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    
+
     // Obtener temporada seleccionada
     // seasonFilter ya es global
     const selectedSeasonText = seasonFilter.options[seasonFilter.selectedIndex].text;
@@ -346,12 +346,12 @@ function generatePDFReport() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
     doc.text("Reporte de Actualización de Fichas Médicas", 14, 20);
-    
+
     doc.setFontSize(12);
     doc.setFont("helvetica", "normal");
     doc.text(`Fecha de generación: ${dateStr} ${timeStr}`, 14, 28);
     doc.text(`Temporada: ${selectedSeasonText}`, 14, 34);
-    
+
     const actualizados = playersToUpdate.filter(p => p.status === 'success');
     const noActualizados = playersToUpdate.filter(p => p.status !== 'success');
 
@@ -399,7 +399,7 @@ function generatePDFReport() {
             body: noActualizados.map(p => {
                 let statusText = 'Pendiente / Cancelado';
                 if (p.status === 'no_change') statusText = 'Misma fecha / Sin cambios';
-                if (p.status === 'fail') statusText = 'Fallo al buscar en APS / No encontrado';
+                if (p.status === 'fail') statusText = 'No figura en SND / No encontrado';
                 return [p.nombre, p.vencimiento, statusText];
             }),
             theme: 'grid',
@@ -411,7 +411,7 @@ function generatePDFReport() {
         doc.setFont("helvetica", "italic");
         doc.text("Todos los jugadores listados fueron actualizados exitosamente.", 14, currentY + 5);
     }
-    
+
     doc.save(`Reporte_Actualizacion_${selectedSeasonValue !== 'todas' ? selectedSeasonValue : 'Todas'}_${dateStr.replace(/\//g, '-')}.pdf`);
     log("Reporte PDF de actualización descargado con éxito.", "info");
 }
