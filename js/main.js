@@ -165,10 +165,22 @@ performActionButton.addEventListener('click', async () => {
 
         try {
             const filtered = filterLatestRecords(parsedData);
-            const { processedCount, skippedCount } = await uploadSeasonData(filtered, season);
+            const { processedCount, skippedCount, addedRecords, modifiedRecords, removedRecords } = await uploadSeasonData(filtered, season);
             let msg = `¡${processedCount} registros procesados!`;
             if (skippedCount > 0) msg += ` (${skippedCount} omitidos)`;
             showUIFeedback(msg, 'success');
+
+            // Generate PDF Report if there are changes
+            if ((addedRecords && addedRecords.length > 0) || 
+                (modifiedRecords && modifiedRecords.length > 0) || 
+                (removedRecords && removedRecords.length > 0)) {
+                
+                showUIFeedback(msg + ' (Generando Reporte PDF...)', 'success');
+                setTimeout(() => {
+                    generatePDFReport(addedRecords || [], modifiedRecords || [], removedRecords || [], season);
+                }, 500);
+            }
+
         } catch (error) {
             showUIFeedback(`Error: ${error.message}`, 'error');
         } finally {
@@ -176,6 +188,87 @@ performActionButton.addEventListener('click', async () => {
         }
     }
 });
+
+function generatePDFReport(added, modified, removed, season) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    // Título y Cabecera
+    doc.setFontSize(18);
+    doc.text(`Reporte de Actualización de Datos (${season})`, 14, 22);
+    
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    const dateStr = new Date().toLocaleString('es-ES');
+    doc.text(`Generado el: ${dateStr}`, 14, 30);
+
+    let startY = 40;
+
+    // Tabla 1: Altas (Nuevos Registros)
+    if (added.length > 0) {
+        doc.setFontSize(14);
+        doc.setTextColor(0, 100, 0); // Verde oscuro
+        doc.text(`Altas (Nuevos Registros): ${added.length}`, 14, startY);
+        
+        doc.autoTable({
+            startY: startY + 5,
+            head: [['Nombre', 'Categoría', 'Equipo']],
+            body: added.map(r => [r.nombre, r.categoria, r.equipo]),
+            headStyles: { fillColor: [40, 167, 69] }, // Verde
+            styles: { fontSize: 9 },
+            margin: { left: 14 }
+        });
+        startY = doc.lastAutoTable.finalY + 15;
+    }
+
+    // Tabla 2: Modificaciones
+    if (modified.length > 0) {
+        // Verificar si cabe en la página actual
+        if (startY > doc.internal.pageSize.height - 40) {
+            doc.addPage();
+            startY = 20;
+        }
+
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 150); // Azul oscuro
+        doc.text(`Modificaciones Guardadas: ${modified.length}`, 14, startY);
+        
+        doc.autoTable({
+            startY: startY + 5,
+            head: [['Nombre', 'Categoría', 'Detalle del Cambio']],
+            body: modified.map(r => [r.nombre, r.categoria, r.cambio]),
+            headStyles: { fillColor: [0, 123, 255] }, // Azul
+            styles: { fontSize: 9 },
+            margin: { left: 14 }
+        });
+        startY = doc.lastAutoTable.finalY + 15;
+    }
+
+    // Tabla 3: Bajas (Pasados a SIN INSCRIBIR)
+    if (removed.length > 0) {
+        // Verificar si cabe en la página actual
+        if (startY > doc.internal.pageSize.height - 40) {
+            doc.addPage();
+            startY = 20;
+        }
+
+        doc.setFontSize(14);
+        doc.setTextColor(150, 0, 0); // Rojo oscuro
+        doc.text(`Bajas (Omitidos en CSV -> SIN INSCRIBIR): ${removed.length}`, 14, startY);
+        
+        doc.autoTable({
+            startY: startY + 5,
+            head: [['Nombre', 'Categoría', 'Equipo Anterior']],
+            body: removed.map(r => [r.nombre, r.categoria, r.equipo]),
+            headStyles: { fillColor: [220, 53, 69] }, // Rojo
+            styles: { fontSize: 9 },
+            margin: { left: 14 }
+        });
+    }
+
+    // Completar y descargar el documento
+    doc.save(`Reporte_Actualizacion_${season}.pdf`);
+}
 
 document.getElementById('searchRecordsButton').addEventListener('click', async () => {
     const season = deleteSeasonSelect.value;

@@ -47,6 +47,11 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
     let processedCount = 0;
     let skippedCount = 0;
 
+    // Trackers for PDF report
+    const addedRecords = [];
+    const modifiedRecords = [];
+    const removedRecords = [];
+
     const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
     const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'TEMPORADA', 'Numero', 'Numeros', 'categoriasAutorizadas'];
 
@@ -77,8 +82,26 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
                     skippedCount++;
                     return;
                 }
+                
+                // Track modified record
+                modifiedRecords.push({
+                    nombre: row.NOMBRE || existingRecords[dni][0].NOMBRE || 'N/A',
+                    dni: dni,
+                    categoria: categoria,
+                    cambio: `Equipo: ${recEquipo} -> ${rowEquipo} | Licencia: ${recEstado} -> ${estadoLicencia}`
+                });
                 targetPushId = match._pushId;
             }
+        }
+
+        if (!targetPushId) {
+            // Track added record
+            addedRecords.push({
+                nombre: row.NOMBRE || existingRecords[dni]?.[0]?.NOMBRE || 'N/A',
+                dni: dni,
+                equipo: row['EQUIPO'] ? row['EQUIPO'].trim() : '',
+                categoria: categoria
+            });
         }
 
         const seasonalData = {};
@@ -127,6 +150,14 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
 
             allUpdates[`/${type}/${dni}/temporadas/${manualSeason}/${pushId}/ESTADO LICENCIA`] = 'SIN INSCRIBIR';
             allUpdates[`/registrosPorTemporada/${manualSeason}/${pushId}/ESTADO LICENCIA`] = 'SIN INSCRIBIR';
+            
+            // Track removed record
+            removedRecords.push({
+                nombre: record.NOMBRE || 'N/A',
+                dni: dni,
+                equipo: record.EQUIPO || 'N/A',
+                categoria: record.CATEGORIA || 'N/A'
+            });
         }
     });
 
@@ -135,7 +166,7 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
         await logAction('upload_season_data', { season: manualSeason, processed: processedCount, skipped: skippedCount });
     }
 
-    return { processedCount, skippedCount };
+    return { processedCount, skippedCount, addedRecords, modifiedRecords, removedRecords };
 }
 
 export async function searchRecordsBySeason(season, query) {
