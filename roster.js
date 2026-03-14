@@ -151,8 +151,10 @@ function loadPlayers(temporada) {
 
         const recordsArray = Object.values(snapshot.val());
         const DNIyTipo = new Set(recordsArray.map(r => {
-            const tipo = String(r._tipo || r.TIPO || "").toLowerCase();
-            const node = tipo.includes("entrenador") ? "entrenadores" : "jugadores";
+            const rawTipo = String(r._tipo || "").toLowerCase();
+            const rawTIPO = String(r.TIPO || "").toLowerCase();
+            // Si cualquiera dice jugador, es jugador (prioridad por Arturo)
+            const node = (rawTipo.includes("jugador") || rawTIPO.includes("jugador")) ? "jugadores" : "entrenadores";
             const dni = String(r._dni || r.DNI || "");
             return `${node}|${dni}`;
         }));
@@ -174,27 +176,29 @@ function loadPlayers(temporada) {
             });
 
             allPlayers = recordsArray.map(record => {
-                const dniKey = String(record._dni || record.DNI || "");
-                const personalData = datosPersonalesMap.get(dniKey) || {};
-
-                const combined = { ...personalData, ...record };
+                const dni = String(record._dni || record.DNI || "");
+                const personalData = datosPersonalesMap.get(dni) || {};
                 
-                // Fuente de la verdad ÚNICA para FM: datosPersonales
+                // CAMBIO CLAVE: Prioridad a 'record' (temporada) sobre 'personalData'
+                const combined = { ...personalData, ...record };
+
+                // Fuente de la verdad MÉDICA: estrictamente de datosPersonales per Arturo
                 if (personalData['FM Hasta'] !== undefined) combined['FM Hasta'] = personalData['FM Hasta'];
                 if (personalData['FM Desde'] !== undefined) combined['FM Desde'] = personalData['FM Desde'];
-
-                // Campos normalizados para el Roster
-                combined.DNI = dniKey;
+                
+                // Normalizaciones tecnicas (Deteccion robusta de tipo para el objeto final)
+                const rawTipo = String(record._tipo || "").toLowerCase();
+                const rawTIPO = String(record.TIPO || "").toLowerCase();
+                combined._tipo = (rawTipo.includes("jugador") || rawTIPO.includes("jugador")) ? "jugadores" : "entrenadores";
+                
+                combined.DNI = dni;
                 combined.NOMBRE = personalData.NOMBRE || record.NOMBRE || 'N/N';
                 combined.NUMERO_TEMPORADA = record.Numero || record.NUMERO || record['Nº'] || "";
                 combined.esAutorizado = record.esAutorizado === true || String(record.esAutorizado).toLowerCase() === 'true';
                 combined.categoriasAutorizadas = record.categoriasAutorizadas || [];
 
                 return combined;
-            }).filter(p => {
-                const tipo = String(p._tipo || p.TIPO || "").toLowerCase();
-                return tipo.includes("jugador");
-            });
+            }).filter(p => p._tipo === "jugadores");
 
             populateFilters();
             renderPlayers();
@@ -218,10 +222,8 @@ function populateFilters() {
 
     const categoriesSet = new Set();
     playersForCategories.forEach(p => {
-        if (p.CATEGORIA) categoriesSet.add(p.CATEGORIA);
-        if (p.categoriasAutorizadas && Array.from(p.categoriasAutorizadas).length > 0) {
-            p.categoriasAutorizadas.forEach(cat => categoriesSet.add(cat));
-        }
+        const cats = [p.CATEGORIA, p.categoriaOrigen, ...(p.categoriasAutorizadas || [])].filter(Boolean);
+        cats.forEach(cat => categoriesSet.add(String(cat).trim()));
     });
 
     const categories = Array.from(categoriesSet).sort();
@@ -282,13 +284,18 @@ function renderPlayers() {
     const filtered = allPlayers.filter(p => {
         const pEquipo = String(p.EQUIPO || "").trim();
         const pCategoria = String(p.CATEGORIA || "").trim();
-        const isAuth = p.esAutorizado === true || String(p.esAutorizado).toLowerCase() === 'true';
+        const pAuthArr = p.categoriasAutorizadas || [];
+        const isAuthFlag = p.esAutorizado === true || String(p.esAutorizado).toLowerCase() === 'true';
 
-        const isSameTeam = pEquipo === selTeam;
-        const isMainCategory = pCategoria === selCat;
-        const isAuthCategory = p.categoriasAutorizadas && p.categoriasAutorizadas.some(cat => String(cat).trim() === selCat);
+        // Lógica de filtrado: El jugador debe ser del equipo seleccionado
+        if (pEquipo !== selTeam) return false;
 
-        return isSameTeam && (isMainCategory || isAuthCategory);
+        // Y debe pertenecer a la categoria (directo o autorizado)
+        const matchesMainCat = pCategoria === selCat;
+        const matchesAuthArr = pAuthArr.some(c => String(c).trim() === selCat);
+        const matchesAuthFlag = isAuthFlag && pCategoria === selCat;
+
+        return matchesMainCat || matchesAuthArr || matchesAuthFlag;
     }).sort((a, b) => {
         const dniA = String(a.DNI);
         const dniB = String(b.DNI);
@@ -311,7 +318,7 @@ function renderPlayers() {
         return (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
     });
 
-    // Separar Titulares de Autorizados (Refuerzos) según lógica de app.js
+    // Separar Titulares de Autorizados (Refuerzos) - LOGICA ESPEJO CON app.js
     const regulars = filtered.filter(p => {
         const pCat = String(p.CATEGORIA || "").trim();
         const isAuth = p.esAutorizado === true || String(p.esAutorizado).toLowerCase() === 'true';
@@ -321,8 +328,11 @@ function renderPlayers() {
     const authorized = filtered.filter(p => {
         const pCat = String(p.CATEGORIA || "").trim();
         const isAuth = p.esAutorizado === true || String(p.esAutorizado).toLowerCase() === 'true';
+        
+        // El mismo chequeo que en app.js (lineas ~876-878)
         const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.some(cat => String(cat).trim() === selCat) && pCat !== selCat;
         const isCrossSeasonAuth = isAuth && pCat === selCat;
+        
         return isSameSeasonAuth || isCrossSeasonAuth;
     });
 
