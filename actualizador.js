@@ -17,7 +17,7 @@ const clearLogsBtn = document.getElementById('clear-logs');
 const statsContainer = document.getElementById('stats-container');
 const loadingSpinner = document.getElementById('loading-spinner');
 const cancelBtn = document.getElementById('cancel-btn');
-// seasonFilter ya estÃ¡ definido globalmente
+const seasonFilter = document.getElementById('season-filter');
 
 // Estadísticas
 const statTotal = document.getElementById('stat-total');
@@ -339,7 +339,7 @@ function generatePDFReport() {
     const timeStr = today.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     
     // Obtener temporada seleccionada
-    const seasonFilter = document.getElementById('season-filter');
+    // seasonFilter ya es global
     const selectedSeasonText = seasonFilter.options[seasonFilter.selectedIndex].text;
     const selectedSeasonValue = seasonFilter.value;
 
