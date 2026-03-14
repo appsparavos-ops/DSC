@@ -162,26 +162,29 @@ function loadPlayers(temporada) {
             const dniTipoArray = Array.from(DNIyTipo);
 
             snapshots.forEach((snap, index) => {
+                const dni = dniTipoArray[index].split('|')[1];
                 if (snap.exists()) {
-                    const dni = dniTipoArray[index].split('|')[1];
                     datosPersonalesMap.set(String(dni), snap.val());
                 }
             });
 
             allPlayers = recordsArray.filter(r => {
-                const tipo = String(r._tipo || "").toLowerCase();
+                const tipo = String(r._tipo || r.TIPO || "").toLowerCase();
                 return tipo.includes("jugador");
             }).map(record => {
-                const dniKey = String(record._dni);
+                const dniKey = String(record._dni || record.DNI);
                 const personalData = datosPersonalesMap.get(dniKey) || {};
 
                 const numeroTemporada = record.Numero || record.NUMERO || record.Número || record['Nº'] || "";
+
+                const fmPersonal = personalData['FM Hasta'] || personalData['FM HASTA'] || personalData.FM_HASTA || "";
 
                 return {
                     ...personalData,
                     ...record,
                     DNI: dniKey,
                     NOMBRE: personalData.NOMBRE || record.NOMBRE || 'N/N',
+                    'FM Hasta': fmPersonal,
                     EQUIPO: record.EQUIPO,
                     CATEGORIA: record.CATEGORIA,
                     NUMERO_TEMPORADA: numeroTemporada,
@@ -207,7 +210,7 @@ function populateFilters() {
 
     let playersForCategories = allPlayers;
     if (teamSelect.value) {
-        playersForCategories = allPlayers.filter(p => String(p.EQUIPO) === String(teamSelect.value));
+        playersForCategories = allPlayers.filter(p => String(p.EQUIPO || "").trim() === String(teamSelect.value).trim());
     }
 
     const categoriesSet = new Set();
@@ -271,9 +274,14 @@ function renderPlayers() {
     }
 
     const filtered = allPlayers.filter(p => {
-        const isSameTeam = String(p.EQUIPO).trim() === String(team).trim();
-        const isMainCategory = String(p.CATEGORIA).trim() === String(category).trim();
-        const isAuthCategory = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category);
+        const pEquipo = String(p.EQUIPO || "").trim();
+        const pCategoria = String(p.CATEGORIA || "").trim();
+        const selTeam = String(team).trim();
+        const selCat = String(category).trim();
+
+        const isSameTeam = pEquipo === selTeam;
+        const isMainCategory = pCategoria === selCat;
+        const isAuthCategory = p.categoriasAutorizadas && p.categoriasAutorizadas.some(cat => String(cat).trim() === selCat);
 
         return isSameTeam && (isMainCategory || isAuthCategory);
     }).sort((a, b) => {
@@ -301,8 +309,12 @@ function renderPlayers() {
     // Separar Titulares de Autorizados (Refuerzos)
     // Titulares: Son de la categoría Y no son marca "esAutorizado"
     // Autorizados: Vienen por categoriasAutorizadas O por el flag esAutorizado
-    const regulars = filtered.filter(p => String(p.CATEGORIA).trim() === String(category).trim() && !p.esAutorizado);
-    const authorized = filtered.filter(p => (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category) && String(p.CATEGORIA).trim() !== String(category).trim()) || p.esAutorizado);
+    const regulars = filtered.filter(p => String(p.CATEGORIA || "").trim() === String(category).trim() && !p.esAutorizado);
+    const authorized = filtered.filter(p => {
+        const isAuthByCategory = p.categoriasAutorizadas && p.categoriasAutorizadas.some(cat => String(cat).trim() === String(category).trim()) && String(p.CATEGORIA || "").trim() !== String(category).trim();
+        const isAuthByFlag = p.esAutorizado && String(p.CATEGORIA || "").trim() === String(category).trim();
+        return isAuthByCategory || isAuthByFlag;
+    });
 
     // Identificar números duplicados entre los seleccionados
     const counts = {};
