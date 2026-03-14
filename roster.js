@@ -8,6 +8,9 @@ const firebaseConfig = {
     appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
 };
 
+const IMG_BASE_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/';
+const PLACEHOLDER_SVG_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2EwYTBhMCI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OS00IDQgNHptMCAyYy0yLjY3IDAtOCA0IDQgNHYyYzAgMS4xLjkgMiAyIDJoMTRjMS4xIDAgMi0uOSAyLTJ2LTJjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PC9zdmc+';
+
 // Inicializar Firebase
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
@@ -400,8 +403,18 @@ function createPlayerRow(p, duplicateNumbers = []) {
     tr.dataset.seleccionado = rosterEntry.seleccionado;
     tr.innerHTML = `
         <td class="px-6 py-4">
-            <div class="font-semibold text-gray-800">${p.NOMBRE || 'N/N'}</div>
-            ${isFUBBInvalid ? `<div class="text-[10px] text-red-500 font-bold uppercase mt-0.5">${estadoLicencia || 'SIN LICENCIA'}</div>` : ''}
+            <div class="flex items-center gap-3">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden bg-white border border-gray-200">
+                    <img src="${IMG_BASE_URL}${dni}.jpg" 
+                         alt="${p.NOMBRE}" 
+                         class="w-full h-full object-cover"
+                         onerror="this.onerror=null; this.src='${PLACEHOLDER_SVG_URL}';">
+                </div>
+                <div>
+                    <div class="font-semibold text-gray-800">${p.NOMBRE || 'N/N'}</div>
+                    ${isFUBBInvalid ? `<div class="text-[10px] text-red-500 font-bold uppercase mt-0.5">${estadoLicencia || 'SIN LICENCIA'}</div>` : ''}
+                </div>
+            </div>
         </td>
         <td class="px-4 py-4 text-center">
             <span class="text-sm ${fmColorClass}">${p['FM Hasta'] || 'SIN FICHA'}</span>
