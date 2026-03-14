@@ -171,10 +171,10 @@ performActionButton.addEventListener('click', async () => {
             showUIFeedback(msg, 'success');
 
             // Generate PDF Report if there are changes
-            if ((addedRecords && addedRecords.length > 0) || 
-                (modifiedRecords && modifiedRecords.length > 0) || 
+            if ((addedRecords && addedRecords.length > 0) ||
+                (modifiedRecords && modifiedRecords.length > 0) ||
                 (removedRecords && removedRecords.length > 0)) {
-                
+
                 showUIFeedback(msg + ' (Generando Reporte PDF...)', 'success');
                 setTimeout(() => {
                     generatePDFReport(addedRecords || [], modifiedRecords || [], removedRecords || [], season);
@@ -196,7 +196,7 @@ function generatePDFReport(added, modified, removed, season) {
     // Título y Cabecera
     doc.setFontSize(18);
     doc.text(`Reporte de Actualización de Datos (${season})`, 14, 22);
-    
+
     doc.setFontSize(11);
     doc.setTextColor(100);
     const dateStr = new Date().toLocaleString('es-ES');
@@ -209,7 +209,7 @@ function generatePDFReport(added, modified, removed, season) {
         doc.setFontSize(14);
         doc.setTextColor(0, 100, 0); // Verde oscuro
         doc.text(`Altas (Nuevos Registros): ${added.length}`, 14, startY);
-        
+
         doc.autoTable({
             startY: startY + 5,
             head: [['Nombre', 'Categoría', 'Equipo']],
@@ -232,7 +232,7 @@ function generatePDFReport(added, modified, removed, season) {
         doc.setFontSize(14);
         doc.setTextColor(0, 0, 150); // Azul oscuro
         doc.text(`Modificaciones Guardadas: ${modified.length}`, 14, startY);
-        
+
         doc.autoTable({
             startY: startY + 5,
             head: [['Nombre', 'Categoría', 'Detalle del Cambio']],
@@ -255,7 +255,7 @@ function generatePDFReport(added, modified, removed, season) {
         doc.setFontSize(14);
         doc.setTextColor(150, 0, 0); // Rojo oscuro
         doc.text(`Bajas (Omitidos en CSV -> SIN INSCRIBIR): ${removed.length}`, 14, startY);
-        
+
         doc.autoTable({
             startY: startY + 5,
             head: [['Nombre', 'Categoría', 'Equipo Anterior']],
@@ -267,7 +267,7 @@ function generatePDFReport(added, modified, removed, season) {
     }
 
     // Completar y descargar el documento
-    doc.save(`Reporte_Actualizacion_${season}.pdf`);
+    doc.save(`Reporte_Actualizacion_de_datos_${season}.pdf`);
 }
 
 document.getElementById('searchRecordsButton').addEventListener('click', async () => {
@@ -336,7 +336,7 @@ async function loadSeasons(uid) {
         const newOption = seasonSelect.querySelector('option[value="new"]');
         seasonSelect.innerHTML = '';
         deleteSeasonSelect.innerHTML = '';
-        
+
         if (seasons.length === 0) {
             const opt = document.createElement('option');
             opt.value = "";
@@ -372,7 +372,7 @@ async function loadSeasons(uid) {
             seasonSelect.value = 'new';
             seasonInput.classList.remove('hidden');
         }
-        
+
     } catch (error) {
         console.error("Error cargando temporadas:", error);
         showUIFeedback('Error al cargar temporadas.', 'error');
