@@ -183,7 +183,7 @@ async function updateSinglePlayer(index) {
     player.status = 'updating';
     renderPlayers();
     loadingSpinner.classList.remove('hidden');
-    log(`Buscando datos APS para: ${player.nombre}...`, 'info');
+    log(`Buscando datos en SND para: ${player.nombre}...`, 'info');
 
     abortController = new AbortController();
 
@@ -230,7 +230,7 @@ async function updateSinglePlayer(index) {
             }
         } else {
             player.status = 'fail';
-            log(`No se encontraron datos para ${player.nombre} en APS.`, 'warn');
+            log(`No se encontraron datos para ${player.nombre} en SND.`, 'warn');
         }
     } catch (error) {
         if (error.name === 'AbortError') {
