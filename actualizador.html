@@ -85,30 +85,33 @@
                             </svg>
                         </div>
                     </div>
-                    <a href="mantenimiento.html"
-                        class="bg-white/80 hover:bg-white text-indigo-600 px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-md flex items-center gap-2 border border-indigo-100">
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                        Volver
-                    </a>
                     <button id="scan-btn"
-                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center gap-2">
+                        class="group bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center"
+                        title="Escanear">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
-                        Escanear
+                        <span class="max-w-0 overflow-hidden group-hover:max-w-xs group-hover:ml-2 transition-all duration-300 ease-in-out whitespace-nowrap">Escanear</span>
                     </button>
                     <button id="update-all-btn"
-                        class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg hidden flex items-center gap-2">
+                        class="group bg-green-600 hover:bg-green-700 text-white p-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg hidden flex items-center"
+                        title="Actualizar Todos">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
-                        Actualizar Todos
+                        <span class="max-w-0 overflow-hidden group-hover:max-w-xs group-hover:ml-2 transition-all duration-300 ease-in-out whitespace-nowrap">Actualizar Todos</span>
                     </button>
+                    <a href="mantenimiento.html"
+                        class="group bg-white/80 hover:bg-white text-indigo-600 p-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-md flex items-center border border-indigo-100"
+                        title="Volver">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        <span class="max-w-0 overflow-hidden group-hover:max-w-xs group-hover:ml-2 transition-all duration-300 ease-in-out whitespace-nowrap">Volver</span>
+                    </a>
                 </div>
         </header>
 
