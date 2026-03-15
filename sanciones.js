@@ -28,17 +28,28 @@ const selectedName = document.getElementById('selectedName');
 const sanctionForm = document.getElementById('sanctionForm');
 const fechasCount = document.getElementById('fechasCount');
 const seasonSelect = document.getElementById('seasonSelect');
+const categorySelect = document.getElementById('categorySelect');
 const startDateInput = document.getElementById('startDate');
 const submitBtn = document.getElementById('submitBtn');
 
 const sanctionsList = document.getElementById('sanctionsList');
 const sanctionCountEl = document.getElementById('sanctionCount');
 
+const categoryContainer = document.getElementById('categoryContainer');
+const searchLabel = document.getElementById('searchLabel');
+const btnTypeJugador = document.getElementById('btnTypeJugador');
+const btnTypeEntrenador = document.getElementById('btnTypeEntrenador');
+
 const toast = document.getElementById('toast');
 const toastText = document.getElementById('toastText');
+const valueLabel = document.getElementById('valueLabel');
+const btnModePartidos = document.getElementById('btnModePartidos');
+const btnModeTiempo = document.getElementById('btnModeTiempo');
 
 let allPlayers = [];
 let activeSanctions = {};
+let currentType = 'jugador'; // 'jugador' o 'entrenador'
+let currentMode = 'partidos'; // 'partidos' o 'tiempo'
 
 // Inicializar fecha de hoy
 const hoy = new Date();
@@ -57,13 +68,28 @@ function showToast(message, error = false) {
 
 // Cargar Jugadores para el buscador
 function loadAllPlayers() {
-    database.ref('/jugadores').once('value').then(snapshot => {
-        const data = snapshot.val();
-        if (data) {
-            allPlayers = Object.keys(data).map(dni => ({
+    const p1 = database.ref('/jugadores').once('value');
+    const p2 = database.ref('/entrenadores').once('value');
+    
+    Promise.all([p1, p2]).then(snapshots => {
+        allPlayers = [];
+        // Jugadores
+        const jugData = snapshots[0].val();
+        if (jugData) {
+            allPlayers = allPlayers.concat(Object.keys(jugData).map(dni => ({
                 DNI: dni,
-                NOMBRE: data[dni].datosPersonales?.NOMBRE || 'S/N'
-            }));
+                NOMBRE: jugData[dni].datosPersonales?.NOMBRE || 'S/N',
+                TIPO: 'jugador'
+            })));
+        }
+        // Entrenadores
+        const entData = snapshots[1].val();
+        if (entData) {
+            allPlayers = allPlayers.concat(Object.keys(entData).map(dni => ({
+                DNI: dni,
+                NOMBRE: entData[dni].datosPersonales?.NOMBRE || 'S/N',
+                TIPO: 'entrenador'
+            })));
         }
     });
 }
@@ -90,8 +116,10 @@ playerSearch.addEventListener('input', (e) => {
     }
 
     const filtered = allPlayers.filter(p => 
-        p.DNI.includes(val) || 
-        p.NOMBRE.toLowerCase().includes(val)
+        p.TIPO === currentType && (
+            p.DNI.includes(val) || 
+            p.NOMBRE.toLowerCase().includes(val)
+        )
     ).slice(0, 5);
 
     if (filtered.length > 0) {
@@ -106,6 +134,45 @@ playerSearch.addEventListener('input', (e) => {
         suggestions.classList.add('hidden');
     }
 });
+
+window.setSanctionType = function(type) {
+    currentType = type;
+    
+    // Reset form states
+    selectedPlayerInfo.classList.add('hidden');
+    selectedDni.value = '';
+    selectedName.value = '';
+    playerSearch.value = '';
+    submitBtn.disabled = true;
+
+    if (type === 'jugador') {
+        searchLabel.textContent = "Buscar Jugador DNI o Nombre";
+        categoryContainer.classList.add('hidden');
+        categorySelect.value = "";
+        // UI Buttons
+        btnTypeJugador.className = "flex-1 py-2 text-xs font-bold rounded-xl transition-all shadow-sm bg-white text-blue-900 ring-1 ring-black/5";
+        btnTypeEntrenador.className = "flex-1 py-2 text-xs font-bold rounded-xl transition-all text-gray-500 hover:bg-gray-200";
+    } else {
+        searchLabel.textContent = "Buscar Entrenador DNI o Nombre";
+        categoryContainer.classList.remove('hidden');
+        // UI Buttons
+        btnTypeEntrenador.className = "flex-1 py-2 text-xs font-bold rounded-xl transition-all shadow-sm bg-white text-blue-900 ring-1 ring-black/5";
+        btnTypeJugador.className = "flex-1 py-2 text-xs font-bold rounded-xl transition-all text-gray-500 hover:bg-gray-200";
+    }
+};
+
+window.setSanctionMode = function(mode) {
+    currentMode = mode;
+    if (mode === 'partidos') {
+        valueLabel.textContent = "Fechas";
+        btnModePartidos.className = "flex-1 py-2 text-[10px] font-bold rounded-lg transition-all shadow-sm bg-white text-blue-900 border border-gray-100";
+        btnModeTiempo.className = "flex-1 py-2 text-[10px] font-bold rounded-lg transition-all text-gray-400 hover:bg-gray-100";
+    } else {
+        valueLabel.textContent = "Días";
+        btnModeTiempo.className = "flex-1 py-2 text-[10px] font-bold rounded-lg transition-all shadow-sm bg-white text-blue-900 border border-gray-100";
+        btnModePartidos.className = "flex-1 py-2 text-[10px] font-bold rounded-lg transition-all text-gray-400 hover:bg-gray-100";
+    }
+};
 
 window.selectPlayer = function(dni, nombre) {
     selectedDni.value = dni;
@@ -154,12 +221,12 @@ function renderSanctions() {
                 </td>
                 <td class="px-6 py-4 text-center">
                     <span class="inline-block bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
-                        ${s.fechas} Partidos
+                        ${s.fechas} ${s.tipoSancion === 'tiempo' ? 'Días' : 'Partidos'}
                     </span>
                 </td>
                 <td class="px-6 py-4 text-center">
                     <div class="text-xs font-medium text-gray-600">${s.fechaInicio || s.fechaCarga.split('T')[0]}</div>
-                    <div class="text-[10px] text-gray-400">${s.temporada}</div>
+                    <div class="text-[10px] text-gray-400 font-bold uppercase">${s.categoria || s.temporada}</div>
                 </td>
                 <td class="px-6 py-4 text-right">
                     <button onclick="removeSanction('${dni}')" class="text-gray-300 hover:text-red-500 transition-colors p-2">
@@ -187,6 +254,7 @@ sanctionForm.addEventListener('submit', (e) => {
     const nombre = selectedName.value;
     const fechas = parseInt(fechasCount.value);
     const temporada = seasonSelect.value;
+    const categoria = categorySelect.value;
     const fechaInicio = startDateInput.value;
 
     if (!dni || !nombre || isNaN(fechas) || !temporada) {
@@ -198,7 +266,9 @@ sanctionForm.addEventListener('submit', (e) => {
         dni,
         nombre,
         fechas,
+        tipoSancion: currentMode,
         temporada,
+        categoria,
         fechaInicio,
         fechaCarga: new Date().toISOString()
     };

@@ -39,6 +39,12 @@ const authorizedList = document.getElementById('authorizedList');
 const authorizedTableBody = document.getElementById('authorizedTableBody');
 const authorizedChevron = document.getElementById('authorizedChevron');
 
+const coachesSection = document.getElementById('coachesSection');
+const coachesCountEl = document.getElementById('coachesCount');
+const coachesList = document.getElementById('coachesList');
+const coachesTableBody = document.getElementById('coachesTableBody');
+const coachesChevron = document.getElementById('coachesChevron');
+
 let allPlayers = [];
 let rosterData = { jugadores: {} };
 let rosterRef = null;
@@ -223,7 +229,7 @@ function loadPlayers(temporada) {
                 combined.categoriasAutorizadas = record.categoriasAutorizadas || [];
 
                 return combined;
-            }).filter(p => p._tipo === "jugadores");
+            }).filter(p => p._tipo === "jugadores" || p._tipo === "entrenadores");
 
             populateFilters();
             renderPlayers();
@@ -284,8 +290,9 @@ function setupRosterSync() {
 
     rosterRef.on('value', snapshot => {
         const val = snapshot.val();
-        rosterData = val || { jugadores: {} };
+        rosterData = val || { jugadores: {}, staff: {} };
         if (!rosterData.jugadores) rosterData.jugadores = {};
+        if (!rosterData.staff) rosterData.staff = {};
         renderPlayers();
     }, err => {
         console.error("Error Roster:", err);
@@ -326,11 +333,6 @@ function renderPlayers() {
         const matchesAuthFlag = isAuthFlag && pCategoria === selCat;
 
         return matchesMainCat || matchesAuthArr || matchesAuthFlag;
-    }).filter(p => {
-        if (rosterViewMode === 'all-alpha') return true;
-        const dni = String(p.DNI);
-        const rosterEntry = (rosterData.jugadores && rosterData.jugadores[dni]) || { seleccionado: false };
-        return rosterEntry.seleccionado;
     }).sort((a, b) => {
         if (rosterViewMode === 'selected-num') {
             const entryA = (rosterData.jugadores && rosterData.jugadores[a.DNI]) || { numero: "" };
@@ -345,14 +347,18 @@ function renderPlayers() {
         return (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
     });
 
-    // Separar Titulares de Autorizados (Refuerzos) - LOGICA ESPEJO CON app.js
-    const regulars = filtered.filter(p => {
+    // Separar por TIPO: Jugadores vs Entrenadores
+    const coaches = filtered.filter(p => p._tipo === 'entrenadores');
+    const players = filtered.filter(p => p._tipo === 'jugadores');
+
+    // Separar Titulares de Autorizados (Refuerzos)
+    const regulars = players.filter(p => {
         const pCat = String(p.CATEGORIA || "").trim();
         const isAuth = p.esAutorizado === true || String(p.esAutorizado).toLowerCase() === 'true';
         return pCat === selCat && !isAuth;
     });
 
-    const authorized = filtered.filter(p => {
+    const authorized = players.filter(p => {
         const pCat = String(p.CATEGORIA || "").trim();
         const isAuth = p.esAutorizado === true || String(p.esAutorizado).toLowerCase() === 'true';
 
@@ -366,7 +372,7 @@ function renderPlayers() {
     // Identificar números duplicados entre los seleccionados
     const counts = {};
     // Necesitamos mapear los números reales que se están mostrando para cada jugador seleccionado
-    filtered.forEach(p => {
+    players.forEach(p => {
         const dni = String(p.DNI);
         const rosterEntry = (rosterData.jugadores && rosterData.jugadores[dni]) || { seleccionado: false, numero: "" };
 
@@ -378,6 +384,35 @@ function renderPlayers() {
         }
     });
     const duplicateNumbers = Object.keys(counts).filter(num => counts[num] > 1);
+
+    // Renderizar Entrenadores
+    coachesTableBody.innerHTML = '';
+    coachesSection.classList.remove('hidden');
+    let coachSelectedCount = 0;
+    
+    // Obtener staff seleccionado y ordenar por timestamp
+    const selectedStaff = Object.entries(rosterData.staff || {})
+        .filter(([_, data]) => data.seleccionado)
+        .sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+    
+    const staffRoles = {};
+    selectedStaff.forEach(([dni, _], index) => {
+        if (index === 0) staffRoles[dni] = "HC";
+        else if (index === 1) staffRoles[dni] = "AC";
+        else staffRoles[dni] = "Staff";
+    });
+
+    if (coaches.length > 0) {
+        coaches.forEach(p => {
+            const role = staffRoles[p.DNI] || "";
+            const tr = createPlayerRow(p, [], role);
+            coachesTableBody.appendChild(tr);
+            if (tr.dataset.seleccionado === 'true') coachSelectedCount++;
+        });
+    } else {
+        coachesTableBody.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-gray-400 text-sm">No hay entrenadores registrados para este equipo/categoría</td></tr>';
+    }
+    coachesCountEl.textContent = `${coachSelectedCount} Entrenadores seleccionados`;
 
     // Renderizar Titulares
     playersTableBody.innerHTML = '';
@@ -440,11 +475,14 @@ function renderPlayers() {
     }
 }
 
-function createPlayerRow(p, duplicateNumbers = []) {
+function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
     const dni = String(p.DNI);
-    const rosterEntry = (rosterData.jugadores && rosterData.jugadores[dni]) || { seleccionado: false, numero: "" };
+    const isCoach = p._tipo === 'entrenadores';
+    const node = isCoach ? 'staff' : 'jugadores';
+    
+    const rosterEntry = (rosterData[node] && rosterData[node][dni]) || { seleccionado: false, numero: "" };
 
-    const numeroAMostrar = rosterEntry.numero || p.NUMERO_TEMPORADA || "";
+    const numeroAMostrar = coachRole || rosterEntry.numero || p.NUMERO_TEMPORADA || "";
 
     const expDate = parseDateDDMMYYYY(p['FM Hasta']);
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -460,28 +498,52 @@ function createPlayerRow(p, duplicateNumbers = []) {
     let fechasRestantes = 0;
 
     if (sanction) {
-        const totalFechas = parseInt(sanction.fechas);
+        const totalValue = parseInt(sanction.fechas);
         const startDate = new Date(sanction.fechaInicio + 'T00:00:00');
         const currentDateStr = dateSelect.value;
         const currentDate = new Date(currentDateStr + 'T00:00:00');
-
-        let fechasCumplidas = 0;
-        const seasonVal = seasonSelect.value;
         const selCat = String(categorySelect.value).trim();
+        const sanctionCat = String(sanction.categoria || "").trim();
 
-        Object.keys(playedMatchesList).forEach(mmdd => {
-            const yearStr = seasonVal.includes('-') ? seasonVal.split('-')[0] : seasonVal;
-            const matchDate = new Date(parseInt(yearStr), parseInt(mmdd.substring(0, 2)) - 1, parseInt(mmdd.substring(2, 4)));
-            if (matchDate >= startDate && matchDate < currentDate) {
-                const rostersOnDate = playedMatchesList[mmdd];
-                if (rostersOnDate && rostersOnDate[selCat]) {
-                    if (!isFUBBInvalid) fechasCumplidas++;
+        if (sanction.tipoSancion === 'tiempo') {
+            // Sanción por Tiempo (Días)
+            const expirationDate = new Date(startDate);
+            expirationDate.setDate(expirationDate.getDate() + totalValue);
+            
+            if (currentDate >= startDate && currentDate < expirationDate) {
+                 // Verificar categoría si es entrenador
+                 if (isCoach && sanctionCat && sanctionCat !== selCat) {
+                     isSancionado = false;
+                 } else {
+                     isSancionado = true;
+                     fechasRestantes = Math.ceil((expirationDate - currentDate) / (1000 * 60 * 60 * 24));
+                 }
+            }
+        } else {
+            // Sanción por Partidos (Comportamiento original)
+            let fechasCumplidas = 0;
+            const seasonVal = seasonSelect.value;
+
+            Object.keys(playedMatchesList).forEach(mmdd => {
+                const yearStr = seasonVal.includes('-') ? seasonVal.split('-')[0] : seasonVal;
+                const matchDate = new Date(parseInt(yearStr), parseInt(mmdd.substring(0, 2)) - 1, parseInt(mmdd.substring(2, 4)));
+                if (matchDate >= startDate && matchDate < currentDate) {
+                    const rostersOnDate = playedMatchesList[mmdd];
+                    if (rostersOnDate && rostersOnDate[selCat]) {
+                        if (!isFUBBInvalid) fechasCumplidas++;
+                    }
+                }
+            });
+
+            fechasRestantes = totalValue - fechasCumplidas;
+            if (fechasRestantes > 0) {
+                if (isCoach && sanctionCat && sanctionCat !== selCat) {
+                    isSancionado = false;
+                } else {
+                    isSancionado = true;
                 }
             }
-        });
-
-        fechasRestantes = totalFechas - fechasCumplidas;
-        if (fechasRestantes > 0) isSancionado = true;
+        }
     }
 
     // Lógica avanzada de colores para FM
@@ -516,9 +578,15 @@ function createPlayerRow(p, duplicateNumbers = []) {
     const isConflict = rosterEntry.seleccionado && numeroAMostrar && duplicateNumbers.includes(String(numeroAMostrar).trim());
     const inputStyle = isConflict ? 'border-red-500 bg-red-50 focus:ring-red-500/20' : 'border-gray-200 focus:ring-blue-500/20';
 
-    const isDisabled = isExpired || isFUBBInvalid || isSancionado;
-    let disabledText = isExpired ? 'FICHA MEDICA' : 'FUBB (No Hab.)';
-    if (isSancionado) disabledText = `Sanción (${fechasRestantes})`;
+    // Ficha médica no es requerida para entrenadores
+    const needsFM = !isCoach;
+    const isDisabled = (needsFM && isExpired) || isFUBBInvalid || isSancionado;
+    
+    let disabledText = (needsFM && isExpired) ? 'FICHA MEDICA' : 'FUBB (No Hab.)';
+    if (isSancionado) {
+        const unit = (sanction && sanction.tipoSancion === 'tiempo') ? ' días' : ' fechas';
+        disabledText = `Sanción (${fechasRestantes}${unit})`;
+    }
 
     const tr = document.createElement('tr');
     tr.className = `player-row border-b border-gray-50 ${rosterEntry.seleccionado ? 'selected-row' : ''}`;
@@ -539,19 +607,29 @@ function createPlayerRow(p, duplicateNumbers = []) {
             </div>
         </td>
         <td class="px-4 py-4 text-center">
-            <span class="text-[11px] inline-block min-w-[80px] ${fmColorClass}">${p['FM Hasta'] || 'SIN FICHA'}</span>
+            ${isCoach ? '' : `
+                <span class="text-[11px] inline-block min-w-[80px] ${fmColorClass}">${p['FM Hasta'] || 'SIN FICHA'}</span>
+            `}
         </td>
         <td class="px-4 py-4 text-center">
             <div class="relative inline-block pb-1">
-                <input type="text" value="${numeroAMostrar}" 
-                    class="w-12 text-center border ${inputStyle} rounded-xl py-2 font-bold text-blue-900 outline-none transition-all shadow-sm"
-                    onchange="updateNumber('${dni}', this.value)"
-                    ${isDisabled ? 'disabled' : ''}>
-                ${isConflict ? `
-                    <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[9px] text-red-600 font-bold whitespace-nowrap bg-white px-1">
-                        Número Repetido
-                    </div>
-                ` : ''}
+                ${isCoach ? `
+                    ${coachRole ? `
+                        <span class="inline-block bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-lg border border-blue-200">
+                            ${coachRole}
+                        </span>
+                    ` : ''}
+                ` : `
+                    <input type="text" value="${numeroAMostrar}" 
+                        class="w-12 text-center border ${inputStyle} rounded-xl py-2 font-bold text-blue-900 outline-none transition-all shadow-sm"
+                        onchange="updateNumber('${dni}', this.value)"
+                        ${isDisabled ? 'disabled' : ''}>
+                    ${isConflict ? `
+                        <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[9px] text-red-600 font-bold whitespace-nowrap bg-white px-1">
+                            Número Repetido
+                        </div>
+                    ` : ''}
+                `}
             </div>
         </td>
         <td class="px-6 py-4 text-right">
@@ -578,16 +656,37 @@ window.toggleAuthorizedList = function () {
     }
 };
 
+window.toggleCoachesList = function () {
+    const isHidden = coachesList.classList.contains('hidden');
+    if (isHidden) {
+        coachesList.classList.remove('hidden');
+        coachesChevron.classList.add('rotate-180');
+    } else {
+        coachesList.classList.add('hidden');
+        coachesChevron.classList.remove('rotate-180');
+    }
+};
+
 window.toggleSelection = function (dni, isChecked, nombre) {
     if (!rosterRef) return;
-    const update = { [`jugadores/${dni}/seleccionado`]: isChecked };
+    
+    // Buscar si es un entrenador en allPlayers
+    const person = allPlayers.find(p => String(p.DNI) === String(dni));
+    const isCoach = person && person._tipo === 'entrenadores';
+    const node = isCoach ? 'staff' : 'jugadores';
+
+    const update = { [`${node}/${dni}/seleccionado`]: isChecked };
     if (isChecked) {
-        update[`jugadores/${dni}/nombre`] = nombre || "";
-    } else {
-        update[`jugadores/${dni}/numero`] = "";
+        update[`${node}/${dni}/nombre`] = nombre || "";
+        if (isCoach) {
+            update[`${node}/${dni}/timestamp`] = Date.now();
+        }
+    } else if (!isCoach) {
+        update[`${node}/${dni}/numero`] = "";
     }
+    
     rosterRef.update(update).then(() => {
-        showToast(isChecked ? "Jugador agregado" : "Jugador removido");
+        showToast(isCoach ? (isChecked ? "Staff agregado" : "Staff removido") : (isChecked ? "Jugador agregado" : "Jugador removido"));
     }).catch(err => {
         console.error("Error Selección:", err);
         showToast("Error al actualizar roster", "error");

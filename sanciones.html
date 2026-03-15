@@ -52,8 +52,10 @@
     <header class="p-6 flex flex-row items-center justify-center gap-6 relative">
         <a href="index.html" class="absolute left-6 hover:opacity-80 transition-opacity hidden sm:block">
             <div class="bg-white/10 p-2 rounded-xl border border-white/20">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
             </div>
         </a>
@@ -76,19 +78,36 @@
                 <div class="glass-card rounded-2xl p-6 shadow-2xl">
                     <h2 class="text-lg font-bold text-blue-900 mb-6 flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd" />
+                            <path fill-rule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"
+                                clip-rule="evenodd" />
                         </svg>
                         Nueva Sanción
                     </h2>
 
                     <form id="sanctionForm" class="space-y-4">
+                        <!-- Selector de Tipo -->
+                        <div class="flex gap-2 p-1 bg-gray-100 rounded-2xl mb-6">
+                            <button type="button" onclick="setSanctionType('jugador')" id="btnTypeJugador"
+                                class="flex-1 py-2 text-xs font-bold rounded-xl transition-all shadow-sm bg-white text-blue-900 ring-1 ring-black/5">
+                                Jugadores
+                            </button>
+                            <button type="button" onclick="setSanctionType('entrenador')" id="btnTypeEntrenador"
+                                class="flex-1 py-2 text-xs font-bold rounded-xl transition-all text-gray-500 hover:bg-gray-200">
+                                Entrenadores
+                            </button>
+                        </div>
+
                         <!-- Buscador de Jugador -->
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Jugador (DNI o Nombre)</label>
+                            <label id="searchLabel"
+                                class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Buscar Jugador DNI o
+                                Nombre</label>
                             <div class="relative">
                                 <input type="text" id="playerSearch" placeholder="Buscar..." autocomplete="off"
                                     class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm">
-                                <div id="suggestions" class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl hidden overflow-hidden">
+                                <div id="suggestions"
+                                    class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl hidden overflow-hidden">
                                     <!-- Sugerencias dinámicas -->
                                 </div>
                             </div>
@@ -96,22 +115,37 @@
                             <input type="hidden" id="selectedName">
                         </div>
 
-                        <div id="selectedPlayerInfo" class="hidden p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-bold" id="playerInitial">?</div>
+                        <div id="selectedPlayerInfo"
+                            class="hidden p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-bold"
+                                id="playerInitial">?</div>
                             <div>
                                 <p class="text-sm font-bold text-blue-900" id="displayName">Nombre</p>
                                 <p class="text-xs text-blue-600" id="displayDni">DNI</p>
                             </div>
                         </div>
 
+                        <!-- Modo de Sanción (Partidos vs Tiempo) -->
+                        <div class="flex gap-2 p-1 bg-gray-50 rounded-xl border border-gray-100">
+                            <button type="button" onclick="setSanctionMode('partidos')" id="btnModePartidos"
+                                class="flex-1 py-2 text-[10px] font-bold rounded-lg transition-all shadow-sm bg-white text-blue-900 border border-gray-100">
+                                Por Partidos
+                            </button>
+                            <button type="button" onclick="setSanctionMode('tiempo')" id="btnModeTiempo"
+                                class="flex-1 py-2 text-[10px] font-bold rounded-lg transition-all text-gray-400 hover:bg-gray-100">
+                                Por Tiempo (Días)
+                            </button>
+                        </div>
+
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Fechas</label>
+                                <label id="valueLabel" class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Fechas</label>
                                 <input type="number" id="fechasCount" min="1" value="1"
                                     class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm font-bold text-center">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Temporada</label>
+                                <label
+                                    class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Temporada</label>
                                 <select id="seasonSelect"
                                     class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm">
                                     <!-- Temporadas dinámicas -->
@@ -119,8 +153,28 @@
                             </div>
                         </div>
 
+                        <div id="categoryContainer" class="hidden">
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Categoría</label>
+                            <select id="categorySelect"
+                                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm">
+                                <option value="">Todas las Categorías</option>
+                                <option value="U11 Mixta">U11 Mixta</option>
+                                <option value="U12 Mixta">U12 Mixta</option>
+                                <option value="U14 Masculino">U14 Masculino</option>
+                                <option value="U16 Masculino">U16 Masculino</option>
+                                <option value="U18 Masculino">U18 Masculino</option>
+                                <option value="U20 Masculino">U20 Masculino</option>
+                                <option value="U11 Femenino">U11 Femenino</option>
+                                <option value="U12 Femenino">U12 Femenino</option>
+                                <option value="U14 Femenino">U14 Femenino</option>
+                                <option value="U16 Femenino">U16 Femenino</option>
+                                <option value="U19 Femenino">U19 Femenino</option>
+                            </select>
+                        </div>
+
                         <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Fecha de Inicio</label>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1 ml-1">Fecha de
+                                Inicio</label>
                             <input type="date" id="startDate"
                                 class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm">
                         </div>
@@ -138,23 +192,33 @@
                 <div class="glass-card rounded-2xl shadow-2xl overflow-hidden">
                     <div class="p-6 bg-white flex justify-between items-center border-b border-gray-100">
                         <h2 class="text-xl font-bold text-blue-900 font-outfit">Sanciones Activas</h2>
-                        <span id="sanctionCount" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">0 Sancionados</span>
+                        <span id="sanctionCount"
+                            class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">0
+                            Sancionados</span>
                     </div>
 
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="bg-gray-50/50">
-                                    <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Jugador</th>
-                                    <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Fechas</th>
-                                    <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Desde</th>
-                                    <th class="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-widest"></th>
+                                    <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                        Jugador</th>
+                                    <th
+                                        class="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest text-center">
+                                        Fechas</th>
+                                    <th
+                                        class="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest text-center">
+                                        Desde</th>
+                                    <th
+                                        class="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="sanctionsList" class="divide-y divide-gray-100 bg-white">
                                 <!-- Filas dinámicas -->
                                 <tr>
-                                    <td colspan="4" class="px-6 py-12 text-center text-gray-400">Cargando sanciones...</td>
+                                    <td colspan="4" class="px-6 py-12 text-center text-gray-400">Cargando sanciones...
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -165,8 +229,10 @@
     </main>
 
     <!-- Alertas (Toasts) -->
-    <div id="toast" class="fixed bottom-8 left-1/2 transform -translate-x-1/2 translate-y-24 opacity-0 transition-all duration-300 ease-out z-50">
-        <div class="bg-gray-900/95 backdrop-blur-md text-white px-8 py-4 rounded-2xl shadow-2xl font-semibold" id="toastText"></div>
+    <div id="toast"
+        class="fixed bottom-8 left-1/2 transform -translate-x-1/2 translate-y-24 opacity-0 transition-all duration-300 ease-out z-50">
+        <div class="bg-gray-900/95 backdrop-blur-md text-white px-8 py-4 rounded-2xl shadow-2xl font-semibold"
+            id="toastText"></div>
     </div>
 
     <script src="sanciones.js"></script>
