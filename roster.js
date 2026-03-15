@@ -43,6 +43,7 @@ let allPlayers = [];
 let rosterData = { jugadores: {} };
 let rosterRef = null;
 let currentSeasonListener = null;
+let rosterViewMode = 'all-alpha'; // 'selected-num', 'selected-alpha', 'all-alpha'
 
 // Inicializar fecha con hoy
 const today = new Date();
@@ -296,25 +297,22 @@ function renderPlayers() {
         const matchesAuthFlag = isAuthFlag && pCategoria === selCat;
 
         return matchesMainCat || matchesAuthArr || matchesAuthFlag;
+    }).filter(p => {
+        if (rosterViewMode === 'all-alpha') return true;
+        const dni = String(p.DNI);
+        const rosterEntry = (rosterData.jugadores && rosterData.jugadores[dni]) || { seleccionado: false };
+        return rosterEntry.seleccionado;
     }).sort((a, b) => {
-        const dniA = String(a.DNI);
-        const dniB = String(b.DNI);
-        const entryA = (rosterData.jugadores && rosterData.jugadores[dniA]) || { seleccionado: false, numero: "" };
-        const entryB = (rosterData.jugadores && rosterData.jugadores[dniB]) || { seleccionado: false, numero: "" };
-
-        const numA = entryA.numero || a.NUMERO_TEMPORADA || "";
-        const numB = entryB.numero || b.NUMERO_TEMPORADA || "";
-
-        // Si ambos tienen número, ordenar numéricamente
-        if (numA !== "" && numB !== "") {
-            return parseInt(numA, 10) - parseInt(numB, 10);
+        if (rosterViewMode === 'selected-num') {
+            const entryA = (rosterData.jugadores && rosterData.jugadores[a.DNI]) || { numero: "" };
+            const entryB = (rosterData.jugadores && rosterData.jugadores[b.DNI]) || { numero: "" };
+            const numA = entryA.numero || a.NUMERO_TEMPORADA || "";
+            const numB = entryB.numero || b.NUMERO_TEMPORADA || "";
+            
+            if (numA !== "" && numB !== "") return parseInt(numA, 10) - parseInt(numB, 10);
+            if (numA !== "") return -1;
+            if (numB !== "") return 1;
         }
-
-        // Si solo uno tiene número, ese va primero
-        if (numA !== "") return -1;
-        if (numB !== "") return 1;
-
-        // Si ninguno tiene número, ordenar por nombre
         return (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
     });
 
@@ -399,6 +397,18 @@ function renderPlayers() {
     } else {
         selectedCountEl.classList.add('bg-blue-600');
     }
+
+    // Feedback visual del modo de vista
+    if (rosterViewMode === 'selected-num') {
+        selectedCountEl.innerHTML = `📌 ${count} Seleccionados (Nº)`;
+        selectedCountEl.classList.add('ring-2', 'ring-white');
+    } else if (rosterViewMode === 'selected-alpha') {
+        selectedCountEl.innerHTML = `🔤 ${count} Seleccionados (A-Z)`;
+        selectedCountEl.classList.add('ring-2', 'ring-white');
+    } else {
+        selectedCountEl.innerHTML = `${count} Seleccionados`;
+        selectedCountEl.classList.remove('ring-2', 'ring-white');
+    }
 }
 
 function createPlayerRow(p, duplicateNumbers = []) {
@@ -470,7 +480,7 @@ function createPlayerRow(p, duplicateNumbers = []) {
             ` : `
                 <input type="checkbox" ${rosterEntry.seleccionado ? 'checked' : ''} 
                     class="w-6 h-6 rounded-lg border-gray-300 text-blue-600 focus:ring-blue-500 transition-all cursor-pointer shadow-sm"
-                    onchange="toggleSelection('${dni}', this.checked)">
+                    onchange="toggleSelection('${dni}', this.checked, '${p.NOMBRE.replace(/'/g, "\\'")}')">
             `}
         </td>
     `;
@@ -488,10 +498,14 @@ window.toggleAuthorizedList = function () {
     }
 };
 
-window.toggleSelection = function (dni, isChecked) {
+window.toggleSelection = function (dni, isChecked, nombre) {
     if (!rosterRef) return;
     const update = { [`jugadores/${dni}/seleccionado`]: isChecked };
-    if (!isChecked) update[`jugadores/${dni}/numero`] = "";
+    if (isChecked) {
+        update[`jugadores/${dni}/nombre`] = nombre || "";
+    } else {
+        update[`jugadores/${dni}/numero`] = "";
+    }
     rosterRef.update(update).then(() => {
         showToast(isChecked ? "Jugador agregado" : "Jugador removido");
     }).catch(err => {
@@ -506,7 +520,19 @@ window.updateNumber = function (dni, number) {
     rosterRef.child(`jugadores/${dni}`).update({ numero: normalizedNum });
 };
 
+window.cycleViewMode = function() {
+    if (rosterViewMode === 'all-alpha') rosterViewMode = 'selected-num';
+    else if (rosterViewMode === 'selected-num') rosterViewMode = 'selected-alpha';
+    else rosterViewMode = 'all-alpha';
+    
+    renderPlayers();
+    showToast(`Vista: ${rosterViewMode === 'selected-num' ? 'Seleccionados por Número' : 
+                          rosterViewMode === 'selected-alpha' ? 'Seleccionados por Nombre' : 
+                          'Todos por Nombre'}`);
+};
+
 seasonSelect.addEventListener('change', () => {
+    rosterViewMode = 'all-alpha';
     const season = seasonSelect.value;
     loadPlayers(season);
     setupRosterSync();
@@ -520,10 +546,17 @@ seasonSelect.addEventListener('change', () => {
     }
 });
 teamSelect.addEventListener('change', () => {
+    rosterViewMode = 'all-alpha';
     populateFilters();
     setupRosterSync();
 });
-dateSelect.addEventListener('change', setupRosterSync);
-categorySelect.addEventListener('change', setupRosterSync);
+dateSelect.addEventListener('change', () => {
+    rosterViewMode = 'all-alpha';
+    setupRosterSync();
+});
+categorySelect.addEventListener('change', () => {
+    rosterViewMode = 'all-alpha';
+    setupRosterSync();
+});
 
 signInGuest();
