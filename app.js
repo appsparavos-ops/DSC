@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const playerDetailView = document.getElementById('playerDetailView');
 
     let allPlayers = [], originalHeaders = [], currentlyDisplayedPlayers = [], currentColumnsForPDF = [];
-    let currentSortCol = 'Numero', currentSortDir = 'asc';
+    let currentSortCol = 'NOMBRE', currentSortDir = 'asc';
     let isEditModeActive = false, currentUserRole = null, currentPlayerIndex = -1, currentSeasonListener = null;
 
     // --- LÓGICA DE BITÁCORA ---
@@ -314,7 +314,14 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const seasonalRecords = snapshot.val();
-            const DNIyTipo = new Set(Object.values(seasonalRecords).map(r => `${r._tipo}|${r._dni}`));
+            const DNIyTipo = new Set(Object.values(seasonalRecords).map(r => {
+                const rawTipo = String(r._tipo || "").toLowerCase();
+                const rawTIPO = String(r.TIPO || "").toLowerCase();
+                // Si cualquiera dice jugador, es jugador (prioridad por Arturo)
+                const node = (rawTipo.includes("jugador") || rawTIPO.includes("jugador")) ? "jugadores" : "entrenadores";
+                const dni = String(r._dni || r.DNI || "");
+                return `${node}|${dni}`;
+            }));
 
             const promises = Array.from(DNIyTipo).map(item => {
                 const [tipo, dni] = item.split('|');
@@ -332,7 +339,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
 
                 allPlayers = Object.values(seasonalRecords).map(record => {
-                    const personalData = datosPersonalesMap.get(String(record._dni)) || {};
+                    const dni = String(record._dni || record.DNI || "");
+                    const personalData = datosPersonalesMap.get(dni) || {};
                     const combined = { ...record, ...personalData };
                     // Fuente de la verdad ÚNICA: estrictamente de datosPersonales si existe
                     if (personalData['FM Hasta'] !== undefined) combined['FM Hasta'] = personalData['FM Hasta'];
@@ -378,7 +386,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const newNumeros = { ...(playerToUpdate.Numeros || {}) };
         if (playerDetailView) {
             playerDetailView.querySelectorAll('.numero-input').forEach(input => {
-                if (input.dataset.category) newNumeros[input.dataset.category] = input.value;
+                if (input.dataset.category) newNumeros[String(input.dataset.category).trim()] = input.value.trim();
             });
         }
         const primaryCategory = playerToUpdate.CATEGORIA;
@@ -578,6 +586,63 @@ document.addEventListener('DOMContentLoaded', function () {
         return catA.localeCompare(catB);
     }
 
+    function getFMStatusStyles(player) {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const expDate = parseDateDDMMYYYY(player['FM Hasta']);
+        const isExpired = !expDate || expDate < today;
+        const season = seasonFilter ? seasonFilter.value : player.TEMPORADA;
+        
+        // Determinar fin del torneo según tipo de temporada
+        let tournamentEndDate = null;
+        if (season && season.includes('-')) {
+            const years = season.split('-').map(y => y.trim());
+            const lastYear = years[years.length - 1];
+            tournamentEndDate = new Date(parseInt(lastYear), 5, 30); // 30/06
+        } else if (season) {
+            const year = parseInt(season);
+            tournamentEndDate = new Date(year, 11, 25); // 25/12
+        }
+
+        let bgClass = 'hover:bg-gray-100';
+        let textClass = 'text-gray-900';
+
+        if (player['TIPO'] === 'ENTRENADOR/A') {
+            return {
+                bg: 'bg-blue-100 hover:bg-blue-200',
+                text: 'text-blue-800',
+                frame: '',
+                isGreen: false
+            };
+        }
+
+        if (isExpired) {
+            bgClass = 'bg-red-800 hover:bg-red-900';
+            textClass = 'text-white';
+        } else if (tournamentEndDate && expDate > tournamentEndDate) {
+            bgClass = 'bg-green-600 hover:bg-green-700';
+            textClass = 'text-white';
+        } else {
+            const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
+            const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+
+            if (expDate <= thirtyDays) {
+                bgClass = 'bg-orange-500 hover:bg-orange-600';
+                textClass = 'text-black';
+            } else if (expDate <= sixtyDays) {
+                bgClass = 'bg-yellow-200 hover:bg-yellow-300';
+                textClass = 'text-black';
+            }
+        }
+
+        return {
+            bg: bgClass,
+            text: textClass,
+            badge: `${bgClass.split(' ')[0]} ${textClass} font-bold px-2 py-1 rounded-lg shadow-sm`,
+            frame: bgClass.replace('hover:', '').split(' ')[0] + ' border-gray-400',
+            isGreen: (tournamentEndDate && expDate > tournamentEndDate)
+        };
+    }
+
     function showExpiring() {
         if (printButton) printButton.classList.remove('hidden');
         const selectedSeason = seasonFilter ? seasonFilter.value : null;
@@ -717,27 +782,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const originalIndex = currentlyDisplayedPlayers.findIndex(p => p._firebaseKey === player._firebaseKey);
         row.addEventListener('click', () => showPlayerDetails(player, isEditModeActive, originalIndex, false));
 
-        const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
-        let colorClass = 'hover:bg-gray-100';
-        if (player['TIPO'] === 'ENTRENADOR/A') {
-            colorClass = 'bg-blue-100 text-blue-800 hover:bg-blue-200';
-        } else {
-            const today = new Date(); today.setHours(0, 0, 0, 0);
-            const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-            const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
-            const endOfYear = new Date(today.getFullYear(), 11, 24);
-
-            if (!expirationDate || expirationDate < today) {
-                colorClass = 'bg-red-100 text-red-800 hover:bg-red-200';
-            } else if (expirationDate <= thirtyDays) {
-                colorClass = 'bg-orange-100 text-orange-800 hover:bg-orange-200';
-            } else if (expirationDate <= sixtyDays) {
-                colorClass = 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
-            } else if (expirationDate > endOfYear) {
-                colorClass = 'bg-green-100 text-green-800 hover:bg-green-200';
-            }
-        }
-        row.classList.add(...colorClass.split(' '));
+        const { bg, text } = getFMStatusStyles(player);
+        row.className = `clickable-row ${bg} ${text} transition-colors`;
 
         columns.forEach(colName => {
             const td = document.createElement('td');
@@ -753,7 +799,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 cellValue = (colName === 'Numero') ? ((player.Numeros && player.Numeros[categoryContext || player.CATEGORIA]) || player.Numero || '-') : (player[colName] || '-');
             }
 
-            if ((colName === 'FM Hasta' || colName === 'FM DESDE') && cellValue === '1/1/1900') cellValue = '-';
+            if (colName === 'FM Hasta' || colName === 'FM DESDE') {
+                const isCoach = player['TIPO'] === 'ENTRENADOR/A';
+                if (!isCoach && (cellValue === '1/1/1900' || cellValue === '-' || !player[colName])) {
+                    cellValue = 'Sin Ficha';
+                }
+            }
             if (colName === 'NOMBRE' && player['ESTADO LICENCIA'] === 'Baja') {
                 td.innerHTML = `<span class="text-red-600 font-bold mr-1">X</span>${cellValue || '-'}`;
             } else {
@@ -774,7 +825,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const th = document.createElement('th');
             const isSortable = ['NOMBRE', 'Numero', 'FM Hasta'].includes(headerText);
             th.className = `px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${isSortable ? 'cursor-pointer hover:bg-gray-100 hover:text-blue-600 transition-colors' : ''}`;
-            
+
             let displayText = headerText;
             if (headerText === currentSortCol) {
                 displayText += currentSortDir === 'asc' ? ' ↑' : ' ↓';
@@ -900,7 +951,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
         } else {
-            tableContainer.appendChild(createTable(players, selectedCategory, currentColumns));
+            tableContainer.appendChild(createTable(sortPlayers(players, selectedCategory), selectedCategory, currentColumns));
         }
     }
 
@@ -965,13 +1016,21 @@ document.addEventListener('DOMContentLoaded', function () {
         // Restore selection if possible
         try {
             equipoFilter.value = currentValue;
-        } catch (e) {}
+        } catch (e) { }
     }
 
     function createDetailHtml(key, value, fmHastaFrameClass) {
         let displayValue = (value === '1/1/1900') ? '-' : (value || '-');
         if (key === 'FM Hasta' && fmHastaFrameClass) {
-            return `<div class="border-b border-gray-200 pb-2"><p class="text-xs font-medium text-gray-500 uppercase">${key}</p><div class="border-2 rounded-lg p-1 ${fmHastaFrameClass}"><p class="text-md text-gray-900 font-bold text-center">${displayValue}</p></div></div>`;
+            return `
+                <div class="border-b border-gray-200 pb-2">
+                    <p class="text-xs font-medium text-gray-500 uppercase">${key}</p>
+                    <div class="mt-1 flex justify-start">
+                        <span class="${fmHastaFrameClass} text-md inline-block text-center min-w-[120px]">
+                            ${displayValue}
+                        </span>
+                    </div>
+                </div>`;
         }
         return `<div class="border-b border-gray-200 pb-2"><p class="text-xs font-medium text-gray-500 uppercase">${key}</p><p class="text-md text-gray-900 font-bold">${displayValue}</p></div>`;
     }
@@ -993,52 +1052,16 @@ document.addEventListener('DOMContentLoaded', function () {
         playerDetailView.innerHTML = '';
 
         const photoUrl = `${IMG_BASE_URL}${encodeURIComponent(player.DNI)}.jpg`;
-        const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
-        let borderColor = 'border-gray-200', backgroundColor = 'bg-white', fmHastaFrameClass = '';
-
-        if (expirationDate) {
-            const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-            const thirtyDays = new Date(hoy); thirtyDays.setDate(hoy.getDate() + 30);
-            const sixtyDays = new Date(hoy); sixtyDays.setDate(hoy.getDate() + 60);
-            const endOfYear = new Date(hoy.getFullYear(), 11, 23);
-
-            let isGreen = false;
-
-            // New special logic for intermediate seasons
-            const season = player.TEMPORADA;
-            const category = player.CATEGORIA;
-            if (season && season.includes('-')) {
-                const years = season.split('-');
-                if (years.length === 2 && years[1].length === 4) {
-                    const endYear = parseInt(years[1], 10);
-                    let targetDate;
-                    if (category === 'Liga de Desarrollo') {
-                        targetDate = new Date(endYear, 3, 1); // April 1st
-                    } else if (category === 'Liga Uruguaya de Basquet') {
-                        targetDate = new Date(endYear, 6, 15); // July 15th
-                    }
-                    if (targetDate && expirationDate > targetDate) {
-                        isGreen = true;
-                    }
-                }
-            }
-
-            // Old "end of year" green rule for other categories
-            if (!isGreen && expirationDate > endOfYear) {
-                isGreen = true;
-            }
-
-            // --- Main Color Logic ---
-            if (isGreen) {
-                borderColor = 'border-green-500'; backgroundColor = 'bg-green-100'; fmHastaFrameClass = 'bg-green-100 border-green-500';
-            } else if (expirationDate < hoy) {
-                borderColor = 'border-red-500'; backgroundColor = 'bg-red-100'; fmHastaFrameClass = 'bg-red-100 border-red-500';
-            } else if (expirationDate <= thirtyDays) { // 30 days = orange
-                borderColor = 'border-orange-500'; backgroundColor = 'bg-orange-100'; fmHastaFrameClass = 'bg-orange-100 border-orange-500';
-            } else if (expirationDate <= sixtyDays) { // 60 days = yellow
-                borderColor = 'border-yellow-500'; backgroundColor = 'bg-yellow-100'; fmHastaFrameClass = 'bg-yellow-100 border-yellow-500';
-            }
-        }
+        const { bg, badge } = getFMStatusStyles(player);
+        
+        const backgroundColor = 'bg-white';
+        // Usamos el formato de badge solicitado en lugar de un marco grueso
+        const fmHastaFrameClass = badge;
+        // Borde de foto con el color fuerte
+        const borderColor = bg.includes('red') ? 'border-red-800' : 
+                          bg.includes('green') ? 'border-green-600' :
+                          bg.includes('orange') ? 'border-orange-500' :
+                          bg.includes('yellow') ? 'border-yellow-200' : 'border-gray-200';
 
         const primaryNumberForHeader = (player.Numeros && player.Numeros[player.CATEGORIA]) || player.Numero || 'S/N';
         const saveButtonHtml = isEditing ? `
@@ -1642,7 +1665,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const dni = originalPlayer.DNI;
-        const dbNode = originalPlayer._tipo || ((originalPlayer.TIPO || "").toUpperCase().includes("JUGADOR") ? "jugadores" : "entrenadores");
+        const rawTipo = String(originalPlayer._tipo || "").toLowerCase();
+        const rawTIPO = String(originalPlayer.TIPO || "").toLowerCase();
+        const dbNode = (rawTipo.includes("jugador") || rawTIPO.includes("jugador")) ? "jugadores" : "entrenadores";
         const pushId = database.ref().push().key;
 
         const combinedDataForIndex = {
@@ -1830,11 +1855,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     return dateA - dateB;
                 });
 
-                const tableData = sortedCategoryPlayers.map(p => [
-                    maskDNI(p.DNI),
-                    p.NOMBRE || '-',
-                    p['FM Hasta'] || 'Sin Ficha'
-                ]);
+                const tableData = sortedCategoryPlayers.map(p => {
+                    let fmHasta = p['FM Hasta'] || 'Sin Ficha';
+                    if (fmHasta === '1/1/1900') fmHasta = 'Sin Ficha';
+                    return [
+                        maskDNI(p.DNI),
+                        p.NOMBRE || '-',
+                        fmHasta
+                    ];
+                });
 
                 doc.autoTable({
                     startY: yPosition,
@@ -1850,20 +1879,36 @@ document.addEventListener('DOMContentLoaded', function () {
                     },
                     didParseCell: (data) => {
                         if (data.section === 'body') {
-                            const playerIndex = data.row.index;
-                            const player = sortedCategoryPlayers[playerIndex];
+                            const player = sortedCategoryPlayers[data.row.index];
                             const expDate = parseDateDDMMYYYY(player['FM Hasta']);
-
                             const today = new Date(); today.setHours(0, 0, 0, 0);
-                            const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-                            const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+                            const season = seasonFilter ? seasonFilter.value : player.TEMPORADA;
+                            
+                            let tournamentEndDate = null;
+                            if (season && season.includes('-')) {
+                                const years = season.split('-').map(y => y.trim());
+                                tournamentEndDate = new Date(parseInt(years[years.length - 1]), 5, 30);
+                            } else if (season) {
+                                tournamentEndDate = new Date(parseInt(season), 11, 25);
+                            }
 
                             if (!expDate || expDate < today) {
-                                data.cell.styles.fillColor = [254, 226, 226]; // Red-100
-                            } else if (expDate <= thirtyDays) {
-                                data.cell.styles.fillColor = [255, 237, 213]; // Orange-100
-                            } else if (expDate <= sixtyDays) {
-                                data.cell.styles.fillColor = [254, 249, 195]; // Yellow-100
+                                data.cell.styles.fillColor = [153, 27, 27]; // Red-800
+                                data.cell.styles.textColor = [255, 255, 255];
+                            } else if (tournamentEndDate && expDate > tournamentEndDate) {
+                                data.cell.styles.fillColor = [22, 163, 74]; // Green-600
+                                data.cell.styles.textColor = [255, 255, 255];
+                            } else {
+                                const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
+                                const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+
+                                if (expDate <= thirtyDays) {
+                                    data.cell.styles.fillColor = [249, 115, 22]; // Orange-500
+                                    data.cell.styles.textColor = [0, 0, 0];
+                                } else if (expDate <= sixtyDays) {
+                                    data.cell.styles.fillColor = [254, 240, 138]; // Yellow-200
+                                    data.cell.styles.textColor = [0, 0, 0];
+                                }
                             }
                         }
                     },
@@ -1885,7 +1930,7 @@ document.addEventListener('DOMContentLoaded', function () {
         let emailPrefix = user && user.email ? user.email.split('@')[0] : 'usuario';
         // Normalizar nombre: Capitalizar primera letra
         emailPrefix = emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
-        
+
         const now = new Date();
         const day = String(now.getDate()).padStart(2, '0');
         const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -1960,7 +2005,7 @@ document.addEventListener('DOMContentLoaded', function () {
             let y = startY;
             const rowHeight = 6, headerHeight = 7, fontSize = 8;
             const baseWidth = pageWidth - 2 * pageMargin;
-            
+
             // Ajustar anchos proporcionalmente
             const columnWidths = {};
             if (includeLicense) {
@@ -2007,24 +2052,40 @@ document.addEventListener('DOMContentLoaded', function () {
                 let textColor = [0, 0, 0];
 
                 if (isBaja) {
-                    fillColor = [220, 20, 60]; // Rojo intenso para Baja
+                    fillColor = [153, 27, 27]; // Red-800
                     textColor = [255, 255, 255];
                 } else if (player['TIPO'] === 'ENTRENADOR/A') {
-                    fillColor = [219, 234, 254]; // Azul para entrenadores
+                    fillColor = [219, 234, 254]; // Blue-100
+                    textColor = [30, 58, 138]; // Blue-900
                 } else {
                     const today = new Date(); today.setHours(0, 0, 0, 0);
-                    const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-                    const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
-                    const endOfYear = new Date(today.getFullYear(), 11, 24);
+                    const season = seasonFilter ? seasonFilter.value : player.TEMPORADA;
+                    
+                    let tournamentEndDate = null;
+                    if (season && season.includes('-')) {
+                        const years = season.split('-').map(y => y.trim());
+                        tournamentEndDate = new Date(parseInt(years[years.length - 1]), 5, 30);
+                    } else if (season) {
+                        tournamentEndDate = new Date(parseInt(season), 11, 25);
+                    }
 
                     if (!expirationDate || expirationDate < today) {
-                        fillColor = [254, 226, 226]; // Rojo (Vencida o Sin Ficha)
-                    } else if (expirationDate <= thirtyDays) {
-                        fillColor = [255, 237, 213]; // Naranja (30 días)
-                    } else if (expirationDate <= sixtyDays) {
-                        fillColor = [254, 249, 195]; // Amarillo (60 días)
-                    } else if (expirationDate > endOfYear) {
-                        fillColor = [220, 252, 231]; // Verde
+                        fillColor = [153, 27, 27]; // Red-800
+                        textColor = [255, 255, 255];
+                    } else if (tournamentEndDate && expirationDate > tournamentEndDate) {
+                        fillColor = [22, 163, 74]; // Green-600
+                        textColor = [255, 255, 255];
+                    } else {
+                        const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
+                        const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+
+                        if (expirationDate <= thirtyDays) {
+                            fillColor = [249, 115, 22]; // Orange-500
+                            textColor = [0, 0, 0];
+                        } else if (expirationDate <= sixtyDays) {
+                            fillColor = [254, 240, 138]; // Yellow-200
+                            textColor = [0, 0, 0];
+                        }
                     }
                 }
 
@@ -2081,7 +2142,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         drawPDFFooter(doc);
-        
+
         // Personalizar nombre de archivo según equipo
         let fileName = selectedCategory;
         if (selectedEquipo === 'DEFENSOR SPORTING') {
@@ -2089,7 +2150,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (selectedEquipo === 'FUSIONADO') {
             fileName += ' FUS';
         }
-        
+
         doc.save(`${fileName}.pdf`);
         showToast("PDF generado.", "success");
     }
