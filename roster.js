@@ -44,6 +44,8 @@ let rosterData = { jugadores: {} };
 let rosterRef = null;
 let currentSeasonListener = null;
 let rosterViewMode = 'all-alpha'; // 'selected-num', 'selected-alpha', 'all-alpha'
+let playerSanctions = {};
+let playedMatchesList = {}; // { mmdd: [categories] }
 
 // Inicializar fecha con hoy
 const today = new Date();
@@ -95,6 +97,28 @@ function showToast(message, type = 'info') {
 }
 
 // Autenticación
+// Cargar Sanciones
+function loadSanctions() {
+    database.ref('/sanciones').on('value', snapshot => {
+        playerSanctions = snapshot.val() || {};
+        renderPlayers();
+    });
+}
+
+// Cargar Historial de Partidos del Equipo
+function loadTeamHistory() {
+    const season = seasonSelect.value;
+    const team = teamSelect.value;
+    if (!season || !team) {
+        playedMatchesList = {};
+        return;
+    }
+    database.ref(`/rosters/${season}/${team}`).once('value').then(snapshot => {
+        playedMatchesList = snapshot.val() || {};
+        renderPlayers();
+    });
+}
+
 function signInGuest() {
     auth.signInWithEmailAndPassword(GUEST_EMAIL, GUEST_PW)
         .then((result) => {
@@ -179,19 +203,19 @@ function loadPlayers(temporada) {
             allPlayers = recordsArray.map(record => {
                 const dni = String(record._dni || record.DNI || "");
                 const personalData = datosPersonalesMap.get(dni) || {};
-                
+
                 // CAMBIO CLAVE: Prioridad a 'record' (temporada) sobre 'personalData'
                 const combined = { ...personalData, ...record };
 
                 // Fuente de la verdad MÉDICA: estrictamente de datosPersonales per Arturo
                 if (personalData['FM Hasta'] !== undefined) combined['FM Hasta'] = personalData['FM Hasta'];
                 if (personalData['FM Desde'] !== undefined) combined['FM Desde'] = personalData['FM Desde'];
-                
+
                 // Normalizaciones tecnicas (Deteccion robusta de tipo para el objeto final)
                 const rawTipo = String(record._tipo || "").toLowerCase();
                 const rawTIPO = String(record.TIPO || "").toLowerCase();
                 combined._tipo = (rawTipo.includes("jugador") || rawTIPO.includes("jugador")) ? "jugadores" : "entrenadores";
-                
+
                 combined.DNI = dni;
                 combined.NOMBRE = personalData.NOMBRE || record.NOMBRE || 'N/N';
                 combined.NUMERO_TEMPORADA = record.Numero || record.NUMERO || record['Nº'] || "";
@@ -279,6 +303,11 @@ function renderPlayers() {
         return;
     }
 
+    // Asegurarnos de tener el historial antes de renderizar si es posible
+    if (Object.keys(playedMatchesList).length === 0) {
+        loadTeamHistory();
+    }
+
     const selTeam = String(team).trim();
     const selCat = String(category).trim();
 
@@ -308,7 +337,7 @@ function renderPlayers() {
             const entryB = (rosterData.jugadores && rosterData.jugadores[b.DNI]) || { numero: "" };
             const numA = entryA.numero || a.NUMERO_TEMPORADA || "";
             const numB = entryB.numero || b.NUMERO_TEMPORADA || "";
-            
+
             if (numA !== "" && numB !== "") return parseInt(numA, 10) - parseInt(numB, 10);
             if (numA !== "") return -1;
             if (numB !== "") return 1;
@@ -326,11 +355,11 @@ function renderPlayers() {
     const authorized = filtered.filter(p => {
         const pCat = String(p.CATEGORIA || "").trim();
         const isAuth = p.esAutorizado === true || String(p.esAutorizado).toLowerCase() === 'true';
-        
+
         // El mismo chequeo que en app.js (lineas ~876-878)
         const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.some(cat => String(cat).trim() === selCat) && pCat !== selCat;
         const isCrossSeasonAuth = isAuth && pCat === selCat;
-        
+
         return isSameSeasonAuth || isCrossSeasonAuth;
     });
 
@@ -425,20 +454,50 @@ function createPlayerRow(p, duplicateNumbers = []) {
     const estadoLicencia = String(p['ESTADO LICENCIA'] || '').trim().toUpperCase();
     const isFUBBInvalid = estadoLicencia !== 'DILIGENCIADO';
 
+    // Verificación de Sanciones
+    const sanction = playerSanctions[dni];
+    let isSancionado = false;
+    let fechasRestantes = 0;
+
+    if (sanction) {
+        const totalFechas = parseInt(sanction.fechas);
+        const startDate = new Date(sanction.fechaInicio + 'T00:00:00');
+        const currentDateStr = dateSelect.value;
+        const currentDate = new Date(currentDateStr + 'T00:00:00');
+
+        let fechasCumplidas = 0;
+        const seasonVal = seasonSelect.value;
+        const selCat = String(categorySelect.value).trim();
+
+        Object.keys(playedMatchesList).forEach(mmdd => {
+            const yearStr = seasonVal.includes('-') ? seasonVal.split('-')[0] : seasonVal;
+            const matchDate = new Date(parseInt(yearStr), parseInt(mmdd.substring(0, 2)) - 1, parseInt(mmdd.substring(2, 4)));
+            if (matchDate >= startDate && matchDate < currentDate) {
+                const rostersOnDate = playedMatchesList[mmdd];
+                if (rostersOnDate && rostersOnDate[selCat]) {
+                    if (!isFUBBInvalid) fechasCumplidas++;
+                }
+            }
+        });
+
+        fechasRestantes = totalFechas - fechasCumplidas;
+        if (fechasRestantes > 0) isSancionado = true;
+    }
+
     // Lógica avanzada de colores para FM
     const season = seasonSelect.value;
     let tournamentEndDate = null;
-    if (season.includes('-')) {
+    if (season && season.includes('-')) {
         const years = season.split('-').map(y => y.trim());
         const lastYear = years[years.length - 1];
-        tournamentEndDate = new Date(parseInt(lastYear), 5, 30); // 30/06
-    } else {
+        tournamentEndDate = new Date(parseInt(lastYear), 5, 30);
+    } else if (season) {
         const year = parseInt(season);
-        tournamentEndDate = new Date(year, 11, 25); // 25/12
+        tournamentEndDate = new Date(year, 11, 25);
     }
 
     let fmColorClass = 'bg-white text-black border border-gray-200 font-bold px-2 py-1 rounded-lg shadow-sm';
-    
+
     if (isExpired) {
         fmColorClass = 'bg-red-800 text-white font-bold px-2 py-1 rounded-lg shadow-sm';
     } else if (tournamentEndDate && expDate > tournamentEndDate) {
@@ -446,7 +505,7 @@ function createPlayerRow(p, duplicateNumbers = []) {
     } else {
         const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
         const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
-        
+
         if (expDate <= thirtyDays) {
             fmColorClass = 'bg-orange-500 text-black font-bold px-2 py-1 rounded-lg shadow-sm';
         } else if (expDate <= sixtyDays) {
@@ -457,8 +516,9 @@ function createPlayerRow(p, duplicateNumbers = []) {
     const isConflict = rosterEntry.seleccionado && numeroAMostrar && duplicateNumbers.includes(String(numeroAMostrar).trim());
     const inputStyle = isConflict ? 'border-red-500 bg-red-50 focus:ring-red-500/20' : 'border-gray-200 focus:ring-blue-500/20';
 
-    const isDisabled = isExpired || isFUBBInvalid;
-    const disabledText = isExpired ? 'Inhabilitado (FM)' : 'No Habilitado en FUBB';
+    const isDisabled = isExpired || isFUBBInvalid || isSancionado;
+    let disabledText = isExpired ? 'FICHA MEDICA' : 'FUBB (No Hab.)';
+    if (isSancionado) disabledText = `Sanción (${fechasRestantes})`;
 
     const tr = document.createElement('tr');
     tr.className = `player-row border-b border-gray-50 ${rosterEntry.seleccionado ? 'selected-row' : ''}`;
@@ -540,15 +600,15 @@ window.updateNumber = function (dni, number) {
     rosterRef.child(`jugadores/${dni}`).update({ numero: normalizedNum });
 };
 
-window.cycleViewMode = function() {
+window.cycleViewMode = function () {
     if (rosterViewMode === 'all-alpha') rosterViewMode = 'selected-num';
     else if (rosterViewMode === 'selected-num') rosterViewMode = 'selected-alpha';
     else rosterViewMode = 'all-alpha';
-    
+
     renderPlayers();
-    showToast(`Vista: ${rosterViewMode === 'selected-num' ? 'Seleccionados por Número' : 
-                          rosterViewMode === 'selected-alpha' ? 'Seleccionados por Nombre' : 
-                          'Todos por Nombre'}`);
+    showToast(`Vista: ${rosterViewMode === 'selected-num' ? 'Seleccionados por Número' :
+        rosterViewMode === 'selected-alpha' ? 'Seleccionados por Nombre' :
+            'Todos por Nombre'}`);
 };
 
 seasonSelect.addEventListener('change', () => {
@@ -568,10 +628,12 @@ seasonSelect.addEventListener('change', () => {
 teamSelect.addEventListener('change', () => {
     rosterViewMode = 'all-alpha';
     populateFilters();
+    loadTeamHistory();
     setupRosterSync();
 });
 dateSelect.addEventListener('change', () => {
     rosterViewMode = 'all-alpha';
+    loadTeamHistory();
     setupRosterSync();
 });
 categorySelect.addEventListener('change', () => {
@@ -579,4 +641,13 @@ categorySelect.addEventListener('change', () => {
     setupRosterSync();
 });
 
+// Helpers
+function parseDateDDMMYYYY(dateStr) {
+    if (!dateStr || dateStr === '1/1/1900') return null;
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return null;
+    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+}
+
 signInGuest();
+loadSanctions();
