@@ -805,8 +805,25 @@ document.addEventListener('DOMContentLoaded', function () {
                     cellValue = 'Sin Ficha';
                 }
             }
-            if (colName === 'NOMBRE' && player['ESTADO LICENCIA'] === 'Baja') {
-                td.innerHTML = `<span class="text-red-600 font-bold mr-1">X</span>${cellValue || '-'}`;
+            if (colName === 'NOMBRE') {
+                const statusLicencia = String(player['ESTADO LICENCIA'] || '').toUpperCase();
+                const isBaja = statusLicencia === 'BAJA';
+                const isSinInscribir = statusLicencia === 'SIN INSCRIBIR';
+                const isDiligenciado = statusLicencia === 'DILIGENCIADO';
+                
+                let iconHtml = '';
+                if (isBaja) {
+                    iconHtml = '<span class="inline-flex items-center justify-center bg-white text-red-600 font-bold rounded-full mr-1" style="width: 1.1rem; height: 1.1rem; font-size: 0.75rem;">X</span>';
+                } else if (!isDiligenciado && player.TIPO !== 'ENTRENADOR/A') {
+                    if (isSinInscribir) {
+                        // Triángulo rojo con ! blanco usando clip-path
+                        iconHtml = '<span title="Sin Inscribir" class="inline-flex items-center justify-center bg-red-600 text-white font-black mr-1" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%); width: 1.1rem; height: 1rem; font-size: 0.65rem; padding-top: 0.3rem;">!</span>';
+                    } else {
+                        iconHtml = '<span title="Licencia no diligenciada" class="mr-1">⚠️</span>';
+                    }
+                }
+                
+                td.innerHTML = `${iconHtml}${cellValue || '-'}`;
             } else {
                 td.textContent = cellValue || '-';
             }
