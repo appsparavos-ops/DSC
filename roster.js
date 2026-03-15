@@ -425,13 +425,33 @@ function createPlayerRow(p, duplicateNumbers = []) {
     const estadoLicencia = String(p['ESTADO LICENCIA'] || '').trim().toUpperCase();
     const isFUBBInvalid = estadoLicencia !== 'DILIGENCIADO';
 
-    let fmColorClass = 'text-green-600';
-    if (isExpired) fmColorClass = 'text-red-600 font-bold';
-    else {
+    // Lógica avanzada de colores para FM
+    const season = seasonSelect.value;
+    let tournamentEndDate = null;
+    if (season.includes('-')) {
+        const years = season.split('-').map(y => y.trim());
+        const lastYear = years[years.length - 1];
+        tournamentEndDate = new Date(parseInt(lastYear), 5, 30); // 30/06
+    } else {
+        const year = parseInt(season);
+        tournamentEndDate = new Date(year, 11, 25); // 25/12
+    }
+
+    let fmColorClass = 'bg-white text-black border border-gray-200 font-bold px-2 py-1 rounded-lg shadow-sm';
+    
+    if (isExpired) {
+        fmColorClass = 'bg-red-800 text-white font-bold px-2 py-1 rounded-lg shadow-sm';
+    } else if (tournamentEndDate && expDate > tournamentEndDate) {
+        fmColorClass = 'bg-green-600 text-white font-bold px-2 py-1 rounded-lg shadow-sm';
+    } else {
         const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
         const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
-        if (expDate <= thirtyDays) fmColorClass = 'text-orange-600 font-bold';
-        else if (expDate <= sixtyDays) fmColorClass = 'text-amber-500 font-bold';
+        
+        if (expDate <= thirtyDays) {
+            fmColorClass = 'bg-orange-500 text-black font-bold px-2 py-1 rounded-lg shadow-sm';
+        } else if (expDate <= sixtyDays) {
+            fmColorClass = 'bg-yellow-200 text-black font-bold px-2 py-1 rounded-lg shadow-sm';
+        }
     }
 
     const isConflict = rosterEntry.seleccionado && numeroAMostrar && duplicateNumbers.includes(String(numeroAMostrar).trim());
@@ -459,7 +479,7 @@ function createPlayerRow(p, duplicateNumbers = []) {
             </div>
         </td>
         <td class="px-4 py-4 text-center">
-            <span class="text-sm ${fmColorClass}">${p['FM Hasta'] || 'SIN FICHA'}</span>
+            <span class="text-[11px] inline-block min-w-[80px] ${fmColorClass}">${p['FM Hasta'] || 'SIN FICHA'}</span>
         </td>
         <td class="px-4 py-4 text-center">
             <div class="relative inline-block pb-1">
