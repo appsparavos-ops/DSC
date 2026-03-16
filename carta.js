@@ -131,7 +131,8 @@ seasonSelect.addEventListener('change', () => {
                     const data = res.snap.val();
                     return {
                         nombre: data.NOMBRE,
-                        dni: res.dni
+                        dni: res.dni,
+                        telefono: data.TELEFONO || data.CELULAR || ''
                     };
                 })
                 .sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -281,8 +282,31 @@ function getDeviceId() {
 }
 
 function showSuccessModal() {
-    document.getElementById('successModal').style.display = 'flex';
+    const modal = document.getElementById('successModal');
+    const wsBtn = document.getElementById('whatsappBtn');
+    const user = auth.currentUser;
+    
+    // Show WhatsApp button only if admin and player has phone
+    if (user && user.email !== GUEST_EMAIL && selectedPlayer && selectedPlayer.telefono) {
+        wsBtn.style.display = 'flex';
+    } else {
+        wsBtn.style.display = 'none';
+    }
+    
+    modal.style.display = 'flex';
 }
+
+document.getElementById('whatsappBtn').onclick = () => {
+    if (!selectedPlayer || !selectedPlayer.telefono) return;
+    
+    let tel = selectedPlayer.telefono.replace(/\D/g, '');
+    // Ensure international format for Uruguay if it starts with 09
+    if (tel.startsWith('09')) tel = '598' + tel.substring(1);
+    else if (tel.startsWith('9')) tel = '598' + tel;
+    
+    const msg = encodeURIComponent(`Hola ${selectedPlayer.nombre}, te envío la constancia de Defensor Sporting Club.`);
+    window.open(`https://wa.me/${tel}?text=${msg}`, '_blank');
+};
 
 document.getElementById('anotherBtn').onclick = () => {
     document.getElementById('successModal').style.display = 'none';
