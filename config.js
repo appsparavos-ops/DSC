@@ -1,5 +1,5 @@
 const GITHUB_CONFIG = {
-    token: "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",
+    token: "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",
     owner: "appsparavos-ops",
     repo: "DSC",
     path: "cartas"
