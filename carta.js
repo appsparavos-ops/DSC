@@ -246,7 +246,8 @@ Por intermedio de la presente dejo constancia que <strong>${nombre}</strong> C.I
     };
 
     updateStatus("Generando PDF...", "info");
-    currentFilename = `Constancia_${nombre.replace(/\s+/g, '_')}.pdf`;
+    const timestamp = new Date().getTime();
+    currentFilename = `Constancia_${nombre.replace(/\s+/g, '_')}_${timestamp}.pdf`;
     opt.filename = currentFilename;
 
     const worker = html2pdf().set(opt).from(element);
@@ -256,6 +257,14 @@ Por intermedio de la presente dejo constancia que <strong>${nombre}</strong> C.I
         updateStatus("Descargado con éxito", "success");
         saveToHistory(nombre, dni);
         
+        // Disable sharing until upload completes
+        const wsBtn = document.getElementById('whatsappBtn');
+        if (wsBtn) {
+            wsBtn.disabled = true;
+            wsBtn.classList.add('opacity-50');
+            wsBtn.innerHTML = '<span>⏳ Cargando link...</span>';
+        }
+
         // Capture blob for sharing
         worker.output('blob').then(blob => {
             currentPdfBlob = blob;
@@ -278,7 +287,6 @@ function uploadPdfToGitHub(blob, filename) {
         const base64data = reader.result.split(',')[1];
         const apiUri = `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}/${filename}`;
         
-        // Check if file exists to avoid conflict (or just overwrite)
         fetch(apiUri, {
             method: 'PUT',
             headers: {
@@ -292,12 +300,32 @@ function uploadPdfToGitHub(blob, filename) {
         })
         .then(response => response.json())
         .then(data => {
+            const wsBtn = document.getElementById('whatsappBtn');
             if (data.content && data.content.download_url) {
                 currentPdfUrl = data.content.download_url;
                 console.log("PDF Uploaded to GitHub:", currentPdfUrl);
+                
+                // Re-enable button
+                if (wsBtn) {
+                    wsBtn.disabled = false;
+                    wsBtn.classList.remove('opacity-50');
+                    wsBtn.innerHTML = `
+                        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.246 2.248 3.484 5.232 3.484 8.412-.003 6.557-5.338 11.892-11.893 11.892-1.997-.001-3.951-.5-5.688-1.448l-6.309 1.656zm6.29-4.132l.353.21c1.459.869 3.044 1.328 4.678 1.329 5.235 0 9.493-4.258 9.495-9.493.002-2.537-.987-4.922-2.787-6.722-1.8-1.8-4.184-2.79-6.721-2.79-5.234 0-9.492 4.259-9.494 9.493-.002 1.83.52 3.613 1.503 5.168l.23.361-1.001 3.655 3.744-.982zm11.332-5.477c-.12-.201-.442-.321-.925-.562-.483-.241-2.857-1.41-3.299-1.57-.442-.16-.764-.241-1.086.241-.321.482-1.247 1.57-1.528 1.891-.282.321-.563.361-1.046.12-.483-.241-2.039-.751-3.882-2.396-1.435-1.28-2.404-2.86-2.686-3.342-.282-.482-.03-.742.211-.981.218-.215.483-.562.725-.843.242-.281.322-.482.483-.803.161-.321.081-.602-.04-.843-.12-.241-1.086-2.614-1.488-3.578-.392-.942-.78-1.042-1.086-1.057-.282-.014-.603-.016-.925-.016-.322 0-.845.12-1.288.602-.442.482-1.69 1.646-1.69 4.015 0 2.37 1.729 4.657 1.97 4.978.242.321 3.402 5.195 8.242 7.284 1.152.497 2.051.794 2.752 1.017 1.157.368 2.21.316 3.042.192.927-.139 2.857-1.166 3.259-2.29.402-1.124.402-2.088.282-2.289z"/></svg>
+                        Enviar por WhatsApp
+                    `;
+                }
             }
         })
-        .catch(err => console.error("GitHub Upload Error:", err));
+        .catch(err => {
+            console.error("GitHub Upload Error:", err);
+            const wsBtn = document.getElementById('whatsappBtn');
+            if (wsBtn) {
+                wsBtn.disabled = false;
+                wsBtn.classList.remove('opacity-50');
+                wsBtn.innerHTML = '<span>❌ Error. Reintentar</span>';
+            }
+        });
     };
 }
 
