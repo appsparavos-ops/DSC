@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Constancias - Defensor Sporting Club</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <!-- html2pdf -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Styles -->
+    <link rel="stylesheet" href="carta.css">
+    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/roster.png" type="image/png">
+</head>
+<body>
+
+    <!-- Segundo Login Modal -->
+    <div id="loginModal">
+        <div class="modal-content glass-card p-8">
+            <div class="text-center mb-8">
+                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="Logo DSC" class="h-20 mx-auto mb-4 drop-shadow-lg">
+                <h1 class="text-2xl font-outfit font-extrabold text-[#1e3a8a]">Generador de Constancias</h1>
+                <p class="text-gray-500 text-sm mt-1">Completa los datos para generar el PDF</p>
+            </div>
+
+            <div class="space-y-6">
+                <!-- Temporada -->
+                <div>
+                    <label for="seasonSelect">Temporada</label>
+                    <select id="seasonSelect">
+                        <option value="">Cargando temporadas...</option>
+                    </select>
+                </div>
+
+                <!-- Búsqueda por Nombre -->
+                <div class="search-container">
+                    <label for="nameSearch">Nombre del Jugador</label>
+                    <input type="text" id="nameSearch" placeholder="Escribe para buscar..." autocomplete="off" disabled>
+                    <div id="searchResults" class="search-results"></div>
+                </div>
+
+                <!-- DNI -->
+                <div>
+                    <label for="dniInput">Cédula de Identidad (DNI)</label>
+                    <input type="text" id="dniInput" placeholder="Sin puntos ni guiones" disabled>
+                </div>
+
+                <!-- Botón Generar -->
+                <button id="generateBtn" class="btn-primary" disabled>
+                    Generar y Descargar PDF
+                </button>
+
+                <div id="statusMessage" class="text-center text-xs font-semibold py-2"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Success Modal -->
+    <div id="successModal" style="display: none;">
+        <div class="modal-content glass-card p-10 text-center max-w-md mx-auto">
+            <div class="mb-8">
+                <div class="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-green-100 text-green-600 mb-6">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                </div>
+                <h2 class="text-3xl font-outfit font-extrabold text-[#115e59]">¡Constancia Lista!</h2>
+                <p class="text-gray-500 mt-3 text-lg">El PDF se ha descargado correctamente.</p>
+            </div>
+            
+            <div class="space-y-4">
+                <button id="anotherBtn" class="btn-primary" style="height: 70px; font-size: 1.2rem;">Generar otra carta</button>
+                <button id="exitBtn" class="bg-gray-100 text-gray-700 font-bold h-[70px] px-6 rounded-2xl w-full hover:bg-gray-200 transition-all uppercase text-lg">Salir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Letter Structure (Hidden until needed) -->
+    <div id="letterPreview">
+        <img src="membrete.jpg" alt="Membrete" class="letterhead" onerror="this.style.display='none'">
+        <div class="letter-content">
+            <div class="letter-date" id="docDate"></div>
+            
+            <div class="letter-header">
+                <strong>Secretaría Nacional de Deporte</strong><br>
+                <strong>A quien corresponda:</strong>
+            </div>
+
+            <div class="letter-body" id="docBody">
+                <!-- Dynamic content will be inserted here -->
+            </div>
+
+            <div class="letter-footer">
+                Sin otro particular y agradeciendo la consideración al respecto, saluda atentamente
+                
+                <div class="signature-block">
+                    <img src="firma.jpg" alt="Firma" class="signature" onerror="this.style.display='none'"><br>
+                    <strong>Patricia de los Santos</strong><br>
+                    Delegada Formativas de Básquetbol<br>
+                    Defensor Sporting Club
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="carta.js"></script>
+</body>
+</html>
