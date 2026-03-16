@@ -29,6 +29,7 @@ const statusMessage = document.getElementById('statusMessage');
 // State
 let playersList = [];
 let selectedPlayer = null;
+let isGuest = false;
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -42,7 +43,7 @@ function autoLogin() {
     // Check if there's already a user (no automatic login if so)
     auth.onAuthStateChanged((user) => {
         if (user) {
-            const isGuest = user.email === GUEST_EMAIL;
+            isGuest = user.email === GUEST_EMAIL;
             updateStatus(`Sesión: ${user.email}`, "success");
             
             // Mostrar botón de regreso si no es invitado
@@ -56,6 +57,7 @@ function autoLogin() {
             updateStatus("Iniciando sesión como invitado...", "info");
             auth.signInWithEmailAndPassword(GUEST_EMAIL, GUEST_PW)
                 .then((result) => {
+                    isGuest = true;
                     updateStatus("Conectado como invitado", "success");
                     fetchPreferencesAndLoad(result.user.uid);
                 })
@@ -299,8 +301,7 @@ document.getElementById('anotherBtn').onclick = () => {
 };
 
 function exitApp() {
-    const user = auth.currentUser;
-    if (user && user.email === GUEST_EMAIL) {
+    if (isGuest) {
         auth.signOut().then(() => {
             window.close();
             // Fallback for browsers that block window.close
