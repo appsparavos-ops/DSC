@@ -18,7 +18,7 @@ if (!firebase.apps.length) {
 const database = firebase.database();
 const auth = firebase.auth();
 
-// DOM Elements
+// Storage logic replaced by GitHub API (using config.js)
 const seasonSelect = document.getElementById('seasonSelect');
 const nameSearch = document.getElementById('nameSearch');
 const searchResults = document.getElementById('searchResults');
@@ -29,6 +29,9 @@ const statusMessage = document.getElementById('statusMessage');
 // State
 let playersList = [];
 let selectedPlayer = null;
+let currentPdfBlob = null;
+let currentPdfUrl = null;
+let currentFilename = "";
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -243,19 +246,59 @@ Por intermedio de la presente dejo constancia que <strong>${nombre}</strong> C.I
     };
 
     updateStatus("Generando PDF...", "info");
+    currentFilename = `Constancia_${nombre.replace(/\s+/g, '_')}.pdf`;
+    opt.filename = currentFilename;
 
-    html2pdf().set(opt).from(element).save().then(() => {
-        element.style.display = 'none'; // Hide again
+    const worker = html2pdf().set(opt).from(element);
+    
+    worker.save().then(() => {
+        element.style.display = 'none'; 
         updateStatus("Descargado con éxito", "success");
-        
-        // Log to history
         saveToHistory(nombre, dni);
         
+        // Capture blob for sharing
+        worker.output('blob').then(blob => {
+            currentPdfBlob = blob;
+            uploadPdfToGitHub(blob, currentFilename);
+        });
+
         showSuccessModal();
     }).catch(err => {
         console.error("PDF Error:", err);
         updateStatus("Error al generar PDF", "error");
     });
+}
+
+function uploadPdfToGitHub(blob, filename) {
+    if (typeof GITHUB_CONFIG === 'undefined') return;
+
+    const reader = new FileReader();
+    reader.readAsDataURL(blob);
+    reader.onloadend = () => {
+        const base64data = reader.result.split(',')[1];
+        const apiUri = `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}/${filename}`;
+        
+        // Check if file exists to avoid conflict (or just overwrite)
+        fetch(apiUri, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `token ${GITHUB_CONFIG.token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: `Upload letter: ${filename}`,
+                content: base64data
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.content && data.content.download_url) {
+                currentPdfUrl = data.content.download_url;
+                console.log("PDF Uploaded to GitHub:", currentPdfUrl);
+            }
+        })
+        .catch(err => console.error("GitHub Upload Error:", err));
+    };
 }
 
 function saveToHistory(nombre, dni) {
@@ -296,15 +339,34 @@ function showSuccessModal() {
     modal.style.display = 'flex';
 }
 
-document.getElementById('whatsappBtn').onclick = () => {
-    if (!selectedPlayer || !selectedPlayer.telefono) return;
+document.getElementById('whatsappBtn').onclick = async () => {
+    if (!selectedPlayer || !selectedPlayer.telefono || !currentPdfBlob) return;
     
     let tel = selectedPlayer.telefono.replace(/\D/g, '');
-    // Ensure international format for Uruguay if it starts with 09
     if (tel.startsWith('09')) tel = '598' + tel.substring(1);
     else if (tel.startsWith('9')) tel = '598' + tel;
     
-    const msg = encodeURIComponent(`Hola ${selectedPlayer.nombre}, te envío la constancia de Defensor Sporting Club.`);
+    const text = `Hola ${selectedPlayer.nombre}, te envío la constancia de Defensor Sporting Club.`;
+    
+    // Try native sharing (best for mobile, sends actual file)
+    if (navigator.canShare && navigator.share) {
+        try {
+            const file = new File([currentPdfBlob], currentFilename, { type: 'application/pdf' });
+            if (navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: 'Constancia DSC',
+                    text: text
+                });
+                return;
+            }
+        } catch (err) {
+            console.log("Share skipped or failed:", err);
+        }
+    }
+
+    // Fallback: WhatsApp Link with Storage URL
+    const msg = encodeURIComponent(`${text} \n\nDescargar aquí: ${currentPdfUrl || '(vuelve a intentar en unos segundos si el link no aparece)'}`);
     window.open(`https://wa.me/${tel}?text=${msg}`, '_blank');
 };
 
