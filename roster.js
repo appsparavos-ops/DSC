@@ -127,20 +127,43 @@ function loadTeamHistory() {
 
 function signInGuest() {
     auth.signInWithEmailAndPassword(GUEST_EMAIL, GUEST_PW)
-        .then((result) => {
-            const uid = result.user.uid;
-            // Buscar última temporada seleccionada
-            database.ref(`preferenciasUsuarios/${uid}/ultimaTemporadaSeleccionada`).once('value')
-                .then(snapshot => {
-                    const lastSeason = snapshot.val();
-                    loadSeasons(lastSeason);
-                });
-        })
         .catch(err => {
             console.error("Error Auth:", err);
             showToast("Error de conexión con el servidor", "error");
         });
 }
+
+function handlePostLogin(user) {
+    if (!user) return;
+    
+    const uid = user.uid;
+    const isGuest = user.email === GUEST_EMAIL;
+
+    // Mostrar botón de regreso si no es invitado
+    const backBtn = document.getElementById('backToMaintenance');
+    if (backBtn && !isGuest) {
+        backBtn.classList.remove('hidden');
+    }
+
+    // Buscar última temporada seleccionada
+    database.ref(`preferenciasUsuarios/${uid}/ultimaTemporadaSeleccionada`).once('value')
+        .then(snapshot => {
+            const lastSeason = snapshot.val();
+            loadSeasons(lastSeason);
+        })
+        .catch(() => loadSeasons());
+}
+
+// Inicialización de sesión
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        // Si ya hay usuario, verificamos si es el invitado o uno real
+        handlePostLogin(user);
+    } else {
+        // Si no hay nada, logueamos como invitado por defecto
+        signInGuest();
+    }
+});
 
 // Cargar Temporadas
 function loadSeasons(lastSeason = null) {
@@ -748,5 +771,5 @@ function parseDateDDMMYYYY(dateStr) {
     return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
 }
 
-signInGuest();
+// Eliminamos la llamada directa a signInGuest() al final porque ahora usamos onAuthStateChanged
 loadSanctions();

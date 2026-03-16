@@ -42,7 +42,15 @@ function autoLogin() {
     // Check if there's already a user (no automatic login if so)
     auth.onAuthStateChanged((user) => {
         if (user) {
+            const isGuest = user.email === GUEST_EMAIL;
             updateStatus(`Sesión: ${user.email}`, "success");
+            
+            // Mostrar botón de regreso si no es invitado
+            const backBtn = document.getElementById('backToMaintenance');
+            if (backBtn && !isGuest) {
+                backBtn.classList.remove('hidden');
+            }
+
             fetchPreferencesAndLoad(user.uid);
         } else {
             updateStatus("Iniciando sesión como invitado...", "info");
