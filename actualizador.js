@@ -18,6 +18,11 @@ const statsContainer = document.getElementById('stats-container');
 const loadingSpinner = document.getElementById('loading-spinner');
 const cancelBtn = document.getElementById('cancel-btn');
 const seasonFilter = document.getElementById('season-filter');
+const reportModal = document.getElementById('report-modal');
+const downloadReportBtn = document.getElementById('download-report-btn');
+const closeModalBtn = document.getElementById('close-modal-btn');
+const mainDashboard = document.getElementById('main-dashboard');
+const playerTableContainer = document.getElementById('player-table-container');
 
 // Estadísticas
 const statTotal = document.getElementById('stat-total');
@@ -58,6 +63,8 @@ function formatDate(date) {
 async function scanPlayers() {
     const selectedSeason = seasonFilter.value;
     const url = selectedSeason === 'todas' ? PLAYERS_URL : `${PLAYERS_URL}?season=${selectedSeason}`;
+    
+    log(`Conectando con Backend en: ${API_BASE_URL}...`, 'info');
 
     log(`Conectando con Backend en: ${API_BASE_URL}...`, 'info');
     scanBtn.disabled = true;
@@ -93,7 +100,7 @@ async function scanPlayers() {
                     players.push({
                         dni: player.datosPersonales['DNI'] || dni,
                         nombre: nombre,
-                        vencimiento: fmHastaStr || 'N/A',
+                        vencimiento: fmHastaStr || 'Sin ficha',
                         status: 'pending'
                     });
                 }
@@ -118,7 +125,7 @@ async function scanPlayers() {
     }
 }
 
-function renderPlayers() {
+function renderPlayers(activeIndex = -1) {
     initialMessage.classList.add('hidden');
     playerTable.classList.remove('hidden');
     statsContainer.classList.remove('hidden');
@@ -166,8 +173,39 @@ function renderPlayers() {
                 </button>
             </td>
         `;
+        
+        if (index === activeIndex) {
+            row.id = `player-row-${index}`;
+            row.classList.add('bg-indigo-50/50');
+        }
+
         playerListBody.appendChild(row);
     });
+    
+    // Auto-scroll al jugador activo para seguir el progreso paso a paso
+    if (activeIndex !== -1) {
+        const activeRow = document.getElementById(`player-row-${activeIndex}`);
+        if (activeRow && playerTableContainer) {
+            // Cálculo manual de desplazamiento interno para NO desplazar la página entera
+            const rowTop = activeRow.offsetTop;
+            const containerHeight = playerTableContainer.clientHeight;
+            const rowHeight = activeRow.clientHeight;
+            
+            // Centrar la fila dentro del contenedor
+            playerTableContainer.scrollTo({
+                top: rowTop - (containerHeight / 2) + (rowHeight / 2),
+                behavior: 'smooth'
+            });
+        }
+    } else if (playersToUpdate.length > 0 && initialMessage.classList.contains('hidden')) {
+        // Si no hay uno activo pero acabamos de cargar la lista, volver al inicio
+        const container = document.getElementById('player-table-container');
+        if (container && container.scrollTop > 100) {
+            // Solo si el usuario no ha scrolleado manualmente mucho
+            // o si queremos forzar el inicio al cargar
+            // container.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
 }
 
 function updateStats(total, pending) {
@@ -181,7 +219,7 @@ async function updateSinglePlayer(index) {
     if (player.status === 'success' || player.status === 'no_change' || player.status === 'updating' || isCancelled) return;
 
     player.status = 'updating';
-    renderPlayers();
+    renderPlayers(index);
     loadingSpinner.classList.remove('hidden');
     log(`Buscando datos en SND para: ${player.nombre}...`, 'info');
 
@@ -241,7 +279,7 @@ async function updateSinglePlayer(index) {
             log(`Error con ${player.nombre}: ${error.message}`, 'error');
         }
     } finally {
-        renderPlayers();
+        renderPlayers(index);
         loadingSpinner.classList.add('hidden');
         abortController = null;
     }
@@ -249,6 +287,10 @@ async function updateSinglePlayer(index) {
 
 async function updateAll() {
     log('Iniciando actualización masiva...', 'warn');
+    
+    // Enfocar el panel al iniciar actualización masiva
+    mainDashboard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
     isCancelled = false;
     updateAllBtn.disabled = true;
     updateAllBtn.classList.add('opacity-50');
@@ -271,8 +313,19 @@ async function updateAll() {
     updateAllBtn.classList.remove('opacity-50');
     cancelBtn.classList.add('hidden');
 
-    // Generar PDF con los resultados de la actualización masiva
-    generatePDFReport();
+    // Abrir modal de confirmación en lugar de descargar directamente
+    showReportModal();
+}
+
+function showReportModal() {
+    reportModal.classList.remove('hidden');
+    // Forzar reflow para animación si fuera necesario
+}
+
+function hideReportModal() {
+    reportModal.classList.add('hidden');
+    // Volver al principio de la página al finalizar
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function cancelUpdate() {
@@ -318,6 +371,11 @@ scanBtn.addEventListener('click', scanPlayers);
 updateAllBtn.addEventListener('click', updateAll);
 cancelBtn.addEventListener('click', cancelUpdate);
 clearLogsBtn.addEventListener('click', () => { logDisplay.innerHTML = '> Consola reseteada...'; });
+downloadReportBtn.addEventListener('click', () => {
+    generatePDFReport();
+    hideReportModal();
+});
+closeModalBtn.addEventListener('click', hideReportModal);
 
 // Inicialización
 loadSeasons();
