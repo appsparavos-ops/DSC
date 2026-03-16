@@ -339,34 +339,17 @@ function showSuccessModal() {
     modal.style.display = 'flex';
 }
 
-document.getElementById('whatsappBtn').onclick = async () => {
-    if (!selectedPlayer || !selectedPlayer.telefono || !currentPdfBlob) return;
+document.getElementById('whatsappBtn').onclick = () => {
+    if (!selectedPlayer || !selectedPlayer.telefono) return;
     
     let tel = selectedPlayer.telefono.replace(/\D/g, '');
     if (tel.startsWith('09')) tel = '598' + tel.substring(1);
     else if (tel.startsWith('9')) tel = '598' + tel;
     
     const text = `Hola ${selectedPlayer.nombre}, te envío la constancia de Defensor Sporting Club.`;
-    
-    // Try native sharing (best for mobile, sends actual file)
-    if (navigator.canShare && navigator.share) {
-        try {
-            const file = new File([currentPdfBlob], currentFilename, { type: 'application/pdf' });
-            if (navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    files: [file],
-                    title: 'Constancia DSC',
-                    text: text
-                });
-                return;
-            }
-        } catch (err) {
-            console.log("Share skipped or failed:", err);
-        }
-    }
-
-    // Fallback: WhatsApp Link with Storage URL
     const msg = encodeURIComponent(`${text} \n\nDescargar aquí: ${currentPdfUrl || '(vuelve a intentar en unos segundos si el link no aparece)'}`);
+    
+    // Abrir directamente WhatsApp al numero específico
     window.open(`https://wa.me/${tel}?text=${msg}`, '_blank');
 };
 
