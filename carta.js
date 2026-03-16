@@ -128,6 +128,7 @@ seasonSelect.addEventListener('change', () => {
             playersList = results
                 .filter(res => res.snap.exists())
                 .map(res => {
+                    const data = res.snap.val();
                     return {
                         nombre: data.NOMBRE,
                         dni: res.dni
