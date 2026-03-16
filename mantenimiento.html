@@ -14,6 +14,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="firebase-config.js"></script>
 
     <style>
@@ -40,6 +41,11 @@
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
+            cursor: grab;
+        }
+
+        .nav-button:active {
+            cursor: grabbing;
         }
 
         .nav-button:hover {
@@ -64,6 +70,11 @@
             left: 100%;
         }
 
+        .sortable-ghost {
+            opacity: 0.4;
+            border: 2px dashed #7c3aed;
+        }
+
         .icon-box {
             background: linear-gradient(135deg, #7c3aed, #4f46e5);
             width: 48px;
@@ -73,6 +84,7 @@
             align-items: center;
             justify-content: center;
             margin-right: 16px;
+            pointer-events: none;
         }
 
         .uninitialized {
@@ -98,9 +110,9 @@
                 <p class="text-gray-400 text-lg">Panel de administración del ecosistema DSC</p>
             </header>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div id="buttons-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- Fichas Medicas -->
-                <a href="actualizador.html"
+                <a href="actualizador.html" data-id="fichas"
                     class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5">
                     <div class="icon-box">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,7 +128,7 @@
                 </a>
 
                 <!-- Actualizar Datos -->
-                <a href="actualizar.html"
+                <a href="actualizar.html" data-id="actualizar"
                     class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5">
                     <div class="icon-box">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,7 +144,7 @@
                 </a>
 
                 <!-- Bitacora -->
-                <a href="bitacora.html"
+                <a href="bitacora.html" data-id="bitacora"
                     class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5">
                     <div class="icon-box">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,7 +159,7 @@
                 </a>
 
                 <!-- Gestion de Estadisticas -->
-                <a href="uploader.html"
+                <a href="uploader.html" data-id="estadisticas"
                     class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5">
                     <div class="icon-box">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -163,7 +175,7 @@
                 </a>
 
                 <!-- Gestion de Sanciones -->
-                <a href="sanciones.html"
+                <a href="sanciones.html" data-id="sanciones"
                     class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5 hover:!bg-red-900/20 hover:!border-red-500/50">
                     <div class="icon-box !bg-gradient-to-br !from-red-600 !to-red-800">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,7 +190,7 @@
                 </a>
 
                 <!-- Roster de Partido -->
-                <a href="roster.html"
+                <a href="roster.html" data-id="roster"
                     class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5 hover:!bg-teal-900/20 hover:!border-teal-500/50">
                     <div class="icon-box !bg-gradient-to-br !from-teal-600 !to-teal-800">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -194,7 +206,7 @@
                 </a>
 
                 <!-- Generador de Constancias -->
-                <a href="carta.html"
+                <a href="carta.html" data-id="cartas"
                     class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5 hover:!bg-blue-900/20 hover:!border-blue-500/50">
                     <div class="icon-box !bg-gradient-to-br !from-blue-600 !to-blue-800">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,7 +222,7 @@
                 </a>
 
                 <!-- Historial de Cartas -->
-                <a href="cartasgeneradas.html"
+                <a href="cartasgeneradas.html" data-id="historial"
                     class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5 hover:!bg-indigo-900/20 hover:!border-indigo-500/50">
                     <div class="icon-box !bg-gradient-to-br !from-indigo-600 !to-indigo-800">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -225,7 +237,7 @@
                 </a>
 
                 <!-- Gestion de Numeros -->
-                <a href="numeros.html"
+                <a href="numeros.html" data-id="numeros"
                     class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5">
                     <div class="icon-box">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -240,7 +252,7 @@
                 </a>
 
                 <!-- Gestion de Usuarios -->
-                <a href="registro.html"
+                <a href="registro.html" data-id="usuarios"
                     class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5">
                     <div class="icon-box">
                         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -274,11 +286,22 @@
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.database();
+        const grid = document.getElementById('buttons-grid');
 
         auth.onAuthStateChanged(user => {
             if (user) {
+                // Verificar si es admin y cargar preferencias
                 db.ref('admins/' + user.uid).once('value').then(snapshot => {
                     if (snapshot.exists()) {
+                        // Cargar orden personalizado si existe
+                        const layout = snapshot.val().layout;
+                        if (layout && layout.orden_botones) {
+                            reorganizeButtons(layout.orden_botones);
+                        }
+                        
+                        // Inicializar Sortable
+                        initSortable(user.uid);
+                        
                         document.body.classList.remove('uninitialized');
                     } else {
                         window.location.href = 'index.html';
@@ -288,6 +311,37 @@
                 window.location.href = 'index.html';
             }
         });
+
+        function initSortable(uid) {
+            new Sortable(grid, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: function () {
+                    const order = Array.from(grid.querySelectorAll('.nav-button'))
+                        .map(btn => btn.getAttribute('data-id'));
+                    
+                    // Guardar nuevo orden en Firebase
+                    db.ref(`admins/${uid}/layout`).update({
+                        orden_botones: order
+                    });
+                }
+            });
+        }
+
+        function reorganizeButtons(order) {
+            const buttons = Array.from(grid.querySelectorAll('.nav-button'));
+            const buttonMap = {};
+            buttons.forEach(btn => {
+                buttonMap[btn.getAttribute('data-id')] = btn;
+            });
+
+            // Re-inyectar en el nuevo orden
+            order.forEach(id => {
+                if (buttonMap[id]) {
+                    grid.appendChild(buttonMap[id]);
+                }
+            });
+        }
     </script>
 </body>
 
