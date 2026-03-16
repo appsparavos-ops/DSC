@@ -298,18 +298,23 @@ document.getElementById('anotherBtn').onclick = () => {
     updateStatus("Selecciona un nuevo jugador", "info");
 };
 
-document.getElementById('exitBtn').onclick = () => {
+function exitApp() {
     const user = auth.currentUser;
     if (user && user.email === GUEST_EMAIL) {
-        window.close();
-        // Fallback for browsers that block window.close
-        setTimeout(() => {
-            window.location.href = 'about:blank';
-        }, 500);
+        auth.signOut().then(() => {
+            window.close();
+            // Fallback for browsers that block window.close
+            setTimeout(() => {
+                window.location.href = 'about:blank';
+            }, 500);
+        });
     } else {
         window.location.href = 'mantenimiento.html';
     }
-};
+}
+
+document.getElementById('exitBtn').onclick = exitApp;
+document.getElementById('globalExitBtn').onclick = exitApp;
 
 // Helpers
 function getLongDate() {

@@ -141,8 +141,22 @@ function handlePostLogin(user) {
 
     // Mostrar botón de regreso si no es invitado
     const backBtn = document.getElementById('backToMaintenance');
+    const guestExitBtn = document.getElementById('guestExitBtn');
+
     if (backBtn && !isGuest) {
         backBtn.classList.remove('hidden');
+    }
+
+    if (guestExitBtn && isGuest) {
+        guestExitBtn.classList.remove('hidden');
+        guestExitBtn.onclick = () => {
+            auth.signOut().then(() => {
+                window.close();
+                setTimeout(() => {
+                    window.location.href = 'about:blank';
+                }, 500);
+            });
+        };
     }
 
     // Buscar última temporada seleccionada
