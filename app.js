@@ -21,7 +21,21 @@ document.addEventListener('DOMContentLoaded', function () {
     const IMG_BASE_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/';
     const LOGO_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png';
     const PLACEHOLDER_SVG_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2EwYTBhMCI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OS00IDQgNHptMCAyYy0yLjY3IDAtOCA0IDQgNHYyYzAgMS4xLjkgMiAyIDJoMTRjMS4xIDAgMi0uOSAyLTJ2LTJjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PC9zdmc+';
-    const COLUMN_ORDER = ['DNI', 'NOMBRE', 'FM Hasta', 'Numero', 'CATEGORIA', 'COMPETICION', 'EQUIPO',];
+    const COLUMN_ORDER = ['DNI', 'NOMBRE', 'FM Hasta', 'Numero', 'CATEGORIA', 'EQUIPO',];
+    const PROGRESSION_RULES = {
+        'U11 Femenino': ['U12 Femenino', 'U11 Mixta', 'U12 Mixta'],
+        'U11 Mixta': ['U12 Mixta'],
+        'U12 Femenino': ['U12 Mixta', 'U14 Femenino'],
+        'U12 Mixta': ['U14 Masculino'],
+        'U14 Femenino': ['U14 Mixta', 'U16 Femenino'],
+        'U14 Masculino': ['U16 Masculino'],
+        'U16 Femenino': ['U19 Femenina', 'Liga Femenina de Basquet'],
+        'U16 Masculino': ['U18 Masculino'],
+        'U18 Masculino': ['U20 Masculino', 'Liga de Desarrollo', 'Liga Uruguaya de Basquet'],
+        'U20 Masculino': ['Liga de Desarrollo', 'Liga Uruguaya de Basquet'],
+        'Liga de Desarrollo': ['Liga Uruguaya de Basquet'],
+        'U19 Femenina': ['Liga Femenina de Basquet'],
+    };
 
     // --- ELEMENTOS DEL DOM ---
     const loginContainer = document.getElementById('login-container');
@@ -591,7 +605,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const expDate = parseDateDDMMYYYY(player['FM Hasta']);
         const isExpired = !expDate || expDate < today;
         const season = seasonFilter ? seasonFilter.value : player.TEMPORADA;
-        
+
         // Determinar fin del torneo según tipo de temporada
         let tournamentEndDate = null;
         if (season && season.includes('-')) {
@@ -788,7 +802,7 @@ document.addEventListener('DOMContentLoaded', function () {
         columns.forEach(colName => {
             const td = document.createElement('td');
             td.className = `px-2 py-2 text-sm ${colName === 'NOMBRE' ? 'truncate max-w-48' : 'whitespace-nowrap'}`;
-            if (colName === 'DNI' || colName === 'FM Hasta' || colName === 'Numero' || colName === 'EQUIPO' || colName === 'CATEGORIA' || colName === 'COMPETICION') {
+            if (colName === 'DNI' || colName === 'FM Hasta' || colName === 'Numero' || colName === 'EQUIPO' || colName === 'CATEGORIA' || colName === 'ESTADO LICENCIA') {
                 td.classList.add('text-center');
             }
 
@@ -810,7 +824,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const isBaja = statusLicencia === 'BAJA';
                 const isSinInscribir = statusLicencia === 'SIN INSCRIBIR';
                 const isDiligenciado = statusLicencia === 'DILIGENCIADO';
-                
+
                 let iconHtml = '';
                 if (isBaja) {
                     iconHtml = '<span class="inline-flex items-center justify-center bg-white text-red-600 font-bold rounded-full mr-1" style="width: 1.1rem; height: 1.1rem; font-size: 0.75rem;">X</span>';
@@ -822,7 +836,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         iconHtml = '<span title="Licencia no diligenciada" class="mr-1">⚠️</span>';
                     }
                 }
-                
+
                 td.innerHTML = `${iconHtml}${cellValue || '-'}`;
             } else {
                 td.textContent = cellValue || '-';
@@ -840,7 +854,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const headerRow = thead.insertRow();
         columns.forEach(headerText => {
             const th = document.createElement('th');
-            const isSortable = ['NOMBRE', 'Numero', 'FM Hasta'].includes(headerText);
+            const isSortable = ['NOMBRE', 'Numero', 'FM Hasta', 'ESTADO LICENCIA'].includes(headerText);
             th.className = `px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${isSortable ? 'cursor-pointer hover:bg-gray-100 hover:text-blue-600 transition-colors' : ''}`;
 
             let displayText = headerText;
@@ -880,7 +894,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const selectedCategory = categoryFilter ? categoryFilter.value : '';
-        const currentColumns = columns || COLUMN_ORDER;
+        const selectedEquipo = equipoFilter ? equipoFilter.value : '';
+
+        let currentColumns = columns || COLUMN_ORDER;
+
+        // Si se filtra por Equipo Y Categoría, cambiar CATEGORIA por ESTADO LICENCIA
+        if (selectedCategory && selectedEquipo && !columns) {
+            currentColumns = currentColumns.map(col => col === 'CATEGORIA' ? 'ESTADO LICENCIA' : col);
+        }
+
         currentlyDisplayedPlayers = players;
 
         tableContainer.innerHTML = '';
@@ -922,6 +944,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         return new Date(parts[2], parts[1] - 1, parts[0]);
                     };
                     comparison = getDateVal(a) - getDateVal(b);
+                } else if (currentSortCol === 'ESTADO LICENCIA') {
+                    comparison = (a['ESTADO LICENCIA'] || '').localeCompare(b['ESTADO LICENCIA'] || '');
                 }
 
                 return currentSortDir === 'asc' ? comparison : -comparison;
@@ -965,6 +989,45 @@ document.addEventListener('DOMContentLoaded', function () {
                 authorizedContainer.appendChild(createTable(authorizedPlayers, selectedCategory, currentColumns));
                 details.appendChild(authorizedContainer);
                 tableContainer.appendChild(details);
+            }
+
+            // --- JUGADORES POTENCIALES PARA AUTORIZAR (Mismo equipo) ---
+            if (selectedCategory && selectedEquipo) {
+                const potentialPlayers = sortPlayers(allPlayers.filter(p => {
+                    if (p.TIPO === 'ENTRENADOR/A') return false;
+
+                    // Ya está en esta categoría
+                    if (p.CATEGORIA === selectedCategory) return false;
+
+                    // Ya está autorizado en esta categoría
+                    if (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) return false;
+                    if (p.esAutorizado && p.CATEGORIA === selectedCategory) return false;
+
+                    // Debe ser del mismo equipo
+                    if (p.EQUIPO !== selectedEquipo) return false;
+
+                    // Debe cumplir la regla de progresión
+                    const possibleDestinations = PROGRESSION_RULES[p.CATEGORIA] || [];
+                    return possibleDestinations.includes(selectedCategory);
+                }), selectedCategory);
+
+                if (potentialPlayers.length > 0) {
+                    const potentialDetails = document.createElement('details');
+                    potentialDetails.className = 'mt-4 bg-amber-50 rounded-lg shadow border border-amber-100';
+                    const potentialSummary = document.createElement('summary');
+                    potentialSummary.className = 'px-6 py-3 text-md font-medium text-amber-800 cursor-pointer focus:outline-none';
+                    potentialSummary.textContent = `Sin Autorizar en este Equipo (${potentialPlayers.length})`;
+                    potentialDetails.appendChild(potentialSummary);
+
+                    const potentialContainer = document.createElement('div');
+                    potentialContainer.className = 'p-4';
+
+                    // Mostrar tabla simplificada para potenciales
+                    const potentialColumns = ['DNI', 'NOMBRE', 'CATEGORIA'];
+                    potentialContainer.appendChild(createTable(potentialPlayers, null, potentialColumns));
+                    potentialDetails.appendChild(potentialContainer);
+                    tableContainer.appendChild(potentialDetails);
+                }
             }
 
         } else {
@@ -1070,15 +1133,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const photoUrl = `${IMG_BASE_URL}${encodeURIComponent(player.DNI)}.jpg`;
         const { bg, badge } = getFMStatusStyles(player);
-        
+
         const backgroundColor = 'bg-white';
         // Usamos el formato de badge solicitado en lugar de un marco grueso
         const fmHastaFrameClass = badge;
         // Borde de foto con el color fuerte
-        const borderColor = bg.includes('red') ? 'border-red-800' : 
-                          bg.includes('green') ? 'border-green-600' :
-                          bg.includes('orange') ? 'border-orange-500' :
-                          bg.includes('yellow') ? 'border-yellow-200' : 'border-gray-200';
+        const borderColor = bg.includes('red') ? 'border-red-800' :
+            bg.includes('green') ? 'border-green-600' :
+                bg.includes('orange') ? 'border-orange-500' :
+                    bg.includes('yellow') ? 'border-yellow-200' : 'border-gray-200';
 
         const primaryNumberForHeader = (player.Numeros && player.Numeros[player.CATEGORIA]) || player.Numero || 'S/N';
         const saveButtonHtml = isEditing ? `
@@ -1174,24 +1237,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     numerosContent.innerHTML = numerosHtml;
                 };
 
-                const categoryProgressionRules = {
-                    'U11 Femenino': ['U12 Femenino', 'U11 Mixta', 'U12 Mixta'],
-                    'U11 Mixta': ['U12 Mixta'],
-                    'U12 Femenino': ['U12 Mixta', 'U14 Femenino'],
-                    'U12 Mixta': ['U14 Masculino'],
-                    'U14 Femenino': ['U14 Masculino', 'U16 Femenino'],
-                    'U14 Masculino': ['U16 Masculino'],
-                    'U16 Femenino': ['U19 Femenina', 'Liga Femenina de Basquet'],
-                    'U16 Masculino': ['U18 Masculino'],
-                    'U18 Masculino': ['U20 Masculino', 'Liga de Desarrollo', 'Liga Uruguaya de Basquet'],
-                    'U20 Masculino': ['Liga de Desarrollo', 'Liga Uruguaya de Basquet'],
-                    'Liga de Desarrollo': ['Liga Uruguaya de Basquet'],
-                    'U19 Femenina': ['Liga Femenina de Basquet'],
-                };
-
                 const primaryCategory = player.CATEGORIA;
                 // FIX: Convertir a mayúsculas para que coincida con las claves de las reglas (ej: "U14 Mixto" vs "U14 Mixto")
-                const suggestedCategories = categoryProgressionRules[primaryCategory] || [];
+                const suggestedCategories = PROGRESSION_RULES[primaryCategory] || [];
                 const existingAuthorizations = player.categoriasAutorizadas || [];
 
                 let categoriesToShow = [...new Set([...suggestedCategories, ...existingAuthorizations])];
@@ -1900,7 +1948,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             const expDate = parseDateDDMMYYYY(player['FM Hasta']);
                             const today = new Date(); today.setHours(0, 0, 0, 0);
                             const season = seasonFilter ? seasonFilter.value : player.TEMPORADA;
-                            
+
                             let tournamentEndDate = null;
                             if (season && season.includes('-')) {
                                 const years = season.split('-').map(y => y.trim());
@@ -2077,7 +2125,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     const today = new Date(); today.setHours(0, 0, 0, 0);
                     const season = seasonFilter ? seasonFilter.value : player.TEMPORADA;
-                    
+
                     let tournamentEndDate = null;
                     if (season && season.includes('-')) {
                         const years = season.split('-').map(y => y.trim());
