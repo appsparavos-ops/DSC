@@ -37,6 +37,37 @@ let playersToUpdate = [];
 let updatedCount = 0;
 let isCancelled = false;
 let abortController = null;
+let wakeLock = null;
+
+// Gestión de Pantalla Activa (Wake Lock)
+async function requestWakeLock() {
+    if ('wakeLock' in navigator) {
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            log('Pantalla activa activada.', 'info');
+            
+            wakeLock.addEventListener('release', () => {
+                log('Pantalla activa liberada.', 'info');
+            });
+        } catch (err) {
+            log(`Error al activar pantalla activa: ${err.message}`, 'error');
+        }
+    }
+}
+
+async function releaseWakeLock() {
+    if (wakeLock !== null) {
+        await wakeLock.release();
+        wakeLock = null;
+    }
+}
+
+// Re-activar si se vuelve a la pestaña
+document.addEventListener('visibilitychange', async () => {
+    if (wakeLock !== null && document.visibilityState === 'visible') {
+        await requestWakeLock();
+    }
+});
 
 // Utilidades
 function log(msg, type = 'info') {
@@ -296,6 +327,8 @@ async function updateAll() {
     updateAllBtn.classList.add('opacity-50');
     cancelBtn.classList.remove('hidden');
 
+    await requestWakeLock();
+
     for (let i = 0; i < playersToUpdate.length; i++) {
         if (isCancelled) break;
         if (playersToUpdate[i].status === 'pending' || playersToUpdate[i].status === 'fail') {
@@ -312,6 +345,8 @@ async function updateAll() {
     updateAllBtn.disabled = false;
     updateAllBtn.classList.remove('opacity-50');
     cancelBtn.classList.add('hidden');
+
+    await releaseWakeLock();
 
     // Abrir modal de confirmación en lugar de descargar directamente
     showReportModal();
