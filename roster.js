@@ -537,8 +537,12 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
     const numeroAMostrar = coachRole || rosterEntry.numero || p.NUMERO_TEMPORADA || "";
 
     const expDate = parseDateDDMMYYYY(p['FM Hasta']);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const isExpired = !expDate || expDate < today;
+    // Comparar FM Hasta contra la fecha del partido seleccionada, no contra hoy
+    const matchDateStr = dateSelect.value; // formato yyyy-mm-dd
+    const matchDateParts = matchDateStr.split('-');
+    const matchDate = new Date(parseInt(matchDateParts[0]), parseInt(matchDateParts[1]) - 1, parseInt(matchDateParts[2]));
+    matchDate.setHours(0, 0, 0, 0);
+    const isExpired = !expDate || expDate < matchDate;
 
     // Validación de Licencia FUBB
     const estadoLicencia = String(p['ESTADO LICENCIA'] || '').trim().toUpperCase();
@@ -617,8 +621,8 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
     } else if (tournamentEndDate && expDate > tournamentEndDate) {
         fmColorClass = 'bg-green-600 text-white font-bold px-2 py-1 rounded-lg shadow-sm';
     } else {
-        const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-        const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+        const thirtyDays = new Date(matchDate); thirtyDays.setDate(matchDate.getDate() + 30);
+        const sixtyDays = new Date(matchDate); sixtyDays.setDate(matchDate.getDate() + 60);
 
         if (expDate <= thirtyDays) {
             fmColorClass = 'bg-orange-500 text-black font-bold px-2 py-1 rounded-lg shadow-sm';
