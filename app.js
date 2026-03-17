@@ -1008,7 +1008,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     // Debe cumplir la regla de progresión
                     const possibleDestinations = PROGRESSION_RULES[p.CATEGORIA] || [];
-                    return possibleDestinations.includes(selectedCategory);
+                    if (!possibleDestinations.includes(selectedCategory)) return false;
+
+                    // --- NUEVAS REGLAS DE EXCLUSIÓN MUTUA ---
+                    const selectedIsMixed = selectedCategory.toLowerCase().includes('mixta') || selectedCategory.toLowerCase().includes('mixto');
+                    const auths = p.categoriasAutorizadas || [];
+
+                    if (selectedIsMixed) {
+                        // 1. A MIXTA: No si ya tiene autorizada una SUPERIOR FEMENINA
+                        const hasHigherFem = auths.some(a => {
+                            const isAMixed = a.toLowerCase().includes('mixta') || a.toLowerCase().includes('mixto');
+                            return !isAMixed && getCategoryOrder(a) > getCategoryOrder(p.CATEGORIA);
+                        });
+                        if (hasHigherFem) return false;
+                    } else {
+                        // 2. A SUPERIOR FEMENINA: No si ya tiene autorizada una MIXTA (de cualquier nivel)
+                        const isHigher = getCategoryOrder(selectedCategory) > getCategoryOrder(p.CATEGORIA);
+                        if (isHigher) {
+                            const hasMixed = auths.some(a => a.toLowerCase().includes('mixta') || a.toLowerCase().includes('mixto'));
+                            if (hasMixed) return false;
+                        }
+                    }
+
+                    return true;
                 }), selectedCategory);
 
                 if (potentialPlayers.length > 0) {
@@ -1244,6 +1266,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 let categoriesToShow = [...new Set([...suggestedCategories, ...existingAuthorizations])];
 
+                // --- APLICAR REGLAS DE EXCLUSIÓN MUTUA EN SUGERENCIAS DE EDICIÓN ---
+                const hasAnyMixedAuth = existingAuthorizations.some(c => c.toLowerCase().includes('mixta') || c.toLowerCase().includes('mixto'));
+                const hasAnySuperiorFemAuth = existingAuthorizations.some(c => {
+                    const isMixed = c.toLowerCase().includes('mixta') || c.toLowerCase().includes('mixto');
+                    return !isMixed && getCategoryOrder(c) > getCategoryOrder(primaryCategory);
+                });
+
+                categoriesToShow = categoriesToShow.filter(cat => {
+                    // Si ya está autorizada, la mantenemos para no perder datos
+                    if (existingAuthorizations.includes(cat)) return true;
+
+                    const isCatMixed = cat.toLowerCase().includes('mixta') || cat.toLowerCase().includes('mixto');
+                    const isCatSuperiorFem = !isCatMixed && getCategoryOrder(cat) > getCategoryOrder(primaryCategory);
+
+                    if (isCatMixed && hasAnySuperiorFemAuth) return false;
+                    if (isCatSuperiorFem && hasAnyMixedAuth) return false;
+                    return true;
+                });
+
                 const specialLeagues = ["Liga de Desarrollo", "Liga Uruguaya de Basquet"];
                 categoriesToShow = categoriesToShow.filter(cat => !specialLeagues.includes(cat));
 
@@ -1267,7 +1308,34 @@ document.addEventListener('DOMContentLoaded', function () {
                     });
                 }
 
-                categoriasSelect.addEventListener('change', updateNumerosUI);
+                const enforceMutualExclusion = () => {
+                    const selectedOptions = Array.from(categoriasSelect.selectedOptions).map(opt => opt.value);
+                    const hasSelectedMixed = selectedOptions.some(val => val.toLowerCase().includes('mixta') || val.toLowerCase().includes('mixto'));
+                    const hasSelectedSuperior = selectedOptions.some(val => {
+                        const isMixed = val.toLowerCase().includes('mixta') || val.toLowerCase().includes('mixto');
+                        return !isMixed && getCategoryOrder(val) > getCategoryOrder(primaryCategory);
+                    });
+
+                    Array.from(categoriasSelect.options).forEach(opt => {
+                        const val = opt.value;
+                        const isOptMixed = val.toLowerCase().includes('mixta') || val.toLowerCase().includes('mixto');
+                        const isOptSuperior = !isOptMixed && getCategoryOrder(val) > getCategoryOrder(primaryCategory);
+
+                        if (hasSelectedMixed && isOptSuperior) {
+                            opt.disabled = true;
+                        } else if (hasSelectedSuperior && isOptMixed) {
+                            opt.disabled = true;
+                        } else {
+                            opt.disabled = false;
+                        }
+                    });
+                };
+
+                categoriasSelect.addEventListener('change', (e) => {
+                    enforceMutualExclusion();
+                    updateNumerosUI();
+                });
+                enforceMutualExclusion();
                 updateNumerosUI();
             }
             document.getElementById('toggle-categorias').addEventListener('click', () => { document.getElementById('categorias-content').classList.toggle('hidden'); });
