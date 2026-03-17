@@ -71,7 +71,10 @@ const categoryRules = {
     'U12 Femenino': { min: 8, max: 12 },
     'U14 Femenino': { min: 5, max: 12 },
     'U16 Femenino': { min: 5, max: 12 },
-    'U19 Femenino': { min: 5, max: 12 }
+    'U19 Femenino': { min: 5, max: 12 },
+    'Liga Uruguaya de Basquet': { min: 5, max: 12 },
+    'Liga Femenina de Basquet': { min: 5, max: 12 },
+    'Liga de Dasarrollo': { min: 5, max: 12 }
 };
 
 function normalizeCategory(cat) {
@@ -135,7 +138,7 @@ function signInGuest() {
 
 function handlePostLogin(user) {
     if (!user) return;
-    
+
     const uid = user.uid;
     const isGuest = user.email === GUEST_EMAIL;
 
@@ -151,6 +154,8 @@ function handlePostLogin(user) {
         guestExitBtn.classList.remove('hidden');
         guestExitBtn.onclick = () => {
             auth.signOut().then(() => {
+                // Truco para forzar el cierre de la pestaña
+                window.open('', '_self', '');
                 window.close();
                 setTimeout(() => {
                     window.location.href = 'about:blank';
@@ -361,23 +366,40 @@ function renderPlayers() {
         const pAuthArr = p.categoriasAutorizadas || [];
         const isAuthFlag = p.esAutorizado === true || String(p.esAutorizado).toLowerCase() === 'true';
 
-        // Lógica de filtrado: El jugador debe ser del equipo seleccionado
+        // 1. Filtrar por equipo
         if (pEquipo !== selTeam) return false;
 
-        // Y debe pertenecer a la categoria (directo o autorizado)
+        // 2. Filtrar por pertenencia a la categoría (directo o autorizado)
         const matchesMainCat = pCategoria === selCat;
         const matchesAuthArr = pAuthArr.some(c => String(c).trim() === selCat);
         const matchesAuthFlag = isAuthFlag && pCategoria === selCat;
+        const belongsToCat = matchesMainCat || matchesAuthArr || matchesAuthFlag;
 
-        return matchesMainCat || matchesAuthArr || matchesAuthFlag;
+        if (!belongsToCat) return false;
+
+        // 3. NUEVO: Filtrar por selección si el modo lo requiere
+        if (rosterViewMode === 'selected-num' || rosterViewMode === 'selected-alpha') {
+            const node = p._tipo === 'entrenadores' ? 'staff' : 'jugadores';
+            const isSelected = rosterData[node] && rosterData[node][p.DNI] && rosterData[node][p.DNI].seleccionado;
+            if (!isSelected) return false;
+        }
+
+        return true;
     }).sort((a, b) => {
         if (rosterViewMode === 'selected-num') {
             const entryA = (rosterData.jugadores && rosterData.jugadores[a.DNI]) || { numero: "" };
             const entryB = (rosterData.jugadores && rosterData.jugadores[b.DNI]) || { numero: "" };
-            const numA = entryA.numero || a.NUMERO_TEMPORADA || "";
-            const numB = entryB.numero || b.NUMERO_TEMPORADA || "";
 
-            if (numA !== "" && numB !== "") return parseInt(numA, 10) - parseInt(numB, 10);
+            // Si es staff, no tiene número en base de datos como los jugadores, usamos su rol o vacío
+            const numA = a._tipo === 'entrenadores' ? "0" : (entryA.numero || a.NUMERO_TEMPORADA || "");
+            const numB = b._tipo === 'entrenadores' ? "0" : (entryB.numero || b.NUMERO_TEMPORADA || "");
+
+            if (numA !== "" && numB !== "") {
+                const nA = parseInt(numA, 10);
+                const nB = parseInt(numB, 10);
+                if (!isNaN(nA) && !isNaN(nB)) return nA - nB;
+                return String(numA).localeCompare(String(numB));
+            }
             if (numA !== "") return -1;
             if (numB !== "") return 1;
         }
@@ -426,12 +448,12 @@ function renderPlayers() {
     coachesTableBody.innerHTML = '';
     coachesSection.classList.remove('hidden');
     let coachSelectedCount = 0;
-    
+
     // Obtener staff seleccionado y ordenar por timestamp
     const selectedStaff = Object.entries(rosterData.staff || {})
         .filter(([_, data]) => data.seleccionado)
         .sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
-    
+
     const staffRoles = {};
     selectedStaff.forEach(([dni, _], index) => {
         if (index === 0) staffRoles[dni] = "HC";
@@ -516,7 +538,7 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
     const dni = String(p.DNI);
     const isCoach = p._tipo === 'entrenadores';
     const node = isCoach ? 'staff' : 'jugadores';
-    
+
     const rosterEntry = (rosterData[node] && rosterData[node][dni]) || { seleccionado: false, numero: "" };
 
     const numeroAMostrar = coachRole || rosterEntry.numero || p.NUMERO_TEMPORADA || "";
@@ -546,15 +568,15 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
             // Sanción por Tiempo (Días)
             const expirationDate = new Date(startDate);
             expirationDate.setDate(expirationDate.getDate() + totalValue);
-            
+
             if (currentDate >= startDate && currentDate < expirationDate) {
-                 // Verificar categoría si es entrenador
-                 if (isCoach && sanctionCat && sanctionCat !== selCat) {
-                     isSancionado = false;
-                 } else {
-                     isSancionado = true;
-                     fechasRestantes = Math.ceil((expirationDate - currentDate) / (1000 * 60 * 60 * 24));
-                 }
+                // Verificar categoría si es entrenador
+                if (isCoach && sanctionCat && sanctionCat !== selCat) {
+                    isSancionado = false;
+                } else {
+                    isSancionado = true;
+                    fechasRestantes = Math.ceil((expirationDate - currentDate) / (1000 * 60 * 60 * 24));
+                }
             }
         } else {
             // Sanción por Partidos (Comportamiento original)
@@ -618,7 +640,7 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
     // Ficha médica no es requerida para entrenadores
     const needsFM = !isCoach;
     const isDisabled = (needsFM && isExpired) || isFUBBInvalid || isSancionado;
-    
+
     let disabledText = (needsFM && isExpired) ? 'FICHA MEDICA' : 'FUBB (No Hab.)';
     if (isSancionado) {
         const unit = (sanction && sanction.tipoSancion === 'tiempo') ? ' días' : ' fechas';
@@ -706,7 +728,7 @@ window.toggleCoachesList = function () {
 
 window.toggleSelection = function (dni, isChecked, nombre) {
     if (!rosterRef) return;
-    
+
     // Buscar si es un entrenador en allPlayers
     const person = allPlayers.find(p => String(p.DNI) === String(dni));
     const isCoach = person && person._tipo === 'entrenadores';
@@ -721,7 +743,7 @@ window.toggleSelection = function (dni, isChecked, nombre) {
     } else if (!isCoach) {
         update[`${node}/${dni}/numero`] = "";
     }
-    
+
     rosterRef.update(update).then(() => {
         showToast(isCoach ? (isChecked ? "Staff agregado" : "Staff removido") : (isChecked ? "Jugador agregado" : "Jugador removido"));
     }).catch(err => {
