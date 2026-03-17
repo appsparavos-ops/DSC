@@ -13,9 +13,12 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="firebase-config.js"></script>
+    <script src="js/audit-logger.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body.uninitialized {
-            display: none;
+        body.uninitialized #login-modal,
+        body.uninitialized #main-content {
+            display: none !important;
         }
     </style>
 </head>
@@ -370,6 +373,9 @@
                                     loginModal.classList.add('hidden');
                                     mainContent.classList.remove('hidden');
                                     loadSeasons();
+                                    if (typeof AuditLogger !== 'undefined') {
+                                        AuditLogger.logNavigation('entró a la Gestión de Dorsales');
+                                    }
                                 } else {
                                     loginModal.classList.remove('hidden');
                                     mainContent.classList.add('hidden');
@@ -575,6 +581,12 @@
                 filterAndSortPlayers();
                 actionsContainer.classList.remove('hidden');
                 bottomActionsContainer.classList.remove('hidden');
+
+                AuditLogger.log(`consultó dorsales de ${category} (${teamSelect.value})`, { 
+                    temporada: seasonSelect.value, 
+                    equipo: teamSelect.value, 
+                    categoria: category 
+                });
             });
 
             function updateVisualConflicts() {
@@ -777,8 +789,18 @@
                 updates[`/${dbNode}/${_dni}/temporadas/${TEMPORADA}/${pushId}/Numeros`] = newNumeros;
 
                 try {
+                    const oldData = { Numero: player.Numero, Numeros: player.Numeros };
+                    const newData = { Numero: number, Numeros: newNumeros };
+
                     await database.ref().update(updates);
                     showToast(`Número de ${player.NOMBRE} guardado.`);
+
+                    AuditLogger.log(`actualizó el dorsal de ${player.NOMBRE}`, { 
+                        dni: player._dni,
+                        anterior: oldData, 
+                        nuevo: newData 
+                    });
+
                     // Update local state to avoid re-fetching
                     player.Numero = number;
                     player.Numeros = newNumeros;

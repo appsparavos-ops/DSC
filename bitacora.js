@@ -1,17 +1,8 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // Configuración de Firebase
-    const firebaseConfig = {
-        apiKey: "AIzaSyANWXQvhHpF0LCYjz4AXi3MkcP798PqRfA",
-        authDomain: "dsc24-aa5a1.firebaseapp.com",
-        databaseURL: "https://dsc24-aa5a1-default-rtdb.firebaseio.com",
-        projectId: "dsc24-aa5a1",
-        storageBucket: "dsc24-aa5a1.appspot.com",
-        messagingSenderId: "798100493177",
-        appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
-    };
-
-    // Inicialización de Firebase
-    firebase.initializeApp(firebaseConfig);
+    // Inicialización de Firebase (ya con firebaseConfig de firebase-config.js)
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
     const database = firebase.database();
     const auth = firebase.auth();
 
@@ -84,54 +75,110 @@ document.addEventListener('DOMContentLoaded', function() {
         return `${timestamp}-${randomPart}`;
     }
 
-    function logAdminLogin(user) {
-        if (!user) return;
-        const timestampKey = getTimestampKey();
-        const logEntry = {
-            usuario: user.email,
-            uid: user.uid,
-            accion: 'login_admin_bitacora',
-            fecha: new Date().toISOString(),
-            detalles: { userAgent: navigator.userAgent }
-        };
-        const logRef = database.ref(`/bitacora/${timestampKey}`);
-        logRef.set(logEntry).catch(error => console.error("Error al escribir en la bitácora:", error));
-    }
 
     // --- LÓGICA DE RENDERIZADO Y PAGINACIÓN ---
+    function getActionBadgeClass(action) {
+        const a = (action || '').toUpperCase();
+        if (a.includes('MODIFICACION') || a.includes('UPDATE')) return 'bg-blue-100 text-blue-700';
+        if (a.includes('CREACION') || a.includes('IMPORTACION')) return 'bg-green-100 text-green-700';
+        if (a.includes('ELIMINACION') || a.includes('BORRADO')) return 'bg-red-100 text-red-700';
+        if (a.includes('VISTA') || a.includes('CONSULTA')) return 'bg-purple-100 text-purple-700';
+        if (a.includes('LOGIN')) return 'bg-gray-100 text-gray-700';
+        return 'bg-amber-100 text-amber-700';
+    }
+
     function renderTableRows(entries) {
         bitacoraTableBody.innerHTML = '';
         if (entries.length === 0) {
             if (allLogEntries.length > 0) {
                  showMessage('No hay registros en esta página.', false);
-            } // Si no hay entradas en absoluto, el mensaje ya se muestra desde loadBitacoraData
+            }
             return;
         }
         hideMessage();
-        entries.forEach(entry => {
+        entries.forEach((entry, index) => {
             const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50/80 transition-all cursor-pointer';
+            const realIndex = (currentPage - 1) * pageSize + index;
+            row.onclick = () => showDetailModal(allLogEntries[realIndex]);
+
             const fecha = new Date(entry.fecha).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'medium' });
             
-            let detallesHtml = '<div class="text-xs space-y-1">';
-            if (entry.detalles && typeof entry.detalles === 'object' && Object.keys(entry.detalles).length > 0) {
-                Object.entries(entry.detalles).forEach(([key, value]) => {
-                    const formattedKey = key.charAt(0).toUpperCase() + key.slice(1);
-                    detallesHtml += `<div><span class="font-semibold">${formattedKey}:</span> ${value}</div>`;
-                });
-            } else {
-                detallesHtml += '<span>-</span>';
+            const badgeClass = getActionBadgeClass(entry.accion);
+            
+            let resumenDetalles = '';
+            if (entry.detalles) {
+                if (entry.detalles.entidad && entry.detalles.registroId) {
+                    resumenDetalles = `<span class="font-bold text-gray-900">${entry.detalles.entidad}:</span> ${entry.detalles.registroId}`;
+                } else if (entry.detalles.view) {
+                    resumenDetalles = `<span class="italic text-gray-500">${entry.detalles.view}</span>`;
+                } else if (typeof entry.detalles === 'object') {
+                    const keys = Object.keys(entry.detalles).slice(0, 2);
+                    resumenDetalles = keys.map(k => `${k}: ${entry.detalles[k]}`).join(', ');
+                }
             }
-            detallesHtml += '</div>';
 
             row.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${fecha}</td>
-                <td class="px-6 py-4 text-sm text-gray-800 font-medium">${entry.usuario || 'N/A'}</td>
-                <td class="px-6 py-4 text-sm text-gray-600">${entry.accion || 'N/A'}</td>
-                <td class="px-6 py-4 text-sm text-gray-600">${detallesHtml}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-[11px] font-mono text-gray-400">${fecha}</td>
+                <td class="px-6 py-4 text-sm text-gray-800">
+                    <div class="font-bold">${entry.usuario || '?' }</div>
+                    <div class="text-[10px] text-gray-400">${entry.contexto?.url || ''}</div>
+                </td>
+                <td class="px-6 py-4">
+                    <span class="action-badge ${badgeClass}">${entry.accion || 'N/A'}</span>
+                </td>
+                <td class="px-6 py-4 text-xs text-gray-600">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="truncate max-w-[200px]">${resumenDetalles || '-'}</div>
+                        <button class="text-blue-600 hover:text-blue-800 font-bold uppercase text-[9px] tracking-widest bg-blue-50 px-2 py-1 rounded">Ver+</button>
+                    </div>
+                </td>
             `;
             bitacoraTableBody.appendChild(row);
         });
     }
+
+    // --- MODAL DE DETALLES ---
+    window.showDetailModal = function(entry) {
+        const modal = document.getElementById('detail-modal');
+        const content = document.getElementById('detail-modal-content');
+        
+        let html = `
+            <div class="grid grid-cols-2 gap-4 text-sm mb-6 bg-gray-50 p-4 rounded-xl">
+                <div><label class="block text-[10px] uppercase font-bold text-gray-400">Fecha</label>${new Date(entry.fecha).toLocaleString()}</div>
+                <div><label class="block text-[10px] uppercase font-bold text-gray-400">Usuario</label>${entry.usuario}</div>
+                <div><label class="block text-[10px] uppercase font-bold text-gray-400">Acción</label>${entry.accion}</div>
+                <div><label class="block text-[10px] uppercase font-bold text-gray-400">Navegador</label><span class="text-[10px]">${entry.contexto?.userAgent || '-'}</span></div>
+            </div>
+        `;
+
+        if (entry.accion === 'MODIFICACION' && entry.detalles?.diferencias) {
+            html += `<h4 class="font-bold text-gray-800 mb-2">Cambios Detectados:</h4>`;
+            html += `<div class="space-y-2">`;
+            Object.entries(entry.detalles.diferencias).forEach(([ campo, diff ]) => {
+                html += `
+                    <div class="border border-gray-100 rounded-lg p-3 bg-white shadow-sm">
+                        <div class="font-bold text-xs text-gray-500 uppercase mb-1">${campo}</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="diff-removed p-2 rounded text-xs">Anterior: ${diff.anterior === null || diff.anterior === undefined ? '<i>(vacio)</i>' : diff.anterior}</div>
+                            <div class="diff-added p-2 rounded text-xs">Nuevo: ${diff.nuevo}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+        } else if (entry.detalles) {
+            html += `<h4 class="font-bold text-gray-800 mb-2">Datos:</h4>`;
+            html += `<pre class="bg-gray-900 text-green-400 p-4 rounded-xl text-xs overflow-x-auto">${JSON.stringify(entry.detalles, null, 2)}</pre>`;
+        }
+
+        content.innerHTML = html;
+        modal.classList.remove('hidden');
+    };
+
+    window.closeDetailModal = function() {
+        document.getElementById('detail-modal').classList.add('hidden');
+    };
 
     function updatePaginationControls(totalPages) {
         pageIndicator.textContent = `Página ${currentPage} de ${totalPages}`;
@@ -174,25 +221,29 @@ document.addEventListener('DOMContentLoaded', function() {
         }).catch(handleError);
     }
 
-    // --- LÓGICA DE AUTENTICACIÓN ---
-    function checkAdminRole(user) {
-        database.ref('admins/' + user.uid).once('value').then(snapshot => {
-            if (snapshot.exists()) {
-                logAdminLogin(user);
-                showMainContent();
-                loadBitacoraData();
-            } else {
-                auth.signOut();
-                showLoginScreen('Acceso denegado. Solo los administradores pueden ver esta página.');
-            }
-        }).catch(handleError);
-    }
-
+    // --- INICIALIZACIÓN Y AUTH ---
     auth.onAuthStateChanged(user => {
+        document.body.classList.remove('uninitialized');
         if (user) {
-            checkAdminRole(user);
+            // Verificar si es admin
+            database.ref('admins/' + user.uid).once('value').then(snapshot => {
+                if (snapshot.exists()) {
+                    showMainContent();
+                    loadBitacoraData();
+                    // Registrar navegación
+                    if (typeof AuditLogger !== 'undefined') {
+                        AuditLogger.logNavigation('Revisó la Bitácora');
+                    }
+                } else {
+                    showLoginScreen("No tienes permisos de administrador.");
+                    auth.signOut();
+                }
+            }).catch(error => {
+                console.error("Error al verificar admin:", error);
+                showLoginScreen("Error al verificar permisos.");
+            });
         } else {
-            showLoginScreen('Por favor, inicie sesión para ver la bitácora.');
+            showLoginScreen();
         }
     });
 
@@ -259,12 +310,21 @@ document.addEventListener('DOMContentLoaded', function() {
             head: [['Fecha', 'Usuario', 'Acción', 'Detalles']],
             body: tableData,
             startY: 30,
-            styles: { fontSize: 8 },
-            headStyles: { fillColor: [22, 160, 133] },
-            columnStyles: { 3: { cellWidth: 'auto' } }
+            styles: { fontSize: 7, cellPadding: 2 },
+            headStyles: { fillColor: [30, 58, 138] }, // Navy blue
+            columnStyles: { 
+                0: { cellWidth: 30 },
+                1: { cellWidth: 40 },
+                2: { cellWidth: 40 },
+                3: { cellWidth: 'auto' }
+            }
         });
 
         doc.save(nombreArchivo);
+
+        if (typeof AuditLogger !== 'undefined') {
+            AuditLogger.log('generó un informe de Bitácora');
+        }
     });
 
     deleteAllButton.addEventListener('click', () => {
@@ -277,6 +337,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         allLogEntries = [];
                         renderCurrentPage();
                         showMessage('Todos los registros han sido borrados.');
+                        if (typeof AuditLogger !== 'undefined') {
+                            AuditLogger.log('borró TODOS los registros de la Bitácora');
+                        }
                     })
                     .catch(handleError);
             }

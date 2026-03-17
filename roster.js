@@ -1,25 +1,12 @@
-const firebaseConfig = {
-    apiKey: "AIzaSyANWXQvhHpF0LCYjz4AXi3MkcP798PqRfA",
-    authDomain: "dsc24-aa5a1.firebaseapp.com",
-    databaseURL: "https://dsc24-aa5a1-default-rtdb.firebaseio.com",
-    projectId: "dsc24-aa5a1",
-    storageBucket: "dsc24-aa5a1.appspot.com",
-    messagingSenderId: "798100493177",
-    appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
-};
-
-const IMG_BASE_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/';
-const PLACEHOLDER_SVG_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2EwYTBhMCI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OS00IDQgNHptMCAyYy0yLjY3IDAtOCA0IDQgNHYyYzAgMS4xLjkgMiAyIDJoMTRjMS4xIDAgMi0uOSAyLTJ2LTJjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PC9zdmc+';
-
-// Inicializar Firebase
+// Inicializar Firebase (usa firebaseConfig de firebase-config.js)
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
 const database = firebase.database();
 const auth = firebase.auth();
 
-const GUEST_EMAIL = "invitado@dsc.com";
-const GUEST_PW = "invitado123";
+const IMG_BASE_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/';
+const PLACEHOLDER_SVG_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2EwYTBhMCI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OS00IDQgNHptMCAyYy0yLjY3IDAtOCA0IDQgNHYyYzAgMS4xLjkgMiAyIDJoMTRjMS4xIDAgMi0uOSAyLTJ2LTJjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PC9zdmc+';
 
 // Elementos del DOM
 const seasonSelect = document.getElementById('seasonSelect');
@@ -335,6 +322,12 @@ function setupRosterSync() {
         rosterData = val || { jugadores: {}, staff: {} };
         if (!rosterData.jugadores) rosterData.jugadores = {};
         if (!rosterData.staff) rosterData.staff = {};
+        
+        // Log que el usuario está viendo este roster específico
+        if (typeof AuditLogger !== 'undefined') {
+            AuditLogger.logNavigation(`entró a la Planilla de Partido (Roster) de ${category} (${team})`);
+        }
+        
         renderPlayers();
     }, err => {
         console.error("Error Roster:", err);
@@ -746,6 +739,20 @@ window.toggleSelection = function (dni, isChecked, nombre) {
 
     rosterRef.update(update).then(() => {
         showToast(isCoach ? (isChecked ? "Staff agregado" : "Staff removido") : (isChecked ? "Jugador agregado" : "Jugador removido"));
+        
+        // Log de la acción
+        if (typeof AuditLogger !== 'undefined') {
+            const actionMsg = isChecked ? 
+                (isCoach ? `agregó a ${nombre} al staff del partido` : `seleccionó a ${nombre} para el partido`) :
+                (isCoach ? `removió a ${nombre} del staff del partido` : `deseleccionó a ${nombre} del partido`);
+                
+            AuditLogger.log(actionMsg, { 
+                entidad: node, 
+                id: dni, 
+                nombre: nombre, 
+                roster: rosterRef.toString().split('.com/')[1] 
+            });
+        }
     }).catch(err => {
         console.error("Error Selección:", err);
         showToast("Error al actualizar roster", "error");
@@ -755,7 +762,18 @@ window.toggleSelection = function (dni, isChecked, nombre) {
 window.updateNumber = function (dni, number) {
     if (!rosterRef) return;
     const normalizedNum = number.trim();
-    rosterRef.child(`jugadores/${dni}`).update({ numero: normalizedNum });
+    
+    // Obtenemos el número anterior para el log si es posible, aunque updateNumber es rápido
+    // Por simplicidad, registramos el nuevo número
+    rosterRef.child(`jugadores/${dni}`).update({ numero: normalizedNum }).then(() => {
+        if (typeof AuditLogger !== 'undefined') {
+            AuditLogger.log(`cambió el dorsal de ${dni} a ${normalizedNum} en el roster`, { 
+                dni: dni, 
+                nuevoNumero: normalizedNum,
+                roster: rosterRef.toString().split('.com/')[1]
+            });
+        }
+    });
 };
 
 window.cycleViewMode = function () {

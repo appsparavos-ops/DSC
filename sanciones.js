@@ -1,19 +1,14 @@
-const firebaseConfig = {
-    apiKey: "AIzaSyANWXQvhHpF0LCYjz4AXi3MkcP798PqRfA",
-    authDomain: "dsc24-aa5a1.firebaseapp.com",
-    databaseURL: "https://dsc24-aa5a1-default-rtdb.firebaseio.com",
-    projectId: "dsc24-aa5a1",
-    storageBucket: "dsc24-aa5a1.appspot.com",
-    messagingSenderId: "798100493177",
-    appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
-};
-
-// Inicializar Firebase
+// Inicializar Firebase (ya con firebaseConfig de firebase-config.js)
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
 const database = firebase.database();
 const auth = firebase.auth();
+
+// Registrar navegación inmediatamente si ya está logueado o al cambiar
+if (typeof AuditLogger !== 'undefined') {
+    AuditLogger.logNavigation('revisó la Gestión de Sanciones');
+}
 
 // Elementos del DOM
 const playerSearch = document.getElementById('playerSearch');
@@ -192,6 +187,8 @@ function loadSanctions() {
     database.ref('/sanciones').on('value', snapshot => {
         activeSanctions = snapshot.val() || {};
         renderSanctions();
+        // Log de vista de gestión de sanciones
+        AuditLogger.logView('gestion_sanciones');
     });
 }
 
@@ -242,8 +239,15 @@ function renderSanctions() {
 
 window.removeSanction = function(dni) {
     if (confirm('¿Seguro que deseas eliminar esta sanción?')) {
+        const sanctionToDelete = activeSanctions[dni];
         database.ref(`/sanciones/${dni}`).remove()
-            .then(() => showToast("Sanción eliminada"))
+            .then(() => {
+                showToast("Sanción eliminada");
+                AuditLogger.log(`eliminó la sanción de ${sanctionToDelete.nombre || dni}`, { 
+                    dni: dni, 
+                    datosAnteriores: sanctionToDelete 
+                });
+            })
             .catch(err => showToast("Error al eliminar", true));
     }
 };
@@ -276,6 +280,7 @@ sanctionForm.addEventListener('submit', (e) => {
     database.ref(`/sanciones/${dni}`).set(sanctionData)
         .then(() => {
             showToast("Sanción registrada correctamente");
+            AuditLogger.log(`registró una sanción para ${nombre}`, sanctionData);
             sanctionForm.reset();
             selectedPlayerInfo.classList.add('hidden');
             submitBtn.disabled = true;

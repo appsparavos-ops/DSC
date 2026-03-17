@@ -301,6 +301,7 @@
         </div>
     </div>
 
+    <script src="js/audit-logger.js"></script>
     <script>
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -311,6 +312,10 @@
 
         auth.onAuthStateChanged(user => {
             if (user) {
+                // Registrar navegación
+                if (typeof AuditLogger !== 'undefined') {
+                    AuditLogger.logNavigation('navegó hacia Mantenimiento');
+                }
                 // Verificar si es admin y cargar preferencias
                 db.ref('admins/' + user.uid).once('value').then(snapshot => {
                     if (snapshot.exists()) {

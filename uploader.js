@@ -1,15 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
 
-    // --- CONFIGURACIÓN DE FIREBASE ---
-    const firebaseConfig = {
-        apiKey: "AIzaSyANWXQvhHpF0LCYjz4AXi3MkcP798PqRfA",
-        authDomain: "dsc24-aa5a1.firebaseapp.com",
-        databaseURL: "https://dsc24-aa5a1-default-rtdb.firebaseio.com",
-        projectId: "dsc24-aa5a1",
-        storageBucket: "dsc24-aa5a1.appspot.com",
-        messagingSenderId: "798100493177",
-        appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
-    };
+    // --- FIREBASE (usa firebaseConfig de firebase-config.js) ---
     if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
     }
@@ -43,12 +34,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Observador de estado de autenticación
     auth.onAuthStateChanged(user => {
+        document.body.classList.remove('uninitialized');
         if (user) {
             // Usuario está conectado
             loginForm.style.display = 'none';
             uploaderContainer.style.display = 'block';
             userEmailDisplay.textContent = `Conectado como: ${user.email}`;
             setupUploaderEventListeners();
+            if (typeof AuditLogger !== 'undefined') {
+                AuditLogger.logNavigation('entró al Importador de Estadísticas (CSV)');
+            }
         } else {
             // Usuario no está conectado
             loginForm.style.display = 'block';
@@ -70,6 +65,9 @@ document.addEventListener('DOMContentLoaded', function() {
         auth.signInWithEmailAndPassword(email, password)
             .then(userCredential => {
                 console.log('Login exitoso:', userCredential.user.email);
+                if (typeof AuditLogger !== 'undefined') {
+                    AuditLogger.log('se logueó en el Importador de Estadísticas', { email: userCredential.user.email });
+                }
                 updateLoginStatus('', false);
             })
             .catch(error => {
@@ -253,6 +251,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     successMessage += ` Se ignoraron ${skippedCount} fila(s) por no tener DNI.`;
                 }
                 updateStatus(successMessage, false);
+                
+                if (typeof AuditLogger !== 'undefined') {
+                    AuditLogger.log(`importó estadísticas CSV para ${category} (${opponent})`, { 
+                        procesados: processedCount, 
+                        ignorados: skippedCount,
+                        temporada: season,
+                        categoria: category,
+                        oponente: opponent,
+                        fechaPartido: date
+                    });
+                }
+                
                 // Limpiar formulario
                 dateInput.value = '';
                 opponentInput.value = '';

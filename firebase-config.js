@@ -7,3 +7,6 @@ const firebaseConfig = {
     messagingSenderId: "798100493177",
     appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
 };
+
+const GUEST_EMAIL = "invitado@dsc.com";
+const GUEST_PW = "invitado123";

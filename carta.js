@@ -1,17 +1,4 @@
-const firebaseConfig = {
-    apiKey: "AIzaSyANWXQvhHpF0LCYjz4AXi3MkcP798PqRfA",
-    authDomain: "dsc24-aa5a1.firebaseapp.com",
-    databaseURL: "https://dsc24-aa5a1-default-rtdb.firebaseio.com",
-    projectId: "dsc24-aa5a1",
-    storageBucket: "dsc24-aa5a1.appspot.com",
-    messagingSenderId: "798100493177",
-    appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
-};
-
-const GUEST_EMAIL = "invitado@dsc.com";
-const GUEST_PW = "invitado123";
-
-// Initialize Firebase
+// Inicializar Firebase (usa firebaseConfig de firebase-config.js)
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
@@ -50,6 +37,10 @@ function autoLogin() {
             const backBtn = document.getElementById('backToMaintenance');
             if (backBtn && !isGuest) {
                 backBtn.classList.remove('hidden');
+            }
+            
+            if (typeof AuditLogger !== 'undefined') {
+                AuditLogger.logNavigation('entró al Generador de Constancias');
             }
 
             fetchPreferencesAndLoad(user.uid);
@@ -152,11 +143,14 @@ seasonSelect.addEventListener('change', () => {
     });
 
     // Guardar preferencia
-    const user = auth.currentUser;
-    if (user) {
-        database.ref(`preferenciasUsuarios/${user.uid}`).update({
+    if (auth.currentUser) {
+        database.ref(`preferenciasUsuarios/${auth.currentUser.uid}`).update({
             ultimaTemporadaSeleccionada: season
         });
+    }
+
+    if (typeof AuditLogger !== 'undefined') {
+        AuditLogger.log(`comenzó a buscar jugadores de la temporada ${season} para constancias`);
     }
 });
 
@@ -194,6 +188,13 @@ function selectPlayer(p) {
     dniInput.value = '';
     dniInput.focus();
     validateForm();
+    
+    if (typeof AuditLogger !== 'undefined') {
+        AuditLogger.log(`seleccionó a ${p.nombre} para generar su constancia`, { 
+            nombre: p.nombre, 
+            dni: p.dni 
+        });
+    }
 }
 
 dniInput.addEventListener('input', validateForm);
@@ -257,6 +258,15 @@ Por intermedio de la presente dejo constancia que <strong>${nombre}</strong> C.I
         element.style.display = 'none'; 
         updateStatus("Descargado con éxito", "success");
         saveToHistory(nombre, dni);
+        
+        if (typeof AuditLogger !== 'undefined') {
+            AuditLogger.log(`generó con éxito la constancia PDF de ${nombre}`, { 
+                nombre: nombre, 
+                dni: dni,
+                temporada: seasonSelect.value
+            });
+        }
+        
         showSuccessModal();
     }).catch(err => {
         console.error("PDF Error:", err);

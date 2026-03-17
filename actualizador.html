@@ -12,6 +12,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="firebase-config.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <style>
@@ -105,7 +106,7 @@
                             class="max-w-0 overflow-hidden group-hover:max-w-xs group-hover:ml-2 transition-all duration-300 ease-in-out whitespace-nowrap">Actualizar
                             Todos</span>
                     </button>
-                    <a href="mantenimiento.html"
+                    <a href="mantenimiento.html" id="btn-volver"
                         class="group bg-white/80 hover:bg-white text-indigo-600 p-3 rounded-xl font-bold transition-all transform hover:scale-105 shadow-md flex items-center border border-indigo-100"
                         title="Volver">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -229,6 +230,7 @@
     </div>
 
     <!-- Script principal -->
+    <script src="js/audit-logger.js"></script>
     <script src="actualizador.js"></script>
 </body>
 

@@ -67,44 +67,15 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentSortCol = 'NOMBRE', currentSortDir = 'asc';
     let isEditModeActive = false, currentUserRole = null, currentPlayerIndex = -1, currentSeasonListener = null;
 
-    // --- LÓGICA DE BITÁCORA ---
-    function getTimestampKey() {
-        const now = new Date();
-        const timestamp = now.getFullYear().toString() +
-            String(now.getMonth() + 1).padStart(2, '0') +
-            String(now.getDate()).padStart(2, '0') +
-            String(now.getHours()).padStart(2, '0') +
-            String(now.getMinutes()).padStart(2, '0') +
-            String(now.getSeconds()).padStart(2, '0');
-        const randomPart = Math.random().toString(36).substring(2, 7); // 5 random chars
-        return `${timestamp}-${randomPart}`;
-    }
-
-    function logAction(action, details) {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        const timestampKey = getTimestampKey();
-        const logEntry = {
-            usuario: user.email,
-            uid: user.uid,
-            accion: action,
-            fecha: new Date().toISOString(),
-            detalles: details
-        };
-
-        const logRef = database.ref(`/bitacora/${timestampKey}`);
-        logRef.set(logEntry).catch(error => {
-            console.error("Error al escribir en la bitácora:", error);
-        });
-    }
 
     // --- LÓGICA DE AUTENTICACIÓN ---
     function initializeAuth() {
         auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).then(() => {
             auth.onAuthStateChanged(user => {
                 if (user) {
-                    logAction('login', { email: user.email });
+                    if (typeof AuditLogger !== 'undefined') {
+                        AuditLogger.logNavigation('se logueó en Gestión de Jugadores (index)');
+                    }
                     // Intentar verificar si es administrador
                     database.ref('admins/' + user.uid).once('value')
                         .then(snapshot => {
@@ -480,8 +451,10 @@ document.addEventListener('DOMContentLoaded', function () {
         database.ref().update(updates)
             .then(() => {
                 showToast("¡Cambios guardados con éxito!");
-                // Usamos el objeto 'datosParaBitacora' que no contiene claves inválidas.
-                logAction('modificacion', { dni: playerToUpdate.DNI, nombre: playerToUpdate.NOMBRE, datos: datosParaBitacora });
+                
+                // Registro detallado del cambio usando AuditLogger
+                AuditLogger.logUpdate('jugador', playerToUpdate.DNI || dni, playerToUpdate, finalData);
+                
                 hidePlayerDetails();
             })
             .catch((error) => {
@@ -1147,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showToast("Modo de edición limitado para jugador autorizado.", "info");
         }
 
-        logAction('Consulta de ficha', { dni: player.DNI, nombre: player.NOMBRE });
+        AuditLogger.logView('detalle_jugador', player.DNI);
         if (playerIndex !== -1) currentPlayerIndex = playerIndex;
         mainContent.classList.add('hidden');
         playerDetailView.classList.remove('hidden');
@@ -1529,7 +1502,7 @@ document.addEventListener('DOMContentLoaded', function () {
             await database.ref().update(updates);
 
             showToast("¡Jugador agregado con éxito!", "success");
-            logAction('creacion', { dni: dni, nombre: newPlayerData.NOMBRE, datos: newPlayerData });
+            AuditLogger.log('CREACION', { entidad: 'jugador', registroId: dni, nombre: newPlayerData.NOMBRE, datos: newPlayerData });
             hidePlayerDetails();
 
         } catch (error) {
@@ -1671,7 +1644,13 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             await database.ref().update(updates);
             showToast(`${originalPlayer.NOMBRE} importado a la temporada ${newSeason} con éxito!`, "success");
-            logAction('importacion', { dni: originalPlayer.DNI, nombre: originalPlayer.NOMBRE, nuevaTemporada: newSeason, datos: newSeasonalData });
+            AuditLogger.log('IMPORTACION', { 
+                entidad: 'jugador', 
+                registroId: originalPlayer.DNI, 
+                nombre: originalPlayer.NOMBRE, 
+                nuevaTemporada: newSeason, 
+                datos: newSeasonalData 
+            });
             hidePlayerDetails();
             if (seasonFilter.value !== newSeason) {
                 if (![...seasonFilter.options].some(option => option.value === newSeason)) {
@@ -1823,7 +1802,13 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             await database.ref().update(updates);
             showToast(`${originalPlayer.NOMBRE} autorizado en ${newCategory} para la temporada ${newSeason}!`, "success");
-            logAction('autorizacion', { dni: originalPlayer.DNI, nombre: originalPlayer.NOMBRE, nuevaTemporada: newSeason, nuevaCategoria: newCategory });
+            AuditLogger.log('AUTORIZACION', { 
+                entidad: 'jugador', 
+                registroId: originalPlayer.DNI, 
+                nombre: originalPlayer.NOMBRE, 
+                nuevaTemporada: newSeason, 
+                nuevaCategoria: newCategory 
+            });
             hidePlayerDetails();
             if (seasonFilter.value !== newSeason) {
                 if (![...seasonFilter.options].some(option => option.value === newSeason)) {

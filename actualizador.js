@@ -23,6 +23,14 @@ const downloadReportBtn = document.getElementById('download-report-btn');
 const closeModalBtn = document.getElementById('close-modal-btn');
 const mainDashboard = document.getElementById('main-dashboard');
 const playerTableContainer = document.getElementById('player-table-container');
+const volverBtn = document.getElementById('btn-volver');
+
+// Inicializar Firebase
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+const auth = firebase.auth();
+const database = firebase.database();
 
 // Estadísticas
 const statTotal = document.getElementById('stat-total');
@@ -96,8 +104,12 @@ async function scanPlayers() {
     const url = selectedSeason === 'todas' ? PLAYERS_URL : `${PLAYERS_URL}?season=${selectedSeason}`;
     
     log(`Conectando con Backend en: ${API_BASE_URL}...`, 'info');
+    
+    const seasonText = seasonFilter.options[seasonFilter.selectedIndex].text;
+    if (typeof AuditLogger !== 'undefined') {
+        await AuditLogger.log(`seleccionó la temporada "${seasonText}" para escanear`);
+    }
 
-    log(`Conectando con Backend en: ${API_BASE_URL}...`, 'info');
     scanBtn.disabled = true;
     scanBtn.classList.add('opacity-50');
 
@@ -143,6 +155,12 @@ async function scanPlayers() {
         updateStats(Object.keys(data).length, players.length);
 
         log(`Escaneo completado. ${players.length} jugadores requieren actualización.`, 'warn');
+        if (typeof AuditLogger !== 'undefined') {
+            const nombresJugadores = players.map(p => p.nombre);
+            await AuditLogger.log(`el escaneo encontró ${players.length} jugadores para actualizar en la temporada "${seasonFilter.options[seasonFilter.selectedIndex].text}"`, {
+                jugadores: nombresJugadores
+            });
+        }
 
         if (players.length > 0) {
             updateAllBtn.classList.remove('hidden');
@@ -292,10 +310,19 @@ async function updateSinglePlayer(index) {
                 if (!updateResult.success) throw new Error('El servidor reportó un fallo al actualizar Firebase.');
 
                 player.status = 'success';
+                const oldVencimiento = player.vencimiento;
                 player.vencimiento = result.hasta;
                 updatedCount++;
                 statUpdated.textContent = updatedCount;
                 log(`${player.nombre} actualizado con éxito hasta ${result.hasta}`, 'info');
+                
+                // Registro de la actualización individual exitosa
+                if (typeof AuditLogger !== 'undefined') {
+                    await AuditLogger.logUpdate('jugador', player.dni, 
+                        { nombre: player.nombre, 'FM Hasta': oldVencimiento }, 
+                        { nombre: player.nombre, 'FM Hasta': result.hasta }
+                    );
+                }
             }
         } else {
             player.status = 'fail';
@@ -322,6 +349,10 @@ async function updateAll() {
     // Enfocar el panel al iniciar actualización masiva
     mainDashboard.scrollIntoView({ behavior: 'smooth', block: 'center' });
     
+    if (typeof AuditLogger !== 'undefined') {
+        await AuditLogger.log(`inició la actualización masiva para ${playersToUpdate.length} jugadores.`);
+    }
+    
     isCancelled = false;
     updateAllBtn.disabled = true;
     updateAllBtn.classList.add('opacity-50');
@@ -338,8 +369,16 @@ async function updateAll() {
 
     if (isCancelled) {
         log('Actualización masiva cancelada por el usuario.', 'error');
+        if (typeof AuditLogger !== 'undefined') {
+            await AuditLogger.log('canceló la actualización masiva de fichas médicas.');
+        }
     } else {
         log('Proceso de actualización masiva finalizado.', 'info');
+        const successCount = playersToUpdate.filter(p => p.status === 'success').length;
+        const successNames = playersToUpdate.filter(p => p.status === 'success').map(p => p.nombre).join(', ');
+        if (typeof AuditLogger !== 'undefined') {
+            await AuditLogger.log(`finalizó la actualización masiva. Se actualizaron con éxito ${successCount} jugadores: ${successNames || 'ninguno'}.`);
+        }
     }
 
     updateAllBtn.disabled = false;
@@ -412,11 +451,39 @@ downloadReportBtn.addEventListener('click', () => {
 });
 closeModalBtn.addEventListener('click', hideReportModal);
 
-// Inicialización
-loadSeasons();
+// Gestión de Sesión y Navegación
+auth.onAuthStateChanged(user => {
+    if (user) {
+        if (typeof AuditLogger !== 'undefined') {
+            AuditLogger.logNavigation('entró al Actualizador de Fichas Médicas');
+        }
+        loadSeasons();
+    } else {
+        window.location.href = 'index.html';
+    }
+});
+
+if (volverBtn) {
+    volverBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const target = volverBtn.href;
+        if (typeof AuditLogger !== 'undefined') {
+            await AuditLogger.log('regresó a la página de Mantenimiento');
+        }
+        window.location.href = target;
+    });
+}
+
+// Registro de cambio de temporada
+seasonFilter.addEventListener('change', () => {
+    const seasonText = seasonFilter.options[seasonFilter.selectedIndex].text;
+    if (typeof AuditLogger !== 'undefined') {
+        AuditLogger.log(`seleccionó la temporada "${seasonText}" en el selector`);
+    }
+});
 
 // Generación de Reporte PDF
-function generatePDFReport() {
+async function generatePDFReport() {
     if (!window.jspdf) {
         log('Error: La librería jsPDF no está cargada.', 'error');
         return;
@@ -507,4 +574,8 @@ function generatePDFReport() {
 
     doc.save(`Reporte_Actualizacion_Fichas_Medicas_${selectedSeasonValue !== 'todas' ? selectedSeasonValue : 'Todas'}_${dateStr.replace(/\//g, '-')}.pdf`);
     log("Reporte PDF de actualización descargado con éxito.", "info");
+
+    if (typeof AuditLogger !== 'undefined') {
+        await AuditLogger.log(`seleccionó descargar el informe PDF detallado de la temporada "${selectedSeasonText}" con ${playersToUpdate.filter(p => p.status === 'success').length} jugadores actualizados.`);
+    }
 }

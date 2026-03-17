@@ -12,10 +12,17 @@
     <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
+    <script src="firebase-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+    <style>
+        body.uninitialized #login-form,
+        body.uninitialized #uploader-container {
+            display: none !important;
+        }
+    </style>
 </head>
 
-<body class="bg-gray-100">
+<body class="bg-gray-100 uninitialized">
     <div class="container mx-auto p-8">
         <div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
 
@@ -119,6 +126,7 @@
 
         </div>
     </div>
+    <script src="js/audit-logger.js"></script>
     <script src="uploader.js"></script>
 </body>
 
