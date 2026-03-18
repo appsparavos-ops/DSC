@@ -24,10 +24,10 @@ export function parseDate(dateStr) {
 export function parseCSV(csvText, currentAction) {
     const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
     if (lines.length < 2) throw new Error('El archivo CSV está vacío o no tiene datos.');
-    
+
     const headers = lines[0].split(';').map(header => header.trim());
     const data = [];
-    
+
     for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(';').map(value => value.trim());
         if (values.length > headers.length) {
@@ -93,4 +93,59 @@ export function filterLatestRecords(data) {
         }
     });
     return Array.from(latestRecordsMap.values());
+}
+
+/**
+ * Filtra duplicados de pases dentro del CSV por NIF.
+ * Aplica lógica de 4 casos basada en FECHA FEDERACION ACEPTA y FECHA SOLICITUD.
+ * Retorna { filtered, pendientes } donde pendientes mapea NIF → datos a guardar como NUEVA SOLICITUD.
+ */
+export function filterLatestPases(data) {
+    const map = new Map();        // NIF → registro principal
+    const pending = new Map();    // NIF → registro pendiente (NUEVA SOLICITUD)
+
+    data.forEach(row => {
+        const nif = (row.NIF || row.DNI || '').trim();
+        if (!nif) return;
+
+        const existing = map.get(nif);
+        if (!existing) {
+            map.set(nif, row);
+            return;
+        }
+
+        const newFechaAcepta = parseDate(row['FECHA FEDERACION ACEPTA']);
+        const existFechaAcepta = parseDate(existing['FECHA FEDERACION ACEPTA']);
+
+        if (newFechaAcepta && existFechaAcepta) {
+            // Caso 1: Ambos tienen aceptación → mantener más reciente
+            if (newFechaAcepta.getTime() >= existFechaAcepta.getTime()) {
+                map.set(nif, row);
+            }
+            // Si es más viejo, se omite (existing se mantiene)
+        } else if (!newFechaAcepta && existFechaAcepta) {
+            // Caso 2: Nuevo NO tiene aceptación, existente SÍ
+            // Mantener existente, guardar nuevo como pendiente
+            pending.set(nif, row);
+        } else if (newFechaAcepta && !existFechaAcepta) {
+            // Caso 4: Existente NO tiene aceptación, nuevo SÍ
+            // Sobrescribir con el nuevo, preservar existente como pendiente
+            pending.set(nif, existing);
+            map.set(nif, row);
+        } else {
+            // Caso 3: Ninguno tiene aceptación → comparar FECHA SOLICITUD
+            const newFechaSol = parseDate(row['FECHA SOLICITUD']);
+            const existFechaSol = parseDate(existing['FECHA SOLICITUD']);
+
+            if (newFechaSol && existFechaSol) {
+                if (newFechaSol.getTime() >= existFechaSol.getTime()) {
+                    map.set(nif, row);
+                }
+            } else if (newFechaSol) {
+                map.set(nif, row);
+            }
+        }
+    });
+
+    return { filtered: Array.from(map.values()), pendientes: pending };
 }

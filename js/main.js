@@ -1,8 +1,8 @@
 /**
  * Lógica principal de la UI.
  */
-import { parseCSV, filterLatestRecords } from './utils.js';
-import { logAction, uploadSeasonData, searchRecordsBySeason, deleteSeasonRecord, getSeasons, getUserPreference } from './firebase-service.js';
+import { parseCSV, filterLatestRecords, filterLatestPases } from './utils.js';
+import { logAction, uploadSeasonData, uploadPasesData, searchRecordsBySeason, deleteSeasonRecord, getSeasons, getUserPreference } from './firebase-service.js';
 
 const auth = firebase.auth();
 
@@ -82,10 +82,19 @@ document.getElementById('logoutButton').addEventListener('click', () => auth.sig
 document.getElementById('choiceUploadButton').addEventListener('click', () => {
     currentAction = 'upload';
     showSection(uploadSection);
-    // seasonSelect ya es visible por defecto en uploadSection (como parte de seasonContainer)
+    document.getElementById('seasonContainer').style.display = 'flex';
     document.getElementById('uploadTitle').textContent = 'Subir Registros de Temporada';
     performActionButton.textContent = 'Subir a Firebase';
     showUIFeedback('Sube un CSV para añadir nuevos registros de temporada.', '');
+});
+
+document.getElementById('choiceUploadPasesButton').addEventListener('click', () => {
+    currentAction = 'uploadPases';
+    showSection(uploadSection);
+    document.getElementById('seasonContainer').style.display = 'none';
+    document.getElementById('uploadTitle').textContent = 'Subir Pases';
+    performActionButton.textContent = 'Subir Pases a Firebase';
+    showUIFeedback('Sube un CSV de pases para actualizar el registro de pases.', '');
 });
 
 document.getElementById('choiceDeleteButton').addEventListener('click', () => {
@@ -101,6 +110,7 @@ document.getElementById('backButton').addEventListener('click', () => {
     seasonInput.value = '';
     seasonSelect.value = '';
     seasonInput.classList.add('hidden');
+    document.getElementById('seasonContainer').style.display = 'flex';
     performActionButton.disabled = true;
     parsedData = [];
     currentAction = null;
@@ -180,6 +190,24 @@ performActionButton.addEventListener('click', async () => {
                     generatePDFReport(addedRecords || [], modifiedRecords || [], removedRecords || [], season);
                 }, 500);
             }
+
+        } catch (error) {
+            showUIFeedback(`Error: ${error.message}`, 'error');
+        } finally {
+            performActionButton.disabled = false;
+        }
+    } else if (currentAction === 'uploadPases') {
+        performActionButton.disabled = true;
+        showUIFeedback('Filtrando y subiendo pases...', '');
+
+        try {
+            const { filtered, pendientes } = filterLatestPases(parsedData);
+            const { uploaded, skipped, pendingSaved } = await uploadPasesData(filtered, pendientes);
+
+            let msg = `¡${uploaded} pases subidos!`;
+            if (skipped > 0) msg += ` (${skipped} omitidos)`;
+            if (pendingSaved > 0) msg += ` | ${pendingSaved} solicitudes pendientes guardadas`;
+            showUIFeedback(msg, 'success');
 
         } catch (error) {
             showUIFeedback(`Error: ${error.message}`, 'error');

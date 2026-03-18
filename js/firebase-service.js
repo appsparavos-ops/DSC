@@ -82,7 +82,7 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
                     skippedCount++;
                     return;
                 }
-                
+
                 // Track modified record
                 modifiedRecords.push({
                     nombre: row.NOMBRE || existingRecords[dni][0].NOMBRE || 'N/A',
@@ -150,7 +150,7 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
 
             allUpdates[`/${type}/${dni}/temporadas/${manualSeason}/${pushId}/ESTADO LICENCIA`] = 'SIN INSCRIBIR';
             allUpdates[`/registrosPorTemporada/${manualSeason}/${pushId}/ESTADO LICENCIA`] = 'SIN INSCRIBIR';
-            
+
             // Track removed record
             removedRecords.push({
                 nombre: record.NOMBRE || 'N/A',
@@ -241,4 +241,123 @@ export async function getSeasons() {
 export async function getUserPreference(uid) {
     const snapshot = await database.ref(`preferenciasUsuarios/${uid}/temporada`).once('value');
     return snapshot.val() || null;
+}
+
+/**
+ * Sube datos de pases a /pases/{NIF} aplicando lógica de 4 casos para duplicados.
+ * @param {Array} data - Registros filtrados del CSV (salida de filterLatestPases.filtered)
+ * @param {Map} pendientes - Map NIF → registro pendiente (salida de filterLatestPases.pendientes)
+ * @returns {{ uploaded, skipped, pendingSaved }}
+ */
+export async function uploadPasesData(data, pendientes) {
+    const pasesRef = database.ref('pases');
+    const snapshot = await pasesRef.once('value');
+    const existingPases = snapshot.val() || {};
+
+    const allUpdates = {};
+    let uploaded = 0;
+    let skipped = 0;
+    let pendingSaved = 0;
+
+    // Campos internos que NO deben guardarse como NUEVA SOLICITUD
+    const internalKeys = ['NUEVA SOLICITUD'];
+
+    function cleanForPending(record) {
+        const clean = {};
+        for (const key of Object.keys(record)) {
+            if (!internalKeys.includes(key)) {
+                clean[key] = record[key];
+            }
+        }
+        return clean;
+    }
+
+    function parseDateStr(str) {
+        if (!str) return null;
+        const parts = str.split('/');
+        if (parts.length !== 3) return null;
+        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    }
+
+    data.forEach(row => {
+        const nif = (row.NIF || row.DNI || '').trim();
+        if (!nif) return;
+
+        const existing = existingPases[nif];
+
+        if (!existing) {
+            // No existe → subir directamente
+            const record = { ...row };
+            // Si hay pendiente del pre-filtro CSV, agregarlo
+            if (pendientes.has(nif)) {
+                record['NUEVA SOLICITUD'] = cleanForPending(pendientes.get(nif));
+                pendingSaved++;
+            }
+            allUpdates[`/pases/${nif}`] = record;
+            uploaded++;
+            return;
+        }
+
+        // Ya existe en Firebase → aplicar lógica de 4 casos
+        const newFechaAcepta = parseDateStr(row['FECHA FEDERACION ACEPTA']);
+        const existFechaAcepta = parseDateStr(existing['FECHA FEDERACION ACEPTA']);
+
+        if (newFechaAcepta && existFechaAcepta) {
+            // Caso 1: Ambos tienen aceptación
+            if (newFechaAcepta.getTime() >= existFechaAcepta.getTime()) {
+                const record = { ...row };
+                if (pendientes.has(nif)) {
+                    record['NUEVA SOLICITUD'] = cleanForPending(pendientes.get(nif));
+                    pendingSaved++;
+                }
+                allUpdates[`/pases/${nif}`] = record;
+                uploaded++;
+            } else {
+                skipped++;
+            }
+        } else if (!newFechaAcepta && existFechaAcepta) {
+            // Caso 2: Nuevo NO tiene aceptación, existente SÍ
+            // Mantener existente, guardar nuevo como NUEVA SOLICITUD
+            allUpdates[`/pases/${nif}/NUEVA SOLICITUD`] = cleanForPending(row);
+            pendingSaved++;
+        } else if (newFechaAcepta && !existFechaAcepta) {
+            // Caso 4: Existente NO tiene aceptación, nuevo SÍ
+            // Sobrescribir, pero guardar existente como NUEVA SOLICITUD
+            const record = { ...row };
+            record['NUEVA SOLICITUD'] = cleanForPending(existing);
+            allUpdates[`/pases/${nif}`] = record;
+            uploaded++;
+            pendingSaved++;
+        } else {
+            // Caso 3: Ninguno tiene aceptación → comparar FECHA SOLICITUD
+            const newFechaSol = parseDateStr(row['FECHA SOLICITUD']);
+            const existFechaSol = parseDateStr(existing['FECHA SOLICITUD']);
+
+            let shouldReplace = false;
+            if (newFechaSol && existFechaSol) {
+                shouldReplace = newFechaSol.getTime() >= existFechaSol.getTime();
+            } else if (newFechaSol) {
+                shouldReplace = true;
+            }
+
+            if (shouldReplace) {
+                const record = { ...row };
+                if (pendientes.has(nif)) {
+                    record['NUEVA SOLICITUD'] = cleanForPending(pendientes.get(nif));
+                    pendingSaved++;
+                }
+                allUpdates[`/pases/${nif}`] = record;
+                uploaded++;
+            } else {
+                skipped++;
+            }
+        }
+    });
+
+    if (Object.keys(allUpdates).length > 0) {
+        await database.ref().update(allUpdates);
+        await logAction('upload_pases', { uploaded, skipped, pendingSaved });
+    }
+
+    return { uploaded, skipped, pendingSaved };
 }
