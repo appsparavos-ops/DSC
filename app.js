@@ -426,6 +426,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const dbNode = (tipoValor === 'JUGADOR/A' || tipoValor === 'jugadores') ? 'jugadores' : 'entrenadores';
         const updates = {};
         let datosParaBitacora;
+        let finalDataParaLog;
 
         // Extraer los números del formulario
         const newNumeros = { ...(playerToUpdate.Numeros || {}) };
@@ -465,6 +466,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     pushId: pushId
                 }
             };
+            finalDataParaLog = { ...playerToUpdate, Numero: newPrimaryNumber, Numeros: newNumeros };
 
         } else {
             // --- LÓGICA ORIGINAL PARA JUGADORES NO AUTORIZADOS ---
@@ -506,6 +508,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 seasonal: seasonalDataToUpdate,
                 registro: combinedDataForIndex
             };
+            finalDataParaLog = finalData;
         }
 
         database.ref().update(updates)
@@ -513,7 +516,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 showToast("¡Cambios guardados con éxito!");
                 
                 // Registro detallado del cambio usando AuditLogger
-                AuditLogger.logUpdate('jugador', playerToUpdate.DNI || dni, playerToUpdate, finalData);
+                AuditLogger.logUpdate('jugador', playerToUpdate.DNI || dni, playerToUpdate, finalDataParaLog);
                 
                 hidePlayerDetails();
             })
