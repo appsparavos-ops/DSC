@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Pases | Defensor Sporting</title>
+    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_SportingCuad.png"
+        type="image/png">
+
+    <link rel="stylesheet" href="pases.css">
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header class="app-header">
+            <h1>Control de Pases</h1>
+            <p>Estado de transferencias — Defensor Sporting Club</p>
+        </header>
+
+        <!-- Tabs -->
+        <div class="tabs-container">
+            <button class="tab-btn active" id="tabRecibidos" data-tab="recibidos">
+                Pases Recibidos <span class="badge" id="badgeRecibidos">0</span>
+            </button>
+            <button class="tab-btn" id="tabEnviados" data-tab="enviados">
+                Pases Enviados <span class="badge" id="badgeEnviados">0</span>
+            </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-bar">
+            <select id="seasonFilter">
+                <option value="">Todas las temporadas</option>
+            </select>
+            <input type="text" id="nameFilter" placeholder="Buscar por nombre o NIF...">
+        </div>
+
+        <!-- Summary counters -->
+        <div class="summary-bar" id="summaryBar"></div>
+
+        <!-- Loading -->
+        <div class="loading" id="loadingState">
+            <div class="spinner"></div>
+            <p>Cargando pases...</p>
+        </div>
+
+        <!-- Content -->
+        <div id="pasesContent"></div>
+
+        <!-- Footer nav -->
+        <div class="footer-nav">
+            <a href="mantenimiento.html" class="back-link">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Volver al Menú
+            </a>
+        </div>
+    </div>
+
+    <script src="firebase-config.js"></script>
+    <script src="pases.js"></script>
+</body>
+
+</html>
