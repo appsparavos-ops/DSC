@@ -29,6 +29,7 @@ let allPases = [];
 let currentTab = 'recibidos';
 let currentSeason = ''; // '' = todas
 let currentName = '';
+let currentStatusFilter = null;
 let userPreferredSeason = null;
 
 // ── Auth Observer ──
@@ -73,15 +74,17 @@ function classifyPase(pase) {
     today.setHours(0, 0, 0, 0);
 
     const fechaAcepta = pase['FECHA FEDERACION ACEPTA'];
-    const validoHasta = parseDate(pase['VALIDO HASTA']);
+    const validoHastaRaw = pase['VALIDO HASTA'];
+    const validoHasta = parseDate(validoHastaRaw);
+    const tipoPase = (pase['TIPO PASE'] || '').toUpperCase().trim();
 
     // No aceptado por la federación → pendiente
     if (!fechaAcepta || fechaAcepta.trim() === '') {
         return 'pendiente';
     }
 
-    if (!validoHasta) {
-        // Tiene aceptación pero no fecha de validez → vigente por defecto
+    if (!validoHasta || (tipoPase === 'DEFINITIVO' && validoHastaRaw && validoHastaRaw.includes('31/12/9999'))) {
+        // Tiene aceptación pero no fecha de validez o es definitivo 9999 → vigente por defecto
         return 'vigente';
     }
 
@@ -93,7 +96,10 @@ function classifyPase(pase) {
 }
 
 function getSeasonYear(pase) {
-    const fecha = pase['FECHA FEDERACION ACEPTA'];
+    let fecha = pase['FECHA FEDERACION ACEPTA'];
+    if (!fecha || fecha.trim() === '') {
+        fecha = pase['FECHA SOLICITUD'];
+    }
     if (!fecha) return null;
     const d = parseDate(fecha);
     return d ? d.getFullYear().toString() : null;
@@ -134,13 +140,24 @@ function renderSummary(pases) {
     const counts = { vigente: 0, aVencer: 0, vencido: 0, pendiente: 0 };
     pases.forEach(p => counts[p._status]++);
 
+    const getOp = (s) => (currentStatusFilter && currentStatusFilter !== s) ? 'opacity: 0.4;' : '';
+
     summaryBar.innerHTML = `
-        <div class="summary-chip green"><span class="dot"></span> ${counts.vigente} Vigentes</div>
-        <div class="summary-chip yellow"><span class="dot"></span> ${counts.aVencer} A Vencer</div>
-        <div class="summary-chip red"><span class="dot"></span> ${counts.vencido} Vencidos</div>
-        <div class="summary-chip gray"><span class="dot"></span> ${counts.pendiente} Pendientes</div>
+        <div class="summary-chip green clickable" style="${getOp('vigente')}" onclick="toggleStatusFilter('vigente')"><span class="dot"></span> ${counts.vigente} Vigentes</div>
+        <div class="summary-chip yellow clickable" style="${getOp('aVencer')}" onclick="toggleStatusFilter('aVencer')"><span class="dot"></span> ${counts.aVencer} A Vencer</div>
+        <div class="summary-chip red clickable" style="${getOp('vencido')}" onclick="toggleStatusFilter('vencido')"><span class="dot"></span> ${counts.vencido} Vencidos</div>
+        <div class="summary-chip gray clickable" style="${getOp('pendiente')}" onclick="toggleStatusFilter('pendiente')"><span class="dot"></span> ${counts.pendiente} Pendientes</div>
     `;
 }
+
+window.toggleStatusFilter = function(status) {
+    if (currentStatusFilter === status) {
+        currentStatusFilter = null;
+    } else {
+        currentStatusFilter = status;
+    }
+    renderTab();
+};
 
 function renderCard(pase) {
     const statusClass = {
@@ -155,7 +172,10 @@ function renderCard(pase) {
 
     const clubOrigen = pase['CLUB ORIGEN'] || '—';
     const clubDestino = pase['CLUB DESTINO'] || '—';
-    const validoHasta = formatDate(pase['VALIDO HASTA']);
+    let validoHasta = formatDate(pase['VALIDO HASTA']);
+    if (tipoPase === 'DEFINITIVO' && pase['VALIDO HASTA'] && pase['VALIDO HASTA'].includes('31/12/9999')) {
+        validoHasta = 'No vence';
+    }
     const fechaSolicitud = formatDate(pase['FECHA SOLICITUD']);
 
     // Determine which club to show based on tab
@@ -234,27 +254,33 @@ function renderTab() {
         return;
     }
 
-    // Group by status
-    const vigentes = tabPases.filter(p => p._status === 'vigente');
-    const aVencer = tabPases.filter(p => p._status === 'aVencer');
-    const vencidos = tabPases.filter(p => p._status === 'vencido');
-    const pendientes = tabPases.filter(p => p._status === 'pendiente');
+    // Group by status (apply currentStatusFilter if active)
+    let drawPases = tabPases;
+    if (currentStatusFilter) {
+        drawPases = drawPases.filter(p => p._status === currentStatusFilter);
+    }
+
+    const vigentes = drawPases.filter(p => p._status === 'vigente');
+    const aVencer = drawPases.filter(p => p._status === 'aVencer');
+    const vencidos = drawPases.filter(p => p._status === 'vencido');
+    const pendientes = drawPases.filter(p => p._status === 'pendiente');
 
     let html = '';
     html += renderSection('Vigentes', 'green', vigentes);
     html += renderSection('A Vencer (próximos 30 días)', 'yellow', aVencer);
     html += renderSection('Vencidos', 'red', vencidos);
     html += renderSection('Pendientes de Aceptación', 'gray', pendientes);
-
     pasesContent.innerHTML = html;
 }
 
 // ── Tab Switching ──
-function switchTab(tab) {
-    currentTab = tab;
-
+function switchTab(tabId) {
+    currentTab = tabId;
+    currentStatusFilter = null;
+    
+    // Update UI tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tab);
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
     });
 
     renderTab();

@@ -67,6 +67,39 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentSortCol = 'NOMBRE', currentSortDir = 'asc';
     let isEditModeActive = false, currentUserRole = null, currentPlayerIndex = -1, currentSeasonListener = null;
 
+    let allGlobalPases = {};
+
+    function daysBetweenDates(d1, d2) {
+        return Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    function classifyPaseLogic(pase) {
+        const today = new Date(); today.setHours(0,0,0,0);
+        const fechaAcepta = pase['FECHA FEDERACION ACEPTA'];
+        
+        if (!fechaAcepta || fechaAcepta.trim() === '') return 'pendiente';
+        
+        const stringHasta = pase['VALIDO HASTA'];
+        const tipoPase = (pase['TIPO PASE'] || '').toUpperCase().trim();
+        const clubOrigen = (pase['CLUB ORIGEN'] || '').toUpperCase().trim();
+
+        if (!stringHasta || (tipoPase === 'DEFINITIVO' && stringHasta.includes('31/12/9999'))) return 'vigente';
+        
+        const parts = stringHasta.split('/');
+        if(parts.length !== 3) return 'vigente';
+        const vto = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        
+        const daysLeft = daysBetweenDates(today, vto);
+        if (daysLeft < 0) {
+            if (tipoPase.includes('TEMPORAL') && clubOrigen.includes('DEFENSOR')) {
+                return 'finalizado';
+            }
+            return 'vencido';
+        }
+        if (daysLeft <= 30) return 'aVencer';
+        return 'vigente';
+    }
+
 
     // --- LÓGICA DE AUTENTICACIÓN ---
     function initializeAuth() {
@@ -290,12 +323,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const registrosRef = database.ref('/registrosPorTemporada/' + temporada);
 
-        const listenerCallback = snapshot => {
+        const listenerCallback = async snapshot => {
             if (!snapshot.exists()) {
                 allPlayers = [];
                 displayPlayers([]);
                 if (messageEl) messageEl.textContent = `No hay datos para la temporada ${temporada}.`;
                 return;
+            }
+
+            if (Object.keys(allGlobalPases).length === 0) {
+                try {
+                    const snap = await database.ref('/pases').once('value');
+                    allGlobalPases = snap.val() || {};
+                } catch(e) { console.error("Error loading pases:", e); }
             }
 
             const seasonalRecords = snapshot.val();
@@ -330,6 +370,26 @@ document.addEventListener('DOMContentLoaded', function () {
                     // Fuente de la verdad ÚNICA: estrictamente de datosPersonales si existe
                     if (personalData['FM Hasta'] !== undefined) combined['FM Hasta'] = personalData['FM Hasta'];
                     if (personalData['FM Desde'] !== undefined) combined['FM Desde'] = personalData['FM Desde'];
+
+                    // Extraer info de Pases
+                    const pase = allGlobalPases[dni];
+                    if (pase) {
+                        combined._paseStatus = classifyPaseLogic(pase);
+                        const origen = (pase['CLUB ORIGEN'] || '').toUpperCase();
+                        const destino = (pase['CLUB DESTINO'] || '').toUpperCase();
+                        const tipoPase = (pase['TIPO PASE'] || '').toUpperCase();
+
+                        if (origen.includes('DEFENSOR') && !destino.includes('DEFENSOR') &&
+                            (tipoPase.includes('TEMPORAL') || tipoPase.includes('PRÉSTAMO') || tipoPase.includes('PRESTAMO')) &&
+                            (combined._paseStatus === 'vigente' || combined._paseStatus === 'aVencer')) {
+                            combined._isCedido = true;
+                        }
+                    }
+
+                    if (String(combined['ESTADO LICENCIA'] || '').toUpperCase() === 'SIN INSCRIBIR' && combined._isCedido) {
+                        combined['ESTADO LICENCIA'] = 'Cedido en Pase';
+                    }
+
                     return combined;
                 });
                 if (allPlayers.length > 0) {
@@ -797,16 +857,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 const isBaja = statusLicencia === 'BAJA';
                 const isSinInscribir = statusLicencia === 'SIN INSCRIBIR';
                 const isDiligenciado = statusLicencia === 'DILIGENCIADO';
+                const isCedido = player._isCedido;
 
                 let iconHtml = '';
+
+                if (player._paseStatus === 'aVencer') {
+                    iconHtml += '<span title="Pase a Vencer" class="inline-flex items-center justify-center bg-yellow-400 text-black font-black rounded-full mr-1 shadow-sm" style="width: 1.1rem; height: 1.1rem; font-size: 0.75rem;">!</span>';
+                } else if (player._paseStatus === 'vencido') {
+                    iconHtml += '<span title="Pase Vencido" class="inline-flex items-center justify-center bg-red-600 text-white font-black rounded-full mr-1 shadow-sm" style="width: 1.1rem; height: 1.1rem; font-size: 0.75rem;">!</span>';
+                }
+
                 if (isBaja) {
-                    iconHtml = '<span class="inline-flex items-center justify-center bg-white text-red-600 font-bold rounded-full mr-1" style="width: 1.1rem; height: 1.1rem; font-size: 0.75rem;">X</span>';
+                    iconHtml += '<span class="inline-flex items-center justify-center bg-white text-red-600 font-bold rounded-full mr-1" style="width: 1.1rem; height: 1.1rem; font-size: 0.75rem;">X</span>';
+                } else if (isCedido) {
+                    iconHtml += '<span title="Cedido en Pase" class="inline-flex items-center justify-center bg-blue-100 text-blue-800 font-bold rounded-full mr-1" style="width: 1.2rem; height: 1.2rem; font-size: 0.75rem;">⇄</span>';
                 } else if (!isDiligenciado && player.TIPO !== 'ENTRENADOR/A') {
                     if (isSinInscribir) {
-                        // Triángulo rojo con ! blanco usando clip-path
-                        iconHtml = '<span title="Sin Inscribir" class="inline-flex items-center justify-center bg-red-600 text-white font-black mr-1" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%); width: 1.1rem; height: 1rem; font-size: 0.65rem; padding-top: 0.3rem;">!</span>';
+                        iconHtml += '<span title="Sin Inscribir" class="inline-flex items-center justify-center bg-red-600 text-white font-black mr-1" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%); width: 1.1rem; height: 1rem; font-size: 0.65rem; padding-top: 0.3rem;">!</span>';
                     } else {
-                        iconHtml = '<span title="Licencia no diligenciada" class="mr-1">⚠️</span>';
+                        iconHtml += '<span title="Licencia no diligenciada" class="mr-1">⚠️</span>';
                     }
                 }
 
