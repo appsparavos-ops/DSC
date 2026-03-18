@@ -40,6 +40,37 @@ let rosterViewMode = 'all-alpha'; // 'selected-num', 'selected-alpha', 'all-alph
 let playerSanctions = {};
 let playedMatchesList = {}; // { mmdd: [categories] }
 
+let allGlobalPases = {};
+
+function daysBetweenDates(d1, d2) {
+    return Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function classifyPaseLogic(pase, matchDate) {
+    const fechaAcepta = pase['FECHA FEDERACION ACEPTA'];
+    if (!fechaAcepta || fechaAcepta.trim() === '') return 'pendiente';
+    
+    const stringHasta = pase['VALIDO HASTA'];
+    const tipoPase = (pase['TIPO PASE'] || '').toUpperCase().trim();
+    const clubOrigen = (pase['CLUB ORIGEN'] || '').toUpperCase().trim();
+
+    if (!stringHasta || (tipoPase === 'DEFINITIVO' && stringHasta.includes('31/12/9999'))) return 'vigente';
+    
+    const parts = stringHasta.split('/');
+    if(parts.length !== 3) return 'vigente';
+    const vto = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    
+    const daysLeft = daysBetweenDates(matchDate, vto);
+    if (daysLeft < 0) {
+        if (tipoPase.includes('TEMPORAL') && clubOrigen.includes('DEFENSOR')) {
+            return 'finalizado'; // Retornó de su préstamo temporal.
+        }
+        return 'vencido';
+    }
+    if (daysLeft <= 30) return 'aVencer';
+    return 'vigente';
+}
+
 // Inicializar fecha con hoy
 const today = new Date();
 const yyyy = today.getFullYear();
@@ -202,11 +233,18 @@ function loadPlayers(temporada) {
     if (currentSeasonListener) currentSeasonListener.off();
 
     currentSeasonListener = database.ref('/registrosPorTemporada/' + temporada);
-    currentSeasonListener.on('value', snapshot => {
+    currentSeasonListener.on('value', async snapshot => {
         if (!snapshot.exists()) {
             allPlayers = [];
             populateFilters();
             return;
+        }
+
+        if (Object.keys(allGlobalPases).length === 0) {
+            try {
+                const snap = await database.ref('/pases').once('value');
+                allGlobalPases = snap.val() || {};
+            } catch(e) { console.error("Error loading pases in roster:", e); }
         }
 
         const recordsArray = Object.values(snapshot.val());
@@ -631,15 +669,40 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
         }
     }
 
+    // Reglas de PASES
+    const pase = allGlobalPases[dni];
+    let paseIsExpired = false;
+    let isCurrentlyCedido = false;
+
+    if (pase && !isCoach) {
+        const pStatus = classifyPaseLogic(pase, matchDate);
+        const tipoPase = (pase['TIPO PASE'] || '').toUpperCase().trim();
+        const clubOrigen = (pase['CLUB ORIGEN'] || '').toUpperCase().trim();
+        const clubDestino = (pase['CLUB DESTINO'] || '').toUpperCase().trim();
+
+        if (pStatus === 'vencido') {
+            paseIsExpired = true;
+        }
+
+        if (clubOrigen.includes('DEFENSOR') && !clubDestino.includes('DEFENSOR') &&
+            tipoPase.includes('TEMPORAL') && (pStatus === 'vigente' || pStatus === 'aVencer')) {
+            isCurrentlyCedido = true;
+        }
+    }
+
     const isConflict = rosterEntry.seleccionado && numeroAMostrar && duplicateNumbers.includes(String(numeroAMostrar).trim());
     const inputStyle = isConflict ? 'border-red-500 bg-red-50 focus:ring-red-500/20' : 'border-gray-200 focus:ring-blue-500/20';
 
     // Ficha médica no es requerida para entrenadores
     const needsFM = !isCoach;
-    const isDisabled = (needsFM && isExpired) || isFUBBInvalid || isSancionado;
+    const isDisabled = (needsFM && isExpired) || isFUBBInvalid || isSancionado || paseIsExpired || isCurrentlyCedido;
 
     let disabledText = (needsFM && isExpired) ? 'FICHA MEDICA' : 'FUBB (No Hab.)';
-    if (isSancionado) {
+    if (paseIsExpired) {
+        disabledText = 'PASE VENCIDO';
+    } else if (isCurrentlyCedido) {
+        disabledText = 'PRESTADO A OTRO';
+    } else if (isSancionado) {
         const unit = (sanction && sanction.tipoSancion === 'tiempo') ? ' días' : ' fechas';
         disabledText = `Sanción (${fechasRestantes}${unit})`;
     }
