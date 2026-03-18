@@ -145,14 +145,14 @@
                 <table class="w-full border-collapse">
                     <thead>
                         <tr class="bg-gray-50/50 border-b border-gray-200">
-                            <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">
-                                Jugador</th>
-                            <th class="px-4 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
-                                FM</th>
-                            <th class="px-4 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
-                                Nº</th>
-                            <th class="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-widest">
-                                Lista</th>
+                            <th onclick="setSort('nombre')" class="cursor-pointer hover:bg-gray-100 hover:text-blue-600 transition-colors px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest select-none">
+                                Jugador <span id="sort-nombre" class="ml-1 text-blue-600 font-bold"></span></th>
+                            <th onclick="setSort('fm')" class="cursor-pointer hover:bg-gray-100 hover:text-blue-600 transition-colors px-4 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-widest select-none">
+                                FM <span id="sort-fm" class="ml-1 text-blue-600 font-bold"></span></th>
+                            <th onclick="setSort('numero')" class="cursor-pointer hover:bg-gray-100 hover:text-blue-600 transition-colors px-4 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-widest select-none">
+                                Nº <span id="sort-numero" class="ml-1 text-blue-600 font-bold"></span></th>
+                            <th onclick="setSort('seleccion')" class="cursor-pointer hover:bg-gray-100 hover:text-blue-600 transition-colors px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-widest select-none">
+                                Lista <span id="sort-seleccion" class="ml-1 text-blue-600 font-bold"></span></th>
                         </tr>
                     </thead>
                     <tbody id="playersTableBody" class="divide-y divide-gray-100">

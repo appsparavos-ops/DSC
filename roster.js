@@ -37,6 +37,8 @@ let rosterData = { jugadores: {} };
 let rosterRef = null;
 let currentSeasonListener = null;
 let rosterViewMode = 'all-alpha'; // 'selected-num', 'selected-alpha', 'all-alpha'
+let sortCol = 'nombre';
+let sortDir = 'asc';
 let playerSanctions = {};
 let playedMatchesList = {}; // { mmdd: [categories] }
 
@@ -416,25 +418,138 @@ function renderPlayers() {
         }
 
         return true;
-    }).sort((a, b) => {
-        if (rosterViewMode === 'selected-num') {
-            const entryA = (rosterData.jugadores && rosterData.jugadores[a.DNI]) || { numero: "" };
-            const entryB = (rosterData.jugadores && rosterData.jugadores[b.DNI]) || { numero: "" };
+    });
 
-            // Si es staff, no tiene número en base de datos como los jugadores, usamos su rol o vacío
-            const numA = a._tipo === 'entrenadores' ? "0" : (entryA.numero || a.NUMERO_TEMPORADA || "");
-            const numB = b._tipo === 'entrenadores' ? "0" : (entryB.numero || b.NUMERO_TEMPORADA || "");
+    // --- PRE-CÁLCULO ESTADO DE ELEGIBILIDAD ---
+    const matchDateStr = dateSelect.value;
+    const matchDateParts = matchDateStr.split('-');
+    const matchDate = new Date(parseInt(matchDateParts[0]), parseInt(matchDateParts[1]) - 1, parseInt(matchDateParts[2]));
+    matchDate.setHours(0, 0, 0, 0);
 
-            if (numA !== "" && numB !== "") {
-                const nA = parseInt(numA, 10);
-                const nB = parseInt(numB, 10);
-                if (!isNaN(nA) && !isNaN(nB)) return nA - nB;
-                return String(numA).localeCompare(String(numB));
+    filtered.forEach(p => {
+        const dni = String(p.DNI);
+        const isCoach = p._tipo === 'entrenadores';
+        const expDate = parseDateDDMMYYYY(p['FM Hasta']);
+        const isExpired = !expDate || expDate < matchDate;
+        
+        const estadoLicencia = String(p['ESTADO LICENCIA'] || '').trim().toUpperCase();
+        const isFUBBInvalid = estadoLicencia !== 'DILIGENCIADO';
+
+        const sanction = playerSanctions[dni];
+        let isSancionado = false;
+        let fechasRestantes = 0;
+
+        if (sanction) {
+            const totalValue = parseInt(sanction.fechas);
+            const startDate = new Date(sanction.fechaInicio + 'T00:00:00');
+            const currentDate = new Date(matchDateStr + 'T00:00:00');
+            const sanctionCat = String(sanction.categoria || "").trim();
+
+            if (sanction.tipoSancion === 'tiempo') {
+                const expirationDate = new Date(startDate);
+                expirationDate.setDate(expirationDate.getDate() + totalValue);
+                if (currentDate >= startDate && currentDate < expirationDate) {
+                    if (!(isCoach && sanctionCat && sanctionCat !== selCat)) {
+                        isSancionado = true;
+                        fechasRestantes = Math.ceil((expirationDate - currentDate) / (1000 * 60 * 60 * 24));
+                    }
+                }
+            } else {
+                let fechasCumplidas = 0;
+                Object.keys(playedMatchesList).forEach(mmdd => {
+                    const yearStr = seasonSelect.value.includes('-') ? seasonSelect.value.split('-')[0] : seasonSelect.value;
+                    const mpDate = new Date(parseInt(yearStr), parseInt(mmdd.substring(0, 2)) - 1, parseInt(mmdd.substring(2, 4)));
+                    if (mpDate >= startDate && mpDate < currentDate) {
+                        const rostersOnDate = playedMatchesList[mmdd];
+                        if (rostersOnDate && rostersOnDate[selCat]) {
+                            if (!isFUBBInvalid) fechasCumplidas++;
+                        }
+                    }
+                });
+                fechasRestantes = totalValue - fechasCumplidas;
+                if (fechasRestantes > 0) {
+                    if (!(isCoach && sanctionCat && sanctionCat !== selCat)) isSancionado = true;
+                }
             }
-            if (numA !== "") return -1;
-            if (numB !== "") return 1;
         }
-        return (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
+
+        const pase = allGlobalPases[dni];
+        let paseIsExpired = false;
+        let isCurrentlyCedido = false;
+
+        if (pase && !isCoach) {
+            const pStatus = classifyPaseLogic(pase, matchDate);
+            const tipoPase = (pase['TIPO PASE'] || '').toUpperCase().trim();
+            const clubOrigen = (pase['CLUB ORIGEN'] || '').toUpperCase().trim();
+            const clubDestino = (pase['CLUB DESTINO'] || '').toUpperCase().trim();
+
+            if (pStatus === 'vencido') paseIsExpired = true;
+            if (clubOrigen.includes('DEFENSOR') && !clubDestino.includes('DEFENSOR') &&
+                tipoPase.includes('TEMPORAL') && (pStatus === 'vigente' || pStatus === 'aVencer')) {
+                isCurrentlyCedido = true;
+            }
+        }
+
+        const needsFM = !isCoach;
+        const isDisabled = (needsFM && isExpired) || isFUBBInvalid || isSancionado || paseIsExpired || isCurrentlyCedido;
+
+        let disabledText = (needsFM && isExpired) ? 'FICHA MEDICA' : 'FUBB (No Hab.)';
+        if (paseIsExpired) disabledText = 'PASE VENCIDO';
+        else if (isCurrentlyCedido) disabledText = 'PRESTADO A OTRO';
+        else if (isSancionado) {
+            const unit = (sanction && sanction.tipoSancion === 'tiempo') ? ' días' : ' fechas';
+            disabledText = `Sanción (${fechasRestantes}${unit})`;
+        }
+
+        p._disabilityData = { isDisabled, disabledText, isExpired, expDate, isFUBBInvalid, estadoLicencia, isSancionado, paseIsExpired, isCurrentlyCedido, fechasRestantes };
+    });
+
+    filtered.sort((a, b) => {
+        let comparison = 0;
+        
+        if (sortCol === 'nombre') {
+            comparison = (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
+        } 
+        else if (sortCol === 'numero') {
+            const getNumA = (p) => {
+                const node = p._tipo === 'entrenadores' ? 'staff' : 'jugadores';
+                const entry = (rosterData[node] && rosterData[node][p.DNI]) || {};
+                const num = entry.numero || p.NUMERO_TEMPORADA || "";
+                if (num === "") return Infinity;
+                if (num === "0") return -2;
+                if (num === "00") return -1;
+                const n = parseInt(num, 10);
+                return isNaN(n) ? Infinity : n;
+            };
+            comparison = getNumA(a) - getNumA(b);
+            if (comparison === 0) comparison = (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
+        }
+        else if (sortCol === 'fm') {
+            const getDateVal = (p) => {
+                if(p._tipo === 'entrenadores') return new Date(2100,0,1).getTime();
+                const d = p['FM Hasta'];
+                if (!d || d === '1/1/1900' || d === '-') return 0;
+                const parts = d.split('/');
+                if (parts.length !== 3) return 0;
+                return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+            };
+            comparison = getDateVal(a) - getDateVal(b);
+        }
+        else if (sortCol === 'seleccion') {
+            const isSel = (p) => {
+                const node = p._tipo === 'entrenadores' ? 'staff' : 'jugadores';
+                return (rosterData[node] && rosterData[node][p.DNI] && rosterData[node][p.DNI].seleccionado) ? 1 : 0;
+            };
+            const isEnable = (p) => (p._disabilityData && !p._disabilityData.isDisabled) ? 1 : 0;
+
+            const scoreA = (isSel(a) * 10) + isEnable(a);
+            const scoreB = (isSel(b) * 10) + isEnable(b);
+
+            comparison = scoreB - scoreA;
+            if (comparison === 0) comparison = (a.NOMBRE || '').localeCompare(b.NOMBRE || '');
+        }
+        
+        return sortDir === 'asc' ? comparison : -comparison;
     });
 
     // Separar por TIPO: Jugadores vs Entrenadores
@@ -571,74 +686,14 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
     const node = isCoach ? 'staff' : 'jugadores';
 
     const rosterEntry = (rosterData[node] && rosterData[node][dni]) || { seleccionado: false, numero: "" };
-
     const numeroAMostrar = coachRole || rosterEntry.numero || p.NUMERO_TEMPORADA || "";
 
-    const expDate = parseDateDDMMYYYY(p['FM Hasta']);
-    // Comparar FM Hasta contra la fecha del partido seleccionada, no contra hoy
-    const matchDateStr = dateSelect.value; // formato yyyy-mm-dd
+    const { isDisabled = false, disabledText = '', isExpired = false, expDate = null, isFUBBInvalid = false, estadoLicencia = '', isSancionado = false, paseIsExpired = false, isCurrentlyCedido = false, fechasRestantes = 0 } = p._disabilityData || {};
+
+    const matchDateStr = dateSelect.value;
     const matchDateParts = matchDateStr.split('-');
     const matchDate = new Date(parseInt(matchDateParts[0]), parseInt(matchDateParts[1]) - 1, parseInt(matchDateParts[2]));
     matchDate.setHours(0, 0, 0, 0);
-    const isExpired = !expDate || expDate < matchDate;
-
-    // Validación de Licencia FUBB
-    const estadoLicencia = String(p['ESTADO LICENCIA'] || '').trim().toUpperCase();
-    const isFUBBInvalid = estadoLicencia !== 'DILIGENCIADO';
-
-    // Verificación de Sanciones
-    const sanction = playerSanctions[dni];
-    let isSancionado = false;
-    let fechasRestantes = 0;
-
-    if (sanction) {
-        const totalValue = parseInt(sanction.fechas);
-        const startDate = new Date(sanction.fechaInicio + 'T00:00:00');
-        const currentDateStr = dateSelect.value;
-        const currentDate = new Date(currentDateStr + 'T00:00:00');
-        const selCat = String(categorySelect.value).trim();
-        const sanctionCat = String(sanction.categoria || "").trim();
-
-        if (sanction.tipoSancion === 'tiempo') {
-            // Sanción por Tiempo (Días)
-            const expirationDate = new Date(startDate);
-            expirationDate.setDate(expirationDate.getDate() + totalValue);
-
-            if (currentDate >= startDate && currentDate < expirationDate) {
-                // Verificar categoría si es entrenador
-                if (isCoach && sanctionCat && sanctionCat !== selCat) {
-                    isSancionado = false;
-                } else {
-                    isSancionado = true;
-                    fechasRestantes = Math.ceil((expirationDate - currentDate) / (1000 * 60 * 60 * 24));
-                }
-            }
-        } else {
-            // Sanción por Partidos (Comportamiento original)
-            let fechasCumplidas = 0;
-            const seasonVal = seasonSelect.value;
-
-            Object.keys(playedMatchesList).forEach(mmdd => {
-                const yearStr = seasonVal.includes('-') ? seasonVal.split('-')[0] : seasonVal;
-                const matchDate = new Date(parseInt(yearStr), parseInt(mmdd.substring(0, 2)) - 1, parseInt(mmdd.substring(2, 4)));
-                if (matchDate >= startDate && matchDate < currentDate) {
-                    const rostersOnDate = playedMatchesList[mmdd];
-                    if (rostersOnDate && rostersOnDate[selCat]) {
-                        if (!isFUBBInvalid) fechasCumplidas++;
-                    }
-                }
-            });
-
-            fechasRestantes = totalValue - fechasCumplidas;
-            if (fechasRestantes > 0) {
-                if (isCoach && sanctionCat && sanctionCat !== selCat) {
-                    isSancionado = false;
-                } else {
-                    isSancionado = true;
-                }
-            }
-        }
-    }
 
     // Lógica avanzada de colores para FM
     const season = seasonSelect.value;
@@ -669,43 +724,8 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
         }
     }
 
-    // Reglas de PASES
-    const pase = allGlobalPases[dni];
-    let paseIsExpired = false;
-    let isCurrentlyCedido = false;
-
-    if (pase && !isCoach) {
-        const pStatus = classifyPaseLogic(pase, matchDate);
-        const tipoPase = (pase['TIPO PASE'] || '').toUpperCase().trim();
-        const clubOrigen = (pase['CLUB ORIGEN'] || '').toUpperCase().trim();
-        const clubDestino = (pase['CLUB DESTINO'] || '').toUpperCase().trim();
-
-        if (pStatus === 'vencido') {
-            paseIsExpired = true;
-        }
-
-        if (clubOrigen.includes('DEFENSOR') && !clubDestino.includes('DEFENSOR') &&
-            tipoPase.includes('TEMPORAL') && (pStatus === 'vigente' || pStatus === 'aVencer')) {
-            isCurrentlyCedido = true;
-        }
-    }
-
     const isConflict = rosterEntry.seleccionado && numeroAMostrar && duplicateNumbers.includes(String(numeroAMostrar).trim());
     const inputStyle = isConflict ? 'border-red-500 bg-red-50 focus:ring-red-500/20' : 'border-gray-200 focus:ring-blue-500/20';
-
-    // Ficha médica no es requerida para entrenadores
-    const needsFM = !isCoach;
-    const isDisabled = (needsFM && isExpired) || isFUBBInvalid || isSancionado || paseIsExpired || isCurrentlyCedido;
-
-    let disabledText = (needsFM && isExpired) ? 'FICHA MEDICA' : 'FUBB (No Hab.)';
-    if (paseIsExpired) {
-        disabledText = 'PASE VENCIDO';
-    } else if (isCurrentlyCedido) {
-        disabledText = 'PRESTADO A OTRO';
-    } else if (isSancionado) {
-        const unit = (sanction && sanction.tipoSancion === 'tiempo') ? ' días' : ' fechas';
-        disabledText = `Sanción (${fechasRestantes}${unit})`;
-    }
 
     const tr = document.createElement('tr');
     tr.className = `player-row border-b border-gray-50 ${rosterEntry.seleccionado ? 'selected-row' : ''}`;
@@ -844,14 +864,49 @@ window.updateNumber = function (dni, number) {
 };
 
 window.cycleViewMode = function () {
-    if (rosterViewMode === 'all-alpha') rosterViewMode = 'selected-num';
-    else if (rosterViewMode === 'selected-num') rosterViewMode = 'selected-alpha';
-    else rosterViewMode = 'all-alpha';
+    if (rosterViewMode === 'all-alpha') {
+        rosterViewMode = 'selected-num';
+        window.setSort('numero', 'asc');
+    }
+    else if (rosterViewMode === 'selected-num') {
+        rosterViewMode = 'selected-alpha';
+        window.setSort('nombre', 'asc');
+    }
+    else {
+        rosterViewMode = 'all-alpha';
+        window.setSort('nombre', 'asc');
+    }
 
-    renderPlayers();
     showToast(`Vista: ${rosterViewMode === 'selected-num' ? 'Seleccionados por Número' :
         rosterViewMode === 'selected-alpha' ? 'Seleccionados por Nombre' :
             'Todos por Nombre'}`);
+};
+
+window.setSort = function(colName, forceDir) {
+    if (forceDir) {
+        sortCol = colName;
+        sortDir = forceDir;
+    } else {
+        if (sortCol === colName) {
+            sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortCol = colName;
+            sortDir = 'asc';
+        }
+    }
+    
+    // Reset arrows
+    ['nombre', 'fm', 'numero', 'seleccion'].forEach(c => {
+        const el = document.getElementById(`sort-${c}`);
+        if(el) el.textContent = '';
+    });
+    
+    const arrowEl = document.getElementById(`sort-${colName}`);
+    if (arrowEl) {
+        arrowEl.textContent = sortDir === 'asc' ? ' ↑' : ' ↓';
+    }
+
+    renderPlayers();
 };
 
 seasonSelect.addEventListener('change', () => {
