@@ -10,7 +10,10 @@ on:
 jobs:
   actualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    env:
+      # Fuerza el uso de Node 24 y oculta avisos de depreciación
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
 
     steps:
       - name: Checkout repo

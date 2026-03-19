@@ -1,44 +1,25 @@
 const { chromium } = require('playwright');
-
 const FICHAS_URL = process.env.FICHAS_URL;
-
-if (!FICHAS_URL) {
-    console.error('ERROR: La variable de entorno FICHAS_URL no está configurada.');
-    process.exit(1);
-}
 
 (async () => {
     console.log(`Abriendo: ${FICHAS_URL}`);
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
+    page.on('console', msg => console.log(`${msg.text()}`));
+    page.on('pageerror', err => console.error(`[BROWSER ERROR] ${err.message}`));
+    
+    // Configurar un timeout global para que no muera a los 30s
+    page.setDefaultTimeout(1800000); // 30 minutos
 
-    // Capturar logs de consola del navegador para ver el progreso en Actions
-    page.on('console', msg => {
-        console.log(`${msg.text()}`);
-    });
-
-    // Capturar errores de la página
-    page.on('pageerror', err => {
-        console.error(`[BROWSER ERROR] ${err.message}`);
-    });
-
-    // Navegar a la página
-    console.log('Navegando...');
-    await page.goto(FICHAS_URL, { waitUntil: 'load', timeout: 60000 });
-    console.log('Página cargada. Esperando ejecución del motor...');
+    await page.goto(FICHAS_URL, { waitUntil: 'load', timeout: 120000 });
 
     try {
-        // Esperar hasta 15 minutos a que aparezca el mensaje de finalización [FINISH]
-        // Esta versión minimalista escribe directamente en el body el log.
-        await page.waitForFunction(() => {
-            const bodyText = document.body.innerText;
-            return bodyText.includes('[FINISH]');
-        }, { timeout: 900000 });
-
-        console.log('✅ Proceso completado detectado en el navegador.');
-
+        console.log('Esperando el mensaje [FINISH]...');
+        // Esperamos hasta 30 minutos (1.8M ms) a que el motor minimalista termine con los 70+ jugadores
+        await page.waitForFunction(() => document.body.innerText.includes('[FINISH]'), { timeout: 1800000 });
+        console.log('✅ Proceso completado exitosamente.');
     } catch (err) {
-        console.error(`❌ Tiempo de espera agotado o error: ${err.message}`);
+        console.error(`❌ Falló por tiempo o error: ${err.message}`);
         await page.screenshot({ path: 'error-screenshot.png', fullPage: true });
         process.exit(1);
     } finally {
