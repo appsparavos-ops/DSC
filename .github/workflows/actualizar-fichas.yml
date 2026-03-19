@@ -1,0 +1,32 @@
+name: Actualizar Fichas Médicas
+
+on:
+  schedule:
+    # Ejecutar todos los días a las 21:00 UTC (18:00 Uruguay)
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+    # Permite ejecutarlo manualmente desde GitHub Actions
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar Playwright y Chromium
+        run: |
+          npm install playwright
+          npx playwright install chromium --with-deps
+
+      - name: Ejecutar Actualizador de Fichas Médicas
+        run: node .github/scripts/run-fichas.js
+        env:
+          FICHAS_URL: ${{ secrets.FICHAS_URL }}
