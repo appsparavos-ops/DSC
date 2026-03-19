@@ -98,11 +98,15 @@ async function runProcess() {
             });
             const result = await resp.json();
 
-            if (result.success && result.hasta && result.hasta !== player.vencimiento) {
+            const newHastaDate = parseDate(result.hasta);
+            const oldHastaDate = parseDate(player.vencimiento);
+            
+            // Solo se considera actualizado si la nueva fecha es superior a la existente
+            if (result.success && newHastaDate && (!oldHastaDate || newHastaDate > oldHastaDate)) {
                 resultsToUpdate.push({ dni: player.dni, nombre: player.nombre, desde: result.desde, hasta: result.hasta });
-                log(`   -> Nueva fecha encontrada: ${result.hasta}`);
+                log(`   -> Nueva fecha encontrada: ${result.hasta} (Superior a la actual: ${player.vencimiento || 'N/A'})`);
             } else {
-                log(`   -> Sin cambios o no encontrado.`);
+                log(`   -> Sin cambios relevantes (Nueva: ${result.hasta || 'N/A'}, Actual: ${player.vencimiento || 'N/A'})`);
             }
         } catch (e) {
             log(`   -> Error scrapping ${player.nombre}: ${e.message}`);
@@ -125,11 +129,19 @@ async function runProcess() {
     }
 
     // 5. NOTIFICACIÓN FINAL
-    const resumen = `✅ *Fichas Médicas Finalizado*
-Temporada: ${AUTO_SEASON}
-Procesados: ${playersToScrape.length}
-Actualizados: ${resultsToUpdate.length}
-${resultsToUpdate.length > 0 ? '\n👥 Actualizados:\n  • ' + resultsToUpdate.map(r => r.nombre).join('\n  • ') : ''}`;
+    let resumen = `✅ *Fichas Médicas Finalizado*\n`;
+    resumen += `📅 *Temporada:* ${AUTO_SEASON}\n`;
+    resumen += `📝 *Procesados:* ${playersToScrape.length}\n`;
+    resumen += `✨ *Actualizados:* ${resultsToUpdate.length}\n`;
+    
+    if (resultsToUpdate.length > 0) {
+        resumen += `\n👥 *Jugadores Actualizados:*\n`;
+        resultsToUpdate.forEach(r => {
+            // Limpieza básica de caracteres que podrían romper el Markdown de Telegram
+            const nombreLimpio = r.nombre.replace(/[_*`[\]]/g, ''); 
+            resumen += `• ${nombreLimpio}\n`;
+        });
+    }
 
     await notificarTelegram(resumen);
     log('[FINISH] Proceso automático completado.');
