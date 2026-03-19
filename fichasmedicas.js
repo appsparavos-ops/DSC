@@ -5,6 +5,10 @@ const API_BASE_URL = 'https://dsc-vh8j.onrender.com';
 const AUTO_EMAIL = 'invitado@dsc.com';
 const AUTO_PASSWORD = 'invitado123';
 const AUTO_SEASON = '2026';
+
+// --- Configuración Telegram ---
+const TG_TOKEN = '8672587823:AAFJllG1YID-FmGaEmPEqgmKtAdAnqxY80I';
+const TG_CHAT_ID = '1837798371';
 const SCRAPE_URL = `${API_BASE_URL}/scrape`;
 const PLAYERS_URL = `${API_BASE_URL}/players`;
 const UPDATE_URL = `${API_BASE_URL}/update_player`;
@@ -395,7 +399,51 @@ async function updateAll() {
 
     await releaseWakeLock();
 
+    // Notificación Telegram al finalizar
+    const successCount = playersToUpdate.filter(p => p.status === 'success').length;
+    const noChangeCount = playersToUpdate.filter(p => p.status === 'no_change').length;
+    const failCount = playersToUpdate.filter(p => p.status === 'fail').length;
+    const successNames = playersToUpdate.filter(p => p.status === 'success').map(p => p.nombre).join('\n  • ');
+
+    const fecha = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const hora = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+    const mensaje = [
+        `✅ *Fichas Médicas - ${fecha} ${hora}*`,
+        `Temporada: ${AUTO_SEASON}`,
+        ``,
+        `📋 Procesados: ${playersToUpdate.length}`,
+        `✅ Actualizados: ${successCount}`,
+        `⚪ Sin cambios: ${noChangeCount}`,
+        `❌ No encontrados: ${failCount}`,
+        successNames ? `\n👥 Actualizados:\n  • ${successNames}` : ''
+    ].join('\n');
+
+    await notificarTelegram(mensaje);
+
     log('[AUTO] Proceso automático completado. No se genera informe.', 'info');
+}
+
+async function notificarTelegram(mensaje) {
+    try {
+        const url = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: TG_CHAT_ID,
+                text: mensaje,
+                parse_mode: 'Markdown'
+            })
+        });
+        if (response.ok) {
+            log('Notificación Telegram enviada con éxito.', 'info');
+        } else {
+            log(`Error al enviar Telegram: ${response.status}`, 'error');
+        }
+    } catch (err) {
+        log(`Error Telegram: ${err.message}`, 'error');
+    }
 }
 
 function cancelUpdate() {
