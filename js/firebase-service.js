@@ -239,7 +239,7 @@ export async function getSeasons() {
 }
 
 export async function getUserPreference(uid) {
-    const snapshot = await database.ref(`preferenciasUsuarios/${uid}/temporada`).once('value');
+    const snapshot = await database.ref(`preferenciasUsuarios/${uid}/ultimaTemporadaSeleccionada`).once('value');
     return snapshot.val() || null;
 }
 
@@ -279,6 +279,18 @@ export async function uploadPasesData(data, pendientes) {
         return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
     }
 
+    // Compara campos del CSV contra el registro existente en Firebase.
+    // Ignora 'NUEVA SOLICITUD' del existente. Retorna true si son idénticos.
+    function recordsAreEqual(csvRow, fbRecord) {
+        for (const key of Object.keys(csvRow)) {
+            if (key === 'NUEVA SOLICITUD') continue;
+            const csvVal = (csvRow[key] ?? '').toString().trim();
+            const fbVal  = (fbRecord[key] ?? '').toString().trim();
+            if (csvVal !== fbVal) return false;
+        }
+        return true;
+    }
+
     data.forEach(row => {
         const nif = (row.NIF || row.DNI || '').trim();
         if (!nif) return;
@@ -305,6 +317,8 @@ export async function uploadPasesData(data, pendientes) {
         if (newFechaAcepta && existFechaAcepta) {
             // Caso 1: Ambos tienen aceptación
             if (newFechaAcepta.getTime() >= existFechaAcepta.getTime()) {
+                // Si los datos no cambiaron, omitir escritura
+                if (recordsAreEqual(row, existing)) { skipped++; return; }
                 const record = { ...row };
                 if (pendientes.has(nif)) {
                     record['NUEVA SOLICITUD'] = cleanForPending(pendientes.get(nif));
@@ -341,6 +355,8 @@ export async function uploadPasesData(data, pendientes) {
             }
 
             if (shouldReplace) {
+                // Si los datos no cambiaron, omitir escritura
+                if (recordsAreEqual(row, existing)) { skipped++; return; }
                 const record = { ...row };
                 if (pendientes.has(nif)) {
                     record['NUEVA SOLICITUD'] = cleanForPending(pendientes.get(nif));
