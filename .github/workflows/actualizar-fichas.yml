@@ -2,7 +2,9 @@ name: Actualizar Fichas Médicas
 
 on:
   schedule:
-    # Ejecutar todos los días a las 21:00 UTC (18:00 Uruguay)
+    # 9:00 AM Uruguay (12:00 UTC)
+    - cron: '0 12 * * *'
+    # 18:00 PM Uruguay (21:00 UTC)
     - cron: '0 21 * * *'
   workflow_dispatch:
     # Permite ejecutarlo manualmente desde GitHub Actions
