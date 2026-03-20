@@ -372,18 +372,30 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (personalData['FM Desde'] !== undefined) combined['FM Desde'] = personalData['FM Desde'];
 
                     // Extraer info de Pases
-                    const pase = allGlobalPases[dni];
-                    if (pase) {
-                        combined._paseStatus = classifyPaseLogic(pase);
-                        const origen = (pase['CLUB ORIGEN'] || '').toUpperCase();
-                        const destino = (pase['CLUB DESTINO'] || '').toUpperCase();
-                        const tipoPase = (pase['TIPO PASE'] || '').toUpperCase();
+                    const pasesValue = allGlobalPases[dni];
+                    if (pasesValue) {
+                        // Puede ser un solo registro o una colección de empujes
+                        const pasesArray = (pasesValue['FECHA FEDERACION ACEPTA']) 
+                            ? [pasesValue] 
+                            : Object.values(pasesValue);
 
-                        if (origen.includes('DEFENSOR') && !destino.includes('DEFENSOR') &&
-                            (tipoPase.includes('TEMPORAL') || tipoPase.includes('PRÉSTAMO') || tipoPase.includes('PRESTAMO')) &&
-                            (combined._paseStatus === 'vigente' || combined._paseStatus === 'aVencer')) {
-                            combined._isCedido = true;
-                        }
+                        // Buscar el pase cedido activo más reciente
+                        pasesArray.forEach(pase => {
+                            const status = classifyPaseLogic(pase);
+                            const origen = String(pase['CLUB ORIGEN'] || '').toUpperCase();
+                            const destino = String(pase['CLUB DESTINO'] || '').toUpperCase();
+                            const tipoPase = String(pase['TIPO PASE'] || '').toUpperCase();
+
+                            const esDeDefensor = origen.includes('DEFENSOR');
+                            const esAFuera = !destino.includes('DEFENSOR');
+                            const esTemporal = tipoPase.includes('TEMPORAL') || tipoPase.includes('PRÉSTAMO') || tipoPase.includes('PRESTAMO') || tipoPase === 'T' || tipoPase === 'P';
+                            const estaActivo = (status === 'vigente' || status === 'aVencer');
+
+                            if (esDeDefensor && esAFuera && esTemporal && estaActivo) {
+                                combined._isCedido = true;
+                                combined._paseStatus = status;
+                            }
+                        });
                     }
 
                     if (String(combined['ESTADO LICENCIA'] || '').toUpperCase() === 'SIN INSCRIBIR' && combined._isCedido) {
@@ -2148,7 +2160,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const playersInCategory = currentlyDisplayedPlayers.filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A' && !p._isCedido).sort((a, b) => { const aIsBaja = a['ESTADO LICENCIA'] === 'Baja', bIsBaja = b['ESTADO LICENCIA'] === 'Baja'; if (aIsBaja && !bIsBaja) return 1; if (!aIsBaja && bIsBaja) return -1; const getSortVal = p => { const raw = (p.Numeros && p.Numeros[selectedCategory]) || p.Numero; if (raw === undefined || raw === null || raw === '') return Infinity; const s = String(raw).trim(); if (s === '0') return -2; if (s === '00') return -1; const n = parseInt(s, 10); return isNaN(n) ? Infinity : n; }; return getSortVal(a) - getSortVal(b); });
-        const coaches = currentlyDisplayedPlayers.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A');
+        const coaches = currentlyDisplayedPlayers.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A' && !p._isCedido);
         const authorizedPlayers = currentlyDisplayedPlayers.filter(p => ((p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) && p.CATEGORIA !== selectedCategory) || (p.esAutorizado && p.CATEGORIA === selectedCategory)) && !p._isCedido).sort((a, b) => { const aIsBaja = a['ESTADO LICENCIA'] === 'Baja', bIsBaja = b['ESTADO LICENCIA'] === 'Baja'; if (aIsBaja && !bIsBaja) return 1; if (!aIsBaja && bIsBaja) return -1; return (a.NOMBRE || '').localeCompare(b.NOMBRE || ''); });
 
         if (playersInCategory.length === 0 && coaches.length === 0 && authorizedPlayers.length === 0) {
@@ -2354,6 +2366,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) return false;
                 if (p.esAutorizado && p.CATEGORIA === selectedCategory) return false;
                 
+                // Excluir cedidos
+                if (p._isCedido) return false;
+
                 // Mismo equipo
                 if (String(p.EQUIPO).trim().toUpperCase() !== currentFilteredEquipo.trim().toUpperCase()) return false;
                 
