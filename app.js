@@ -1247,7 +1247,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div class="md:col-span-1 flex flex-col items-center text-center">
                         <img src="${photoUrl}" alt="Foto de ${player.NOMBRE}" class="h-48 w-36 sm:h-64 sm:w-48 object-cover shadow-lg border-4 ${borderColor}" style="border-width: 4px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_SVG_URL}';">
-                        <h2 class="text-2xl font-bold text-gray-900 mt-4">${player.NOMBRE || 'Sin Nombre'}</h2>
+                        <h2 class="text-2xl font-bold text-gray-900 mt-4 min-h-[4rem] flex items-center justify-center leading-tight text-center">${player.NOMBRE || 'Sin Nombre'}</h2>
                         <p class="text-lg text-gray-600">${(player.esAutorizado && player.categoriaOrigen) ? player.categoriaOrigen : (player.CATEGORIA || 'Sin Categoría')}</p>
                         <p class="text-lg text-gray-600">Número: ${primaryNumberForHeader}</p>
                         <div class="mt-4 flex items-center justify-center space-x-2">
