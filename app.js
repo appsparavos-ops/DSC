@@ -2182,6 +2182,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const drawSectionHeader = (text, y) => {
             if (y > pageHeight - pageMargin - 20) { doc.addPage(); y = pageMargin; }
             doc.setFontSize(12); doc.setFont(undefined, 'bold');
+            doc.setTextColor(0, 0, 0); // Asegurar color negro
             doc.text(text, pageMargin, y);
             doc.setFont(undefined, 'normal');
             return y + 8;
@@ -2198,7 +2199,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Ajustar anchos proporcionalmente
             const columnWidths = {};
-            if (columns.length === 3 && columns.includes('CATEGORIA')) {
+            if (columns.length === 4 && columns.includes('CATEGORIA') && columns.includes('ESTADO LICENCIA')) {
+                columnWidths['DNI'] = baseWidth * 0.15;
+                columnWidths['NOMBRE'] = baseWidth * 0.40;
+                columnWidths['CATEGORIA'] = baseWidth * 0.20;
+                columnWidths['ESTADO LICENCIA'] = baseWidth * 0.25;
+            } else if (columns.length === 3 && columns.includes('CATEGORIA')) {
                 columnWidths['DNI'] = baseWidth * 0.20;
                 columnWidths['NOMBRE'] = baseWidth * 0.50;
                 columnWidths['CATEGORIA'] = baseWidth * 0.30;
@@ -2381,7 +2387,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     yPosition = pageMargin;
                 }
                 yPosition = drawSectionHeader('Jugadores Potenciales (Sin Autorizar)', yPosition + 10);
-                const potentialCols = ['DNI', 'NOMBRE', 'CATEGORIA'];
+                const potentialCols = ['DNI', 'NOMBRE', 'CATEGORIA', 'ESTADO LICENCIA'];
                 yPosition = drawTableForCategory(potentialCols, potentialPlayersList, yPosition);
             }
         }
