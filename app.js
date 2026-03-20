@@ -1011,7 +1011,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (customTitle) {
             tableContainer.appendChild(createTable(sortPlayers(players, selectedCategory), selectedCategory, currentColumns));
-        } else if (selectedCategory || selectedEquipo) {
+        } else if (selectedCategory) {
             if (printButton) printButton.classList.remove('hidden');
             const playersInCategory = sortPlayers(players.filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A'), selectedCategory);
             const coaches = players.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A');
@@ -1110,6 +1110,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
         } else {
+            if (selectedEquipo && printButton) printButton.classList.remove('hidden');
             tableContainer.appendChild(createTable(sortPlayers(players, selectedCategory), selectedCategory, currentColumns));
         }
     }
