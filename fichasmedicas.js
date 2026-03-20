@@ -47,6 +47,13 @@ auth.onAuthStateChanged(async user => {
 });
 
 async function runProcess() {
+    // 0. NOTIFICACIÓN INICIO
+    const inicioMsg = `🚀 *Actualización de Fichas Médicas Iniciada*\n` +
+                 `📅 *Temporada:* ${AUTO_SEASON}\n` +
+                 `⏰ *Hora:* ${new Date().toLocaleTimeString('es-UY', { timeZone: 'America/Montevideo' })}\n` +
+                 `⏳ _Iniciando escaneo y procesamiento..._`;
+    await notificarTelegram(inicioMsg);
+
     // 1. CARGAR TEMPORADAS
     log('Cargando temporadas...');
     const resSeasons = await fetch(SEASONS_URL);
