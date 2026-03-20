@@ -2199,16 +2199,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Ajustar anchos proporcionalmente
             const columnWidths = {};
-            if (columns.length === 4 && columns.includes('CATEGORIA') && columns.includes('ESTADO LICENCIA')) {
-                columnWidths['DNI'] = baseWidth * 0.15;
-                columnWidths['NOMBRE'] = baseWidth * 0.40;
-                columnWidths['CATEGORIA'] = baseWidth * 0.20;
-                columnWidths['ESTADO LICENCIA'] = baseWidth * 0.25;
-            } else if (columns.length === 3 && columns.includes('CATEGORIA')) {
-                columnWidths['DNI'] = baseWidth * 0.20;
-                columnWidths['NOMBRE'] = baseWidth * 0.50;
-                columnWidths['CATEGORIA'] = baseWidth * 0.30;
-            } else if (includeLicense) {
+            if (includeLicense) {
+                // Si la tabla tiene 4 o 5 columnas y es la de licencia
                 columnWidths['DNI'] = baseWidth * 0.12;
                 columnWidths['NOMBRE'] = baseWidth * 0.43;
                 columnWidths['ESTADO LICENCIA'] = baseWidth * 0.20;
@@ -2220,6 +2212,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 columnWidths['FM Hasta'] = baseWidth * 0.15;
                 columnWidths['Numero'] = baseWidth * 0.15;
             }
+
+            // Fallback robusto para anchos faltantes: Si una columna no está mapeada, 
+            // usar el espacio sobrante o dividir equitativamente.
+            columns.forEach(col => {
+                if (!columnWidths[col]) columnWidths[col] = baseWidth / columns.length;
+            });
 
             // Fallback robusto para anchos faltantes
             columns.forEach(col => {
@@ -2387,8 +2385,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     yPosition = pageMargin;
                 }
                 yPosition = drawSectionHeader('Jugadores Potenciales (Sin Autorizar)', yPosition + 10);
-                const potentialCols = ['DNI', 'NOMBRE', 'CATEGORIA', 'ESTADO LICENCIA'];
-                yPosition = drawTableForCategory(potentialCols, potentialPlayersList, yPosition);
+                // Usar las mismas columnas que el resto del reporte (heredado de includeLicense)
+                yPosition = drawTableForCategory(columns, potentialPlayersList, yPosition);
             }
         }
 
