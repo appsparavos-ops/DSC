@@ -43,21 +43,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    async function loadSeasons() {
-        const snapshot = await db.ref('jugadores').once('value');
-        if (snapshot.exists()) {
-            const seasons = Object.keys(snapshot.val()).sort((a, b) => b.localeCompare(a));
-            seasonSelect.innerHTML = '<option value="">Seleccionar Temporada</option>';
-            seasons.forEach(s => {
-                const opt = document.createElement('option');
-                opt.value = opt.textContent = s;
-                seasonSelect.appendChild(opt);
-            });
-            // Auto-select latest
-            if (seasons.length > 0) {
-                seasonSelect.value = seasons[0];
+    function loadSeasons() {
+        console.log("Cargando temporadas desde /temporadas...");
+        db.ref('temporadas').on('value', snapshot => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const seasons = Object.keys(data).sort((a, b) => b.localeCompare(a));
+                console.log("Temporadas encontradas:", seasons);
+                
+                seasonSelect.innerHTML = '<option value="">Seleccionar Temporada</option>';
+                seasons.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = opt.textContent = s;
+                    seasonSelect.appendChild(opt);
+                });
+                // Auto-seleccionar la más reciente
+                if (seasons.length > 0 && !seasonSelect.value) {
+                    seasonSelect.value = seasons[0];
+                }
+            } else {
+                console.warn("No se encontraron temporadas en '/temporadas'");
+                showToast("No se encontraron temporadas.", "error");
             }
-        }
+        }, error => {
+            console.error("Error cargando temporadas:", error);
+            showToast("Error al cargar temporadas.", "error");
+        });
     }
 
     // --- AUDIT LOGIC ---
@@ -69,44 +80,72 @@ document.addEventListener('DOMContentLoaded', () => {
         updateUIState(true);
         resetStats();
 
-        const snapshot = await db.ref(`jugadores/${season}`).once('value');
-        if (!snapshot.exists()) {
+        try {
+            // 1. Cargar registros por temporada
+            const registrationsSnap = await db.ref(`registrosPorTemporada/${season}`).once('value');
+            if (!registrationsSnap.exists()) {
+                isAuditing = false;
+                updateUIState(false);
+                return showToast("No hay registros para esta temporada.", "error");
+            }
+
+            // 2. Cargar datos de jugadores para obtener nombres
+            const jugadoresSnap = await db.ref('jugadores').once('value');
+            const allJugadoresData = jugadoresSnap.exists() ? jugadoresSnap.val() : {};
+
+            const registrations = Object.values(registrationsSnap.val());
+            
+            // 3. Mapear datos completos
+            allPlayers = registrations.map(r => {
+                const dni = String(r._dni || r.DNI || r.dni || '').trim();
+                if (!dni) return null;
+                const personal = allJugadoresData[dni] ? allJugadoresData[dni].datosPersonales : null;
+                return {
+                    DNI: dni,
+                    NOMBRE: personal ? personal.NOMBRE : (r.Nombre || r.NOMBRE || 'Sin Nombre'),
+                    EQUIPO: r.EQUIPO || r.Equipo || '-',
+                    CATEGORIA: r.CATEGORIA || r.Categoria || '-'
+                };
+            }).filter(Boolean);
+
+            statTotal.textContent = allPlayers.length;
+            playersWithoutPhoto = [];
+            resultsBody.innerHTML = '';
+            progressContainer.classList.remove('hidden');
+
+            // 4. Verificación por lotes
+            const batchSize = 10;
+            for (let i = 0; i < allPlayers.length; i += batchSize) {
+                if (!isAuditing) break;
+
+                const batch = allPlayers.slice(i, i + batchSize);
+                const promises = batch.map(player => checkPlayerPhoto(player));
+                await Promise.all(promises);
+
+                const processed = Math.min(i + batchSize, allPlayers.length);
+                const percent = Math.round((processed / allPlayers.length) * 100);
+                progressBar.style.width = `${percent}%`;
+                progressPercent.textContent = `${percent}%`;
+                progressLabel.textContent = `Verificando ${processed} de ${allPlayers.length}...`;
+                statVerified.textContent = processed;
+            }
+
             isAuditing = false;
             updateUIState(false);
-            return showToast("No hay datos para esta temporada.", "error");
-        }
-
-        const data = snapshot.val();
-        allPlayers = Object.values(data);
-        statTotal.textContent = allPlayers.length;
-
-        playersWithoutPhoto = [];
-        resultsBody.innerHTML = '';
-        progressContainer.classList.remove('hidden');
-
-        // Check photos in batches to avoid overwhelming the browser/network
-        const batchSize = 10;
-        for (let i = 0; i < allPlayers.length; i += batchSize) {
-            if (!isAuditing) break;
-
-            const batch = allPlayers.slice(i, i + batchSize);
-            const promises = batch.map(player => checkPlayerPhoto(player));
-            await Promise.all(promises);
-
-            const processed = Math.min(i + batchSize, allPlayers.length);
-            const percent = Math.round((processed / allPlayers.length) * 100);
-            progressBar.style.width = `${percent}%`;
-            progressPercent.textContent = `${percent}%`;
-            progressLabel.textContent = `Verificando ${processed} de ${allPlayers.length}...`;
-            statVerified.textContent = processed;
-        }
-
-        isAuditing = false;
-        updateUIState(false);
-        renderResults();
-        showToast("Auditoría completada.", "success");
-        if (typeof AuditLogger !== 'undefined') {
-            AuditLogger.logAction('completó Auditoría de Fotos', `Temporada: ${season}, Sin foto: ${playersWithoutPhoto.length}`);
+            renderResults();
+            showToast("Auditoría completada.", "success");
+            
+            if (typeof AuditLogger !== 'undefined') {
+                AuditLogger.log('completó Auditoría de Fotos', {
+                    temporada: season,
+                    sinFoto: playersWithoutPhoto.length
+                });
+            }
+        } catch (error) {
+            console.error("Error durante la auditoría:", error);
+            showToast("Ocurrió un error inesperado.", "error");
+            isAuditing = false;
+            updateUIState(false);
         }
     });
 
