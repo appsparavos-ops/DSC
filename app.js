@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const COLUMN_ORDER = ['DNI', 'NOMBRE', 'FM Hasta', 'Numero', 'CATEGORIA', 'EQUIPO',];
     const PROGRESSION_RULES = {
         'U11 Femenino': ['U12 Femenino', 'U11 Mixta', 'U12 Mixta'],
-        'U11 Mixta': ['U12 Mixta', 'U12 Femenino'],
+        'U11 Mixta': ['U12 Mixta'],
         'U12 Femenino': ['U12 Mixta', 'U14 Femenino'],
         'U12 Mixta': ['U14 Masculino'],
         'U14 Femenino': ['U14 Mixta', 'U16 Femenino'],
