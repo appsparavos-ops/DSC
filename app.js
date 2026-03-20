@@ -2215,6 +2215,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 columnWidths['Numero'] = baseWidth * 0.15;
             }
 
+            // Fallback robusto para anchos faltantes
+            columns.forEach(col => {
+                if (!columnWidths[col]) columnWidths[col] = baseWidth / columns.length;
+            });
+
             const drawHeader = () => {
                 let x = pageMargin;
                 doc.setFontSize(fontSize + 1); doc.setFont(undefined, 'bold');
@@ -2336,14 +2341,18 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // --- JUGADORES POTENCIALES (SIN AUTORIZAR) ---
-        const selectedEquipo = equipoFilter ? equipoFilter.value : '';
-        if (selectedCategory && selectedEquipo) {
-            const potentialPlayers = allPlayers.filter(p => {
-                if (p.TIPO === 'ENTRENADOR/A') return false;
+        const currentFilteredEquipo = equipoFilter ? equipoFilter.value : '';
+        if (selectedCategory && currentFilteredEquipo && currentFilteredEquipo !== 'TODOS') {
+            const potentialPlayersList = allPlayers.filter(p => {
+                const pTipo = (p.TIPO || '').toUpperCase();
+                if (pTipo === 'ENTRENADOR/A') return false;
                 if (p.CATEGORIA === selectedCategory) return false;
                 if (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) return false;
                 if (p.esAutorizado && p.CATEGORIA === selectedCategory) return false;
-                if (p.EQUIPO !== selectedEquipo) return false;
+                
+                // Mismo equipo
+                if (String(p.EQUIPO).trim().toUpperCase() !== currentFilteredEquipo.trim().toUpperCase()) return false;
+                
                 const possibleDestinations = PROGRESSION_RULES[p.CATEGORIA] || [];
                 if (!possibleDestinations.includes(selectedCategory)) return false;
 
@@ -2365,10 +2374,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 return true;
             }).sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
 
-            if (potentialPlayers.length > 0) {
-                yPosition = drawSectionHeader('Jugadores Potenciales (Sin Autorizar)', yPosition + 5);
-                const potentialColumns = ['DNI', 'NOMBRE', 'CATEGORIA'];
-                yPosition = drawTableForCategory(potentialColumns, potentialPlayers, yPosition);
+            if (potentialPlayersList.length > 0) {
+                // Forzar espacio o nueva página si queda poco espacio
+                if (yPosition > doc.internal.pageSize.getHeight() - 40) {
+                    doc.addPage();
+                    yPosition = pageMargin;
+                }
+                yPosition = drawSectionHeader('Jugadores Potenciales (Sin Autorizar)', yPosition + 10);
+                const potentialCols = ['DNI', 'NOMBRE', 'CATEGORIA'];
+                yPosition = drawTableForCategory(potentialCols, potentialPlayersList, yPosition);
             }
         }
 
