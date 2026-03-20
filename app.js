@@ -1011,7 +1011,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (customTitle) {
             tableContainer.appendChild(createTable(sortPlayers(players, selectedCategory), selectedCategory, currentColumns));
-        } else if (selectedCategory) {
+        } else if (selectedCategory || selectedEquipo) {
             if (printButton) printButton.classList.remove('hidden');
             const playersInCategory = sortPlayers(players.filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A'), selectedCategory);
             const coaches = players.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A');
@@ -1913,9 +1913,9 @@ document.addEventListener('DOMContentLoaded', function () {
         // Priorizar el reporte de Vencimientos si es el que se generó específicamente
         if (currentColumnsForPDF.length === 3 && currentColumnsForPDF.includes('FM Hasta') && currentlyDisplayedPlayers.length > 0) {
             await generateExpiringPDF();
-        } else if (selectedCategory) {
-            // Mostrar modal de opciones para el PDF de categoría
-            showPDFOptionsModal(selectedCategory);
+        } else if (selectedCategory || (equipoFilter && equipoFilter.value)) {
+            // Mostrar modal de opciones para el PDF de categoría o equipo
+            showPDFOptionsModal(selectedCategory, !selectedCategory ? equipoFilter.value : null);
         } else if (currentlyDisplayedPlayers.length > 0 && currentColumnsForPDF.length > 0) {
             await generateExpiringPDF();
         } else {
@@ -1923,7 +1923,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    function showPDFOptionsModal(selectedCategory) {
+    function showPDFOptionsModal(selectedCategory, selectedEquipo = null) {
         const modal = document.getElementById('pdfOptionsModal');
         const btnYes = document.getElementById('pdfOptionYes');
         const btnNo = document.getElementById('pdfOptionNo');
@@ -1936,11 +1936,19 @@ document.addEventListener('DOMContentLoaded', function () {
         // Handlers temporales
         const handleYes = async () => {
             closeModal();
-            await generateCategoryPDF(selectedCategory, true);
+            if (selectedEquipo) {
+                await generateTeamPDF(selectedEquipo, true);
+            } else {
+                await generateCategoryPDF(selectedCategory, true);
+            }
         };
         const handleNo = async () => {
             closeModal();
-            await generateCategoryPDF(selectedCategory, false);
+            if (selectedEquipo) {
+                await generateTeamPDF(selectedEquipo, false);
+            } else {
+                await generateCategoryPDF(selectedCategory, false);
+            }
         };
         const closeModal = () => {
             modal.classList.add('hidden');
@@ -2154,6 +2162,205 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // This is the full implementation of generateCategoryPDF, including the nested helpers.
+    async function generateTeamPDF(selectedEquipo, includeLicense = false) {
+        if (typeof window.jspdf === 'undefined') {
+            return showToast("Librería PDF no disponible.", "error");
+        }
+
+        const playersInTeam = currentlyDisplayedPlayers.filter(p => !p._isCedido && (p.EQUIPO || '').trim().toUpperCase() === selectedEquipo.trim().toUpperCase());
+
+        if (playersInTeam.length === 0) {
+            return showToast("No hay jugadores en este equipo para generar el PDF.", "error");
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait' });
+        const title = `Reporte de Equipo: ${selectedEquipo}`;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const pageMargin = 15;
+        let yPosition = pageMargin;
+
+        const maskDNI = dni => { const s = String(dni || ''); return s.length > 4 ? '****' + s.substring(4) : s; };
+
+        const drawSectionHeader = (text, y, fontSize = 12) => {
+            if (y > pageHeight - pageMargin - 20) { doc.addPage(); y = pageMargin; }
+            doc.setFontSize(fontSize); doc.setFont(undefined, 'bold');
+            doc.setTextColor(0, 0, 0);
+            doc.text(text, pageMargin, y);
+            doc.setFont(undefined, 'normal');
+            return y + 8;
+        };
+
+        const drawTable = (columns, data, startY, categoryContext) => {
+            let y = startY;
+            const rowHeight = 6, headerHeight = 7, fontSize = 8;
+            const baseWidth = pageWidth - 2 * pageMargin;
+            const columnWidths = {};
+            if (includeLicense) {
+                columnWidths['DNI'] = baseWidth * 0.12;
+                columnWidths['NOMBRE'] = baseWidth * 0.43;
+                columnWidths['ESTADO LICENCIA'] = baseWidth * 0.20;
+                columnWidths['FM Hasta'] = baseWidth * 0.13;
+                columnWidths['Numero'] = baseWidth * 0.12;
+            } else {
+                columnWidths['DNI'] = baseWidth * 0.15;
+                columnWidths['NOMBRE'] = baseWidth * 0.55;
+                columnWidths['FM Hasta'] = baseWidth * 0.15;
+                columnWidths['Numero'] = baseWidth * 0.15;
+            }
+            columns.forEach(col => { if (!columnWidths[col]) columnWidths[col] = baseWidth / columns.length; });
+
+            const drawHeader = () => {
+                let x = pageMargin;
+                doc.setFontSize(fontSize + 1); doc.setFont(undefined, 'bold');
+                columns.forEach(col => {
+                    const colWidth = columnWidths[col];
+                    doc.setFillColor(25, 50, 100); doc.setDrawColor(25, 50, 100); doc.setTextColor(255, 255, 255);
+                    doc.rect(x, y, colWidth, headerHeight, 'FD');
+                    doc.text(col, x + 2, y + 5);
+                    x += colWidth;
+                });
+                y += headerHeight;
+                doc.setFont(undefined, 'normal'); doc.setFontSize(fontSize); doc.setTextColor(0, 0, 0); doc.setDrawColor(0, 0, 0);
+            };
+
+            drawHeader();
+            data.forEach(player => {
+                if (y > pageHeight - pageMargin - rowHeight) { doc.addPage(); y = pageMargin; drawHeader(); }
+                const isBaja = player['ESTADO LICENCIA'] === 'Baja';
+                const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
+                let fillColor = [255, 255, 255], textColor = [0, 0, 0];
+
+                if (isBaja) { fillColor = [153, 27, 27]; textColor = [255, 255, 255]; }
+                else if (player['TIPO'] === 'ENTRENADOR/A') { fillColor = [219, 234, 254]; textColor = [30, 58, 138]; }
+                else {
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const season = seasonFilter ? seasonFilter.value : player.TEMPORADA;
+                    let tournamentEndDate = null;
+                    if (season && season.includes('-')) {
+                        const years = season.split('-').map(y => y.trim());
+                        tournamentEndDate = new Date(parseInt(years[years.length - 1]), 5, 30);
+                    } else if (season) { tournamentEndDate = new Date(parseInt(season), 11, 25); }
+
+                    if (!expirationDate || expirationDate < today) { fillColor = [153, 27, 27]; textColor = [255, 255, 255]; }
+                    else if (tournamentEndDate && expirationDate > tournamentEndDate) { fillColor = [22, 163, 74]; textColor = [255, 255, 255]; }
+                    else {
+                        const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
+                        const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+                        if (expirationDate <= thirtyDays) { fillColor = [249, 115, 22]; textColor = [0, 0, 0]; }
+                        else if (expirationDate <= sixtyDays) { fillColor = [254, 240, 138]; textColor = [0, 0, 0]; }
+                    }
+                }
+
+                let x = pageMargin;
+                columns.forEach(colName => {
+                    const colWidth = columnWidths[colName];
+                    doc.setFillColor(...fillColor); doc.setDrawColor(0, 0, 0); doc.setTextColor(...textColor);
+                    let cellValue = player[colName] || '-';
+                    if (colName === 'DNI') cellValue = maskDNI(player[colName]);
+                    else if (colName === 'Numero') cellValue = (player.Numeros && player.Numeros[categoryContext]) || player.Numero || ' ';
+                    else if (colName === 'NOMBRE' && isBaja) cellValue = `${player.NOMBRE || ''} - Baja`;
+                    if (colName === 'FM Hasta' && (cellValue === '1/1/1900' || cellValue === '-')) cellValue = 'Sin Ficha';
+
+                    doc.rect(x, y, colWidth, rowHeight, 'FD');
+                    doc.text(String(cellValue), x + 2, y + 4, { maxWidth: colWidth - 4 });
+                    x += colWidth;
+                });
+                y += rowHeight;
+            });
+            return y;
+        };
+
+        let logoImage = null;
+        try {
+            logoImage = await new Promise((resolve, reject) => {
+                const img = new Image(); img.crossOrigin = 'Anonymous';
+                img.onload = () => resolve(img); img.onerror = (err) => reject(err);
+                img.src = LOGO_URL;
+            });
+        } catch (e) { console.error("No se pudo cargar el logo:", e); }
+
+        if (logoImage) {
+            const logoSize = 15, logoWidth = 10;
+            doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoWidth, logoSize);
+            doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
+        }
+
+        doc.setFontSize(18); doc.setFont(undefined, 'bold');
+        doc.text(title, pageWidth / 2, pageMargin + 10, { align: 'center' });
+        yPosition = pageMargin + 20;
+
+        // Categorias sorting
+        const categories = [...new Set(playersInTeam.map(p => p.CATEGORIA))].sort(globalCategorySort);
+        const columns = ['DNI', 'NOMBRE'];
+        if (includeLicense) columns.push('ESTADO LICENCIA');
+        columns.push('FM Hasta', 'Numero');
+
+        for (const cat of categories) {
+            if (yPosition > pageHeight - pageMargin - 30) { doc.addPage(); yPosition = pageMargin + 10; }
+            doc.setFontSize(14); doc.setFont(undefined, 'bold'); doc.setTextColor(25, 50, 100);
+            doc.text(`CATEGORÍA: ${cat.toUpperCase()}`, pageMargin, yPosition);
+            doc.line(pageMargin, yPosition + 1, pageWidth - pageMargin, yPosition + 1);
+            yPosition += 10;
+
+            const playersInCategory = playersInTeam.filter(p => p.CATEGORIA === cat && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A').sort((a, b) => {
+                const aIsBaja = a['ESTADO LICENCIA'] === 'Baja', bIsBaja = b['ESTADO LICENCIA'] === 'Baja';
+                if (aIsBaja && !bIsBaja) return 1; if (!aIsBaja && bIsBaja) return -1;
+                const getSortVal = p => {
+                    const raw = (p.Numeros && p.Numeros[cat]) || p.Numero;
+                    if (raw === undefined || raw === null || raw === '') return Infinity;
+                    const s = String(raw).trim();
+                    if (s === '0') return -2; if (s === '00') return -1;
+                    const n = parseInt(s, 10);
+                    return isNaN(n) ? Infinity : n;
+                };
+                return getSortVal(a) - getSortVal(b);
+            });
+
+            const coaches = playersInTeam.filter(p => p.CATEGORIA === cat && p.TIPO === 'ENTRENADOR/A');
+            const authorizedPlayers = playersInTeam.filter(p => (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(cat) && p.CATEGORIA !== cat) || (p.esAutorizado && p.CATEGORIA === cat)).sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
+
+            if (playersInCategory.length > 0) {
+                yPosition = drawTable(columns, playersInCategory, yPosition, cat);
+                yPosition += 5;
+            }
+            if (coaches.length > 0) {
+                yPosition = drawSectionHeader('Entrenadores', yPosition, 10);
+                yPosition = drawTable(columns, coaches, yPosition, cat);
+                yPosition += 5;
+            }
+            if (authorizedPlayers.length > 0) {
+                yPosition = drawSectionHeader('Jugadores Autorizados (Refuerzos)', yPosition, 10);
+                yPosition = drawTable(columns, authorizedPlayers, yPosition, cat);
+                yPosition += 5;
+            }
+
+            const potentialPlayersList = allPlayers.filter(p => {
+                if ((p.TIPO || '').toUpperCase() === 'ENTRENADOR/A') return false;
+                if (p.CATEGORIA === cat) return false;
+                if (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(cat)) return false;
+                if (p.esAutorizado && p.CATEGORIA === cat) return false;
+                if (p._isCedido) return false;
+                if (String(p.EQUIPO).trim().toUpperCase() !== selectedEquipo.trim().toUpperCase()) return false;
+                const possibleDestinations = PROGRESSION_RULES[p.CATEGORIA] || [];
+                return possibleDestinations.includes(cat);
+            }).sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
+
+            if (potentialPlayersList.length > 0) {
+                yPosition = drawSectionHeader('Jugadores Potenciales (Sin Autorizar)', yPosition, 10);
+                yPosition = drawTable(columns, potentialPlayersList, yPosition, cat);
+                yPosition += 5;
+            }
+
+            yPosition += 10;
+        }
+
+        drawPDFFooter(doc);
+        doc.save(`Reporte_Equipo_${selectedEquipo}.pdf`);
+        showToast("PDF de equipo generado.", "success");
+    }
+
     async function generateCategoryPDF(selectedCategory, includeLicense = false) {
         if (typeof window.jspdf === 'undefined') {
             return showToast("Librería PDF no disponible.", "error");
