@@ -74,21 +74,21 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function classifyPaseLogic(pase) {
-        const today = new Date(); today.setHours(0,0,0,0);
+        const today = new Date(); today.setHours(0, 0, 0, 0);
         const fechaAcepta = pase['FECHA FEDERACION ACEPTA'];
-        
+
         if (!fechaAcepta || fechaAcepta.trim() === '') return 'pendiente';
-        
+
         const stringHasta = pase['VALIDO HASTA'];
         const tipoPase = (pase['TIPO PASE'] || '').toUpperCase().trim();
         const clubOrigen = (pase['CLUB ORIGEN'] || '').toUpperCase().trim();
 
         if (!stringHasta || (tipoPase === 'DEFINITIVO' && stringHasta.includes('31/12/9999'))) return 'vigente';
-        
+
         const parts = stringHasta.split('/');
-        if(parts.length !== 3) return 'vigente';
+        if (parts.length !== 3) return 'vigente';
         const vto = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-        
+
         const daysLeft = daysBetweenDates(today, vto);
         if (daysLeft < 0) {
             if (tipoPase.includes('TEMPORAL') && clubOrigen.includes('DEFENSOR')) {
@@ -335,7 +335,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 try {
                     const snap = await database.ref('/pases').once('value');
                     allGlobalPases = snap.val() || {};
-                } catch(e) { console.error("Error loading pases:", e); }
+                } catch (e) { console.error("Error loading pases:", e); }
             }
 
             const seasonalRecords = snapshot.val();
@@ -514,10 +514,10 @@ document.addEventListener('DOMContentLoaded', function () {
         database.ref().update(updates)
             .then(() => {
                 showToast("¡Cambios guardados con éxito!");
-                
+
                 // Registro detallado del cambio usando AuditLogger
                 AuditLogger.logUpdate('jugador', playerToUpdate.DNI || dni, playerToUpdate, finalDataParaLog);
-                
+
                 hidePlayerDetails();
             })
             .catch((error) => {
@@ -1716,12 +1716,12 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             await database.ref().update(updates);
             showToast(`${originalPlayer.NOMBRE} importado a la temporada ${newSeason} con éxito!`, "success");
-            AuditLogger.log('IMPORTACION', { 
-                entidad: 'jugador', 
-                registroId: originalPlayer.DNI, 
-                nombre: originalPlayer.NOMBRE, 
-                nuevaTemporada: newSeason, 
-                datos: newSeasonalData 
+            AuditLogger.log('IMPORTACION', {
+                entidad: 'jugador',
+                registroId: originalPlayer.DNI,
+                nombre: originalPlayer.NOMBRE,
+                nuevaTemporada: newSeason,
+                datos: newSeasonalData
             });
             hidePlayerDetails();
             if (seasonFilter.value !== newSeason) {
@@ -1874,12 +1874,12 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             await database.ref().update(updates);
             showToast(`${originalPlayer.NOMBRE} autorizado en ${newCategory} para la temporada ${newSeason}!`, "success");
-            AuditLogger.log('AUTORIZACION', { 
-                entidad: 'jugador', 
-                registroId: originalPlayer.DNI, 
-                nombre: originalPlayer.NOMBRE, 
-                nuevaTemporada: newSeason, 
-                nuevaCategoria: newCategory 
+            AuditLogger.log('AUTORIZACION', {
+                entidad: 'jugador',
+                registroId: originalPlayer.DNI,
+                nombre: originalPlayer.NOMBRE,
+                nuevaTemporada: newSeason,
+                nuevaCategoria: newCategory
             });
             hidePlayerDetails();
             if (seasonFilter.value !== newSeason) {
@@ -2147,9 +2147,9 @@ document.addEventListener('DOMContentLoaded', function () {
             return showToast("Librería PDF no disponible.", "error");
         }
 
-        const playersInCategory = currentlyDisplayedPlayers.filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A').sort((a, b) => { const aIsBaja = a['ESTADO LICENCIA'] === 'Baja', bIsBaja = b['ESTADO LICENCIA'] === 'Baja'; if (aIsBaja && !bIsBaja) return 1; if (!aIsBaja && bIsBaja) return -1; const getSortVal = p => { const raw = (p.Numeros && p.Numeros[selectedCategory]) || p.Numero; if (raw === undefined || raw === null || raw === '') return Infinity; const s = String(raw).trim(); if (s === '0') return -2; if (s === '00') return -1; const n = parseInt(s, 10); return isNaN(n) ? Infinity : n; }; return getSortVal(a) - getSortVal(b); });
+        const playersInCategory = currentlyDisplayedPlayers.filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A' && !p._isCedido).sort((a, b) => { const aIsBaja = a['ESTADO LICENCIA'] === 'Baja', bIsBaja = b['ESTADO LICENCIA'] === 'Baja'; if (aIsBaja && !bIsBaja) return 1; if (!aIsBaja && bIsBaja) return -1; const getSortVal = p => { const raw = (p.Numeros && p.Numeros[selectedCategory]) || p.Numero; if (raw === undefined || raw === null || raw === '') return Infinity; const s = String(raw).trim(); if (s === '0') return -2; if (s === '00') return -1; const n = parseInt(s, 10); return isNaN(n) ? Infinity : n; }; return getSortVal(a) - getSortVal(b); });
         const coaches = currentlyDisplayedPlayers.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A');
-        const authorizedPlayers = currentlyDisplayedPlayers.filter(p => (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) && p.CATEGORIA !== selectedCategory) || (p.esAutorizado && p.CATEGORIA === selectedCategory)).sort((a, b) => { const aIsBaja = a['ESTADO LICENCIA'] === 'Baja', bIsBaja = b['ESTADO LICENCIA'] === 'Baja'; if (aIsBaja && !bIsBaja) return 1; if (!aIsBaja && bIsBaja) return -1; return (a.NOMBRE || '').localeCompare(b.NOMBRE || ''); });
+        const authorizedPlayers = currentlyDisplayedPlayers.filter(p => ((p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) && p.CATEGORIA !== selectedCategory) || (p.esAutorizado && p.CATEGORIA === selectedCategory)) && !p._isCedido).sort((a, b) => { const aIsBaja = a['ESTADO LICENCIA'] === 'Baja', bIsBaja = b['ESTADO LICENCIA'] === 'Baja'; if (aIsBaja && !bIsBaja) return 1; if (!aIsBaja && bIsBaja) return -1; return (a.NOMBRE || '').localeCompare(b.NOMBRE || ''); });
 
         if (playersInCategory.length === 0 && coaches.length === 0 && authorizedPlayers.length === 0) {
             return showToast("No hay jugadores en esta categoría para generar el PDF.", "error");
@@ -2198,7 +2198,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Ajustar anchos proporcionalmente
             const columnWidths = {};
-            if (includeLicense) {
+            if (columns.length === 3 && columns.includes('CATEGORIA')) {
+                columnWidths['DNI'] = baseWidth * 0.20;
+                columnWidths['NOMBRE'] = baseWidth * 0.50;
+                columnWidths['CATEGORIA'] = baseWidth * 0.30;
+            } else if (includeLicense) {
                 columnWidths['DNI'] = baseWidth * 0.12;
                 columnWidths['NOMBRE'] = baseWidth * 0.43;
                 columnWidths['ESTADO LICENCIA'] = baseWidth * 0.20;
@@ -2329,6 +2333,43 @@ document.addEventListener('DOMContentLoaded', function () {
         if (authorizedPlayers.length > 0) {
             yPosition = drawSectionHeader('Jugadores Autorizados (Refuerzos)', yPosition + 5);
             yPosition = drawTableForCategory(columns, authorizedPlayers, yPosition);
+        }
+
+        // --- JUGADORES POTENCIALES (SIN AUTORIZAR) ---
+        const selectedEquipo = equipoFilter ? equipoFilter.value : '';
+        if (selectedCategory && selectedEquipo) {
+            const potentialPlayers = allPlayers.filter(p => {
+                if (p.TIPO === 'ENTRENADOR/A') return false;
+                if (p.CATEGORIA === selectedCategory) return false;
+                if (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) return false;
+                if (p.esAutorizado && p.CATEGORIA === selectedCategory) return false;
+                if (p.EQUIPO !== selectedEquipo) return false;
+                const possibleDestinations = PROGRESSION_RULES[p.CATEGORIA] || [];
+                if (!possibleDestinations.includes(selectedCategory)) return false;
+
+                const selectedIsMixed = selectedCategory.toLowerCase().includes('mixta') || selectedCategory.toLowerCase().includes('mixto');
+                const auths = p.categoriasAutorizadas || [];
+                if (selectedIsMixed) {
+                    const hasHigherFem = auths.some(a => {
+                        const isAMixed = a.toLowerCase().includes('mixta') || a.toLowerCase().includes('mixto');
+                        return !isAMixed && getCategoryOrder(a) > getCategoryOrder(p.CATEGORIA);
+                    });
+                    if (hasHigherFem) return false;
+                } else {
+                    const isHigher = getCategoryOrder(selectedCategory) > getCategoryOrder(p.CATEGORIA);
+                    if (isHigher) {
+                        const hasMixed = auths.some(a => a.toLowerCase().includes('mixta') || a.toLowerCase().includes('mixto'));
+                        if (hasMixed) return false;
+                    }
+                }
+                return true;
+            }).sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
+
+            if (potentialPlayers.length > 0) {
+                yPosition = drawSectionHeader('Jugadores Potenciales (Sin Autorizar)', yPosition + 5);
+                const potentialColumns = ['DNI', 'NOMBRE', 'CATEGORIA'];
+                yPosition = drawTableForCategory(potentialColumns, potentialPlayers, yPosition);
+            }
         }
 
         drawPDFFooter(doc);
