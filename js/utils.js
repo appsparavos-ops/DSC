@@ -101,51 +101,36 @@ export function filterLatestRecords(data) {
  * Retorna { filtered, pendientes } donde pendientes mapea NIF → datos a guardar como NUEVA SOLICITUD.
  */
 export function filterLatestPases(data) {
-    const map = new Map();        // NIF → registro principal
-    const pending = new Map();    // NIF → registro pendiente (NUEVA SOLICITUD)
+    const mainMap = new Map();      // NIF → registro principal (activo)
+    const pendingMap = new Map();   // NIF → registro pendiente (solicitud)
+    const processedNifs = new Set(); // NIFs que ya tienen su "main" final determinado
 
     data.forEach(row => {
         const nif = (row.NIF || row.DNI || '').trim();
-        if (!nif) return;
+        if (!nif || processedNifs.has(nif)) return;
 
-        const existing = map.get(nif);
-        if (!existing) {
-            map.set(nif, row);
-            return;
-        }
+        // Para que el pase sea VIGENTE (main), se requiere que FEDERACION = SÍ
+        const fedStatus = (row['FEDERACION ACEPTA'] || '').trim().toUpperCase();
+        // Robustez: Comprobamos 'SÍ' (con tilde) y 'SI' (sin tilde)
+        const hasAcepta = fedStatus === 'SÍ' || fedStatus === 'SI';
 
-        const newFechaAcepta = parseDate(row['FECHA FEDERACION ACEPTA']);
-        const existFechaAcepta = parseDate(existing['FECHA FEDERACION ACEPTA']);
-
-        if (newFechaAcepta && existFechaAcepta) {
-            // Caso 1: Ambos tienen aceptación → mantener más reciente
-            if (newFechaAcepta.getTime() >= existFechaAcepta.getTime()) {
-                map.set(nif, row);
-            }
-            // Si es más viejo, se omite (existing se mantiene)
-        } else if (!newFechaAcepta && existFechaAcepta) {
-            // Caso 2: Nuevo NO tiene aceptación, existente SÍ
-            // Mantener existente, guardar nuevo como pendiente
-            pending.set(nif, row);
-        } else if (newFechaAcepta && !existFechaAcepta) {
-            // Caso 4: Existente NO tiene aceptación, nuevo SÍ
-            // Sobrescribir con el nuevo, preservar existente como pendiente
-            pending.set(nif, existing);
-            map.set(nif, row);
+        if (hasAcepta) {
+            // Caso A: Es el primer registro con aceptación que vemos -> es el más reciente (Fuente: Orden CSV)
+            mainMap.set(nif, row);
+            processedNifs.add(nif);
+            // Al marcar como procesado, cualquier registro posterior (más viejo) se ignorará.
+            // Si ya habíamos guardado un "pendiente" para este NIF (que estaba más arriba en el CSV),
+            // se mantiene como tal.
         } else {
-            // Caso 3: Ninguno tiene aceptación → comparar FECHA SOLICITUD
-            const newFechaSol = parseDate(row['FECHA SOLICITUD']);
-            const existFechaSol = parseDate(existing['FECHA SOLICITUD']);
-
-            if (newFechaSol && existFechaSol) {
-                if (newFechaSol.getTime() >= existFechaSol.getTime()) {
-                    map.set(nif, row);
-                }
-            } else if (newFechaSol) {
-                map.set(nif, row);
+            // Caso B: No tiene aceptación -> Es una solicitud pendiente.
+            // Si es la primera vez que vemos una solicitud para este NIF, la guardamos.
+            if (!pendingMap.has(nif)) {
+                pendingMap.set(nif, row);
             }
+            // NO marcamos como procesado el NIF porque aún necesitamos encontrar
+            // el pase activo (con fecha) más reciente que esté abajo en el CSV.
         }
     });
 
-    return { filtered: Array.from(map.values()), pendientes: pending };
+    return { filtered: Array.from(mainMap.values()), pendientes: pendingMap };
 }

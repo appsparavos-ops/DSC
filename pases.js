@@ -78,8 +78,11 @@ function classifyPase(pase) {
     const validoHasta = parseDate(validoHastaRaw);
     const tipoPase = (pase['TIPO PASE'] || '').toUpperCase().trim();
 
+    const fedStat = (pase['FEDERACION ACEPTA'] || '').trim().toUpperCase();
+    const isAceptado = fedStat === 'SÍ' || fedStat === 'SI';
+
     // No aceptado por la federación → pendiente
-    if (!fechaAcepta || fechaAcepta.trim() === '') {
+    if (!isAceptado) {
         return 'pendiente';
     }
 
@@ -96,13 +99,20 @@ function classifyPase(pase) {
 }
 
 function getSeasonYear(pase) {
-    let fecha = pase['FECHA FEDERACION ACEPTA'];
-    if (!fecha || fecha.trim() === '') {
-        fecha = pase['FECHA SOLICITUD'];
+    let fechaRaw = pase['FECHA FEDERACION ACEPTA'];
+    if (!fechaRaw || fechaRaw.trim() === '') {
+        fechaRaw = pase['FECHA SOLICITUD'];
     }
-    if (!fecha) return null;
-    const d = parseDate(fecha);
-    return d ? d.getFullYear().toString() : null;
+    if (!fechaRaw) return null;
+    const d = parseDate(fechaRaw);
+    if (!d) return null;
+
+    let year = d.getFullYear();
+    // Si la fecha es después del 15 de diciembre (mes 11 en JS), sumar 1 al año
+    if (d.getMonth() === 11 && d.getDate() > 15) {
+        year++;
+    }
+    return year.toString();
 }
 
 function getTabPases(tab) {

@@ -259,115 +259,67 @@ export async function uploadPasesData(data, pendientes) {
     let skipped = 0;
     let pendingSaved = 0;
 
-    // Campos internos que NO deben guardarse como NUEVA SOLICITUD
     const internalKeys = ['NUEVA SOLICITUD'];
 
     function cleanForPending(record) {
         const clean = {};
         for (const key of Object.keys(record)) {
-            if (!internalKeys.includes(key)) {
-                clean[key] = record[key];
-            }
+            if (!internalKeys.includes(key)) clean[key] = record[key];
         }
         return clean;
     }
 
-    function parseDateStr(str) {
-        if (!str) return null;
-        const parts = str.split('/');
-        if (parts.length !== 3) return null;
-        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    function isSame(o1, o2) {
+        return JSON.stringify(o1) === JSON.stringify(o2);
     }
 
-    // Compara campos del CSV contra el registro existente en Firebase.
-    // Ignora 'NUEVA SOLICITUD' del existente. Retorna true si son idénticos.
-    function recordsAreEqual(csvRow, fbRecord) {
-        for (const key of Object.keys(csvRow)) {
-            if (key === 'NUEVA SOLICITUD') continue;
-            const csvVal = (csvRow[key] ?? '').toString().trim();
-            const fbVal  = (fbRecord[key] ?? '').toString().trim();
-            if (csvVal !== fbVal) return false;
-        }
-        return true;
-    }
-
+    // 1. NIFs con pase activo en el CSV (data ya filtrado con lo más reciente)
     data.forEach(row => {
         const nif = (row.NIF || row.DNI || '').trim();
         if (!nif) return;
 
-        const existing = existingPases[nif];
+        const record = { ...row };
+        if (pendientes.has(nif)) {
+            record['NUEVA SOLICITUD'] = cleanForPending(pendientes.get(nif));
+            pendingSaved++;
+        }
 
-        if (!existing) {
-            // No existe → subir directamente
-            const record = { ...row };
-            // Si hay pendiente del pre-filtro CSV, agregarlo
-            if (pendientes.has(nif)) {
-                record['NUEVA SOLICITUD'] = cleanForPending(pendientes.get(nif));
-                pendingSaved++;
-            }
-            allUpdates[`/pases/${nif}`] = record;
-            uploaded++;
+        const existing = existingPases[nif];
+        // Si es idéntico a lo que ya hay (incluyendo la ausencia de NUEVA SOLICITUD), saltar
+        if (existing && isSame(record, existing)) {
+            skipped++;
             return;
         }
 
-        // Ya existe en Firebase → aplicar lógica de 4 casos
-        const newFechaAcepta = parseDateStr(row['FECHA FEDERACION ACEPTA']);
-        const existFechaAcepta = parseDateStr(existing['FECHA FEDERACION ACEPTA']);
+        allUpdates[`/pases/${nif}`] = record;
+        uploaded++;
+    });
 
-        if (newFechaAcepta && existFechaAcepta) {
-            // Caso 1: Ambos tienen aceptación
-            if (newFechaAcepta.getTime() >= existFechaAcepta.getTime()) {
-                // Si los datos no cambiaron, omitir escritura
-                if (recordsAreEqual(row, existing)) { skipped++; return; }
-                const record = { ...row };
-                if (pendientes.has(nif)) {
-                    record['NUEVA SOLICITUD'] = cleanForPending(pendientes.get(nif));
-                    pendingSaved++;
-                }
-                allUpdates[`/pases/${nif}`] = record;
-                uploaded++;
-            } else {
+    // 2. NIFs que SOLO tienen solicitud pendiente (sin pase activo nuevo en el CSV)
+    pendientes.forEach((pendingRow, nif) => {
+        // Si ya se procesó en el paso 1, omitir
+        if (data.some(r => (r.NIF || r.DNI || '').trim() === nif)) return;
+
+        const existing = existingPases[nif];
+        const pendingData = cleanForPending(pendingRow);
+
+        if (existing) {
+            // Solo actualizamos el sub-nodo de solicitud si es diferente
+            if (existing['NUEVA SOLICITUD'] && isSame(existing['NUEVA SOLICITUD'], pendingData)) {
                 skipped++;
+                return;
             }
-        } else if (!newFechaAcepta && existFechaAcepta) {
-            // Caso 2: Nuevo NO tiene aceptación, existente SÍ
-            // Mantener existente, guardar nuevo como NUEVA SOLICITUD
-            allUpdates[`/pases/${nif}/NUEVA SOLICITUD`] = cleanForPending(row);
-            pendingSaved++;
-        } else if (newFechaAcepta && !existFechaAcepta) {
-            // Caso 4: Existente NO tiene aceptación, nuevo SÍ
-            // Sobrescribir, pero guardar existente como NUEVA SOLICITUD
-            const record = { ...row };
-            record['NUEVA SOLICITUD'] = cleanForPending(existing);
-            allUpdates[`/pases/${nif}`] = record;
-            uploaded++;
-            pendingSaved++;
+            allUpdates[`/pases/${nif}/NUEVA SOLICITUD`] = pendingData;
         } else {
-            // Caso 3: Ninguno tiene aceptación → comparar FECHA SOLICITUD
-            const newFechaSol = parseDateStr(row['FECHA SOLICITUD']);
-            const existFechaSol = parseDateStr(existing['FECHA SOLICITUD']);
-
-            let shouldReplace = false;
-            if (newFechaSol && existFechaSol) {
-                shouldReplace = newFechaSol.getTime() >= existFechaSol.getTime();
-            } else if (newFechaSol) {
-                shouldReplace = true;
-            }
-
-            if (shouldReplace) {
-                // Si los datos no cambiaron, omitir escritura
-                if (recordsAreEqual(row, existing)) { skipped++; return; }
-                const record = { ...row };
-                if (pendientes.has(nif)) {
-                    record['NUEVA SOLICITUD'] = cleanForPending(pendientes.get(nif));
-                    pendingSaved++;
-                }
-                allUpdates[`/pases/${nif}`] = record;
-                uploaded++;
-            } else {
-                skipped++;
-            }
+            // Registro nuevo solo con solicitud
+            const record = {
+                NIF: nif,
+                JUGADOR: pendingRow.JUGADOR || pendingRow.NOMBRE || '',
+                'NUEVA SOLICITUD': pendingData
+            };
+            allUpdates[`/pases/${nif}`] = record;
         }
+        pendingSaved++;
     });
 
     if (Object.keys(allUpdates).length > 0) {
