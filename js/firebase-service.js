@@ -78,6 +78,19 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
         const categoria = row.CATEGORIA ? row.CATEGORIA.trim() : '';
         const estadoLicencia = row['ESTADO LICENCIA'] ? row['ESTADO LICENCIA'].trim() : '';
 
+        // --- ACTUALIZAR DATOS PERSONALES (Siempre se intenta si no se omite la fila) ---
+        const currentGender = existingGenders[dni];
+        if (row.NOMBRE && !currentGender) {
+            const deduced = deduceGender(row.NOMBRE, categoria);
+            if (deduced) row.genero = deduced;
+        }
+
+        personalKeys.forEach(key => {
+            if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
+                allUpdates[`/${rootNode}/${dni}/datosPersonales/${key}`] = row[key];
+            }
+        });
+
         let targetPushId = null;
         let accumulatedNumeros = {};
 
@@ -120,12 +133,6 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
             }
         }
 
-        // Deducir género solo si no está disponible en datosPersonales (para no sobrescribir correcciones manuales)
-        const currentGender = existingGenders[dni];
-        if (row.NOMBRE && !currentGender) {
-            const deduced = deduceGender(row.NOMBRE, categoria);
-            if (deduced) row.genero = deduced;
-        }
 
         if (!targetPushId) {
             // Track added record
@@ -138,11 +145,6 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
         }
 
         const seasonalData = {};
-        personalKeys.forEach(key => {
-            if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
-                allUpdates[`/${rootNode}/${dni}/datosPersonales/${key}`] = row[key];
-            }
-        });
         seasonalKeys.forEach(key => {
             if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
                 seasonalData[key] = row[key];
