@@ -64,7 +64,8 @@ export function filterLatestRecords(data) {
         const categoria = row.CATEGORIA ? row.CATEGORIA.trim() : '';
         if (!dni) return;
 
-        const key = `${dni}|${categoria}`;
+        const isCoach = row.TIPO && row.TIPO.trim().toUpperCase() === 'ENTRENADOR/A';
+        const key = isCoach ? `${dni}|${categoria}|${row.FECHA_ALTA || ''}` : `${dni}|${categoria}`;
         const existingRecord = latestRecordsMap.get(key);
 
         if (!existingRecord) {
@@ -133,4 +134,51 @@ export function filterLatestPases(data) {
     });
 
     return { filtered: Array.from(mainMap.values()), pendientes: pendingMap };
+}
+
+/**
+ * Deduce el género basado en el nombre de pila y la categoría.
+ * @param {string} fullName - Nombre completo (ej: "APELLIDO, NOMBRE")
+ * @param {string} category - Categoría (ej: "U11 Mixta")
+ * @returns {string|null} - "Masculino", "Femenino" o null
+ */
+export function deduceGender(fullName, category) {
+    if (!fullName) return null;
+    
+    const catUpper = (category || "").toUpperCase();
+    if (catUpper.includes("FEMENINO")) return "Femenino";
+    if (catUpper.includes("MASCULINO")) return "Masculino";
+    // Criterios explícitos: Liga de Desarrollo, Liga Uruguaya
+    if (catUpper.includes("LIGA DE DESARROLLO") || catUpper.includes("LIGA URUGUAYA")) return "Masculino";
+
+    // Extraer nombre de pila
+    let firstName = "";
+    if (fullName.includes(",")) {
+        firstName = fullName.split(",")[1].trim().split(" ")[0];
+    } else {
+        const parts = fullName.trim().split(" ");
+        firstName = parts[parts.length - 1];
+    }
+
+    if (!firstName) return null;
+    
+    const name = firstName.toUpperCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Quitar acentos
+
+    // Reglas de terminación para español
+    const femaleEndings = ["A", "ELA", "INA", "ITA", "ETTE", "ELLE", "IS", "ID"];
+    const maleEndings = ["O", "UR", "OR", "EL", "AS", "AN", "ON", "ES", "US", "AM", "IM"];
+
+    // Casos especiales frecuentes
+    const specialMale = ["LUCA", "BAUTISTA", "JOSHUA", "MATIAS", "JOSE", "LUIS", "JUAN", "VICENTE", "MANUEL", "JAVIER"];
+    const specialFemale = ["ANDREA", "MARIA", "ANA", "INES", "RAQUEL", "ISABEL", "CARMEN", "ESTER", "LIZ", "RUTH"];
+
+    if (specialMale.includes(name)) return "Masculino";
+    if (specialFemale.includes(name)) return "Femenino";
+
+    // Heurística por terminación
+    if (femaleEndings.some(e => name.endsWith(e))) return "Femenino";
+    if (maleEndings.some(e => name.endsWith(e))) return "Masculino";
+
+    return null;
 }

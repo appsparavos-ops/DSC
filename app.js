@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const COLUMN_ORDER = ['DNI', 'NOMBRE', 'FM Hasta', 'Numero', 'CATEGORIA', 'EQUIPO',];
     const PROGRESSION_RULES = {
         'U11 Femenino': ['U12 Femenino', 'U11 Mixta', 'U12 Mixta'],
-        'U11 Mixta': ['U12 Mixta'],
+        'U11 Mixta': ['U12 Mixta', 'U12 Femenino'],
         'U12 Femenino': ['U12 Mixta', 'U14 Femenino'],
         'U12 Mixta': ['U14 Masculino'],
         'U14 Femenino': ['U14 Mixta', 'U16 Femenino'],
@@ -375,8 +375,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     const pasesValue = allGlobalPases[dni];
                     if (pasesValue) {
                         // Puede ser un solo registro o una colección de empujes
-                        const pasesArray = (pasesValue['FECHA FEDERACION ACEPTA']) 
-                            ? [pasesValue] 
+                        const pasesArray = (pasesValue['FECHA FEDERACION ACEPTA'])
+                            ? [pasesValue]
                             : Object.values(pasesValue);
 
                         // Buscar el pase cedido activo más reciente
@@ -484,7 +484,9 @@ document.addEventListener('DOMContentLoaded', function () {
             // --- LÓGICA ORIGINAL PARA JUGADORES NO AUTORIZADOS ---
             const finalData = { ...playerToUpdate };
             if (playerDetailView) {
-                playerDetailView.querySelectorAll('#player-data-list input[type="text"]').forEach(input => finalData[input.dataset.key] = input.value);
+                playerDetailView.querySelectorAll('#player-data-list input, #player-data-list select').forEach(input => {
+                    if (input.dataset.key) finalData[input.dataset.key] = input.value;
+                });
                 const selectElement = document.getElementById('edit-categoriasAutorizadas');
                 finalData.categoriasAutorizadas = selectElement ? Array.from(selectElement.selectedOptions).map(o => o.value) : (playerToUpdate.categoriasAutorizadas || []);
                 finalData.Numeros = newNumeros;
@@ -496,7 +498,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
+            const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta', 'genero'];
             const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'Numero', 'categoriasAutorizadas', 'Numeros', 'TEMPORADA'];
             const personalDataToUpdate = {}, seasonalDataToUpdate = {};
             personalKeys.forEach(k => { if (finalData[k] !== undefined) personalDataToUpdate[k] = finalData[k]; });
@@ -603,7 +605,21 @@ document.addEventListener('DOMContentLoaded', function () {
     function isFemaleCategory(categoryName) {
         if (!categoryName) return false;
         const cat = categoryName.toLowerCase();
-        return cat.includes('femenino') || cat.includes('fem');
+        return (cat.includes('femenino') || cat.includes('femenina') || cat.includes('fem')) && !cat.includes('mixt');
+    }
+
+    function isMaleCategory(categoryName) {
+        if (!categoryName) return false;
+        const cat = categoryName.toLowerCase();
+        // Criterios explícitos: Liga de Desarrollo, Liga Uruguaya
+        if (cat.includes('liga de desarrollo') || cat.includes('liga uruguaya')) return true;
+        return (cat.includes('masculino') || cat.includes('masculina') || cat.includes('masc')) && !cat.includes('mixt');
+    }
+
+    function isMixedCategory(categoryName) {
+        if (!categoryName) return false;
+        const cat = categoryName.toLowerCase();
+        return cat.includes('mixt');
     }
 
     function getCategoryOrder(categoryName) {
@@ -1087,6 +1103,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     }
 
+                    // --- NUEVAS REGLAS DE GÉNERO ---
+                    if (p.genero === 'Masculino' && isFemaleCategory(selectedCategory)) return false;
+                    if (p.genero === 'Femenino' && isMaleCategory(selectedCategory)) return false;
+
                     return true;
                 }), selectedCategory);
 
@@ -1274,6 +1294,17 @@ document.addEventListener('DOMContentLoaded', function () {
         }).join('')}
                                 </div>
                             `).join('')}
+                            ${isEditing ? `
+                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                                <div>
+                                    <label for="edit-genero" class="block text-sm font-medium text-gray-600">Género</label>
+                                    <select id="edit-genero" data-key="genero" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                                        <option value="" ${!player.genero ? 'selected' : ''}>Seleccione...</option>
+                                        <option value="Masculino" ${player.genero === 'Masculino' ? 'selected' : ''}>Masculino</option>
+                                        <option value="Femenino" ${player.genero === 'Femenino' ? 'selected' : ''}>Femenino</option>
+                                    </select>
+                                </div>
+                            </div>` : ''}
                         </div>
                         ${isEditing ? `
                         <div class="mt-6 flex flex-wrap md:flex-nowrap gap-6">
@@ -1340,6 +1371,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     if (isCatMixed && hasAnySuperiorFemAuth) return false;
                     if (isCatSuperiorFem && hasAnyMixedAuth) return false;
+
+                    // --- NUEVAS REGLAS DE GÉNERO ---
+                    if (player.genero === 'Masculino' && isFemaleCategory(cat)) return false;
+                    if (player.genero === 'Femenino' && isMaleCategory(cat)) return false;
+
                     return true;
                 });
 
@@ -1547,7 +1583,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             const pushId = database.ref().push().key;
 
-            const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
+            const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta', 'genero'];
             const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'Numero'];
 
             const personalDataToSave = {};
@@ -2345,7 +2381,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (p._isCedido) return false;
                 if (String(p.EQUIPO).trim().toUpperCase() !== selectedEquipo.trim().toUpperCase()) return false;
                 const possibleDestinations = PROGRESSION_RULES[p.CATEGORIA] || [];
-                return possibleDestinations.includes(cat);
+                if (!possibleDestinations.includes(cat)) return false;
+
+                // --- NUEVAS REGLAS DE GÉNERO Y EXCLUSIÓN MUTUA ---
+                if (p.genero === 'Masculino' && isFemaleCategory(cat)) return false;
+                if (p.genero === 'Femenino' && isMaleCategory(cat)) return false;
+
+                const selectedIsMixed = isMixedCategory(cat);
+                const auths = p.categoriasAutorizadas || [];
+                if (selectedIsMixed) {
+                    const hasHigherFem = auths.some(a => !isMixedCategory(a) && getCategoryOrder(a) > getCategoryOrder(p.CATEGORIA));
+                    if (hasHigherFem) return false;
+                } else {
+                    const isHigher = getCategoryOrder(cat) > getCategoryOrder(p.CATEGORIA);
+                    if (isHigher) {
+                        const hasMixed = auths.some(a => isMixedCategory(a));
+                        if (hasMixed) return false;
+                    }
+                }
+                return true;
             }).sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
 
             if (potentialPlayersList.length > 0) {
@@ -2573,28 +2627,29 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (p.CATEGORIA === selectedCategory) return false;
                 if (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) return false;
                 if (p.esAutorizado && p.CATEGORIA === selectedCategory) return false;
-                
+
                 // Excluir cedidos
                 if (p._isCedido) return false;
 
                 // Mismo equipo
                 if (String(p.EQUIPO).trim().toUpperCase() !== currentFilteredEquipo.trim().toUpperCase()) return false;
-                
+
                 const possibleDestinations = PROGRESSION_RULES[p.CATEGORIA] || [];
                 if (!possibleDestinations.includes(selectedCategory)) return false;
 
-                const selectedIsMixed = selectedCategory.toLowerCase().includes('mixta') || selectedCategory.toLowerCase().includes('mixto');
+                // --- NUEVAS REGLAS DE GÉNERO Y EXCLUSIÓN MUTUA ---
+                if (p.genero === 'Masculino' && isFemaleCategory(selectedCategory)) return false;
+                if (p.genero === 'Femenino' && isMaleCategory(selectedCategory)) return false;
+
+                const selectedIsMixed = isMixedCategory(selectedCategory);
                 const auths = p.categoriasAutorizadas || [];
                 if (selectedIsMixed) {
-                    const hasHigherFem = auths.some(a => {
-                        const isAMixed = a.toLowerCase().includes('mixta') || a.toLowerCase().includes('mixto');
-                        return !isAMixed && getCategoryOrder(a) > getCategoryOrder(p.CATEGORIA);
-                    });
+                    const hasHigherFem = auths.some(a => !isMixedCategory(a) && getCategoryOrder(a) > getCategoryOrder(p.CATEGORIA));
                     if (hasHigherFem) return false;
                 } else {
                     const isHigher = getCategoryOrder(selectedCategory) > getCategoryOrder(p.CATEGORIA);
                     if (isHigher) {
-                        const hasMixed = auths.some(a => a.toLowerCase().includes('mixta') || a.toLowerCase().includes('mixto'));
+                        const hasMixed = auths.some(a => isMixedCategory(a));
                         if (hasMixed) return false;
                     }
                 }

@@ -1,7 +1,7 @@
 /**
  * Servicio de Firebase para Auth y Database.
  */
-import { getTimestampKey } from './utils.js';
+import { getTimestampKey, deduceGender } from './utils.js';
 
 // Inicializar Firebase si aún no se ha hecho
 if (!firebase.apps.length) {
@@ -43,6 +43,21 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
         }
     });
 
+    // --- PRE-FETCH GÉNEROS EXISTENTES ---
+    const existingGenders = {};
+    try {
+        const [jugadoresSnap, entrenadoresSnap] = await Promise.all([
+            database.ref('jugadores').once('value'),
+            database.ref('entrenadores').once('value')
+        ]);
+        const jVal = jugadoresSnap.val() || {};
+        const eVal = entrenadoresSnap.val() || {};
+        Object.keys(jVal).forEach(d => { if (jVal[d].datosPersonales?.genero) existingGenders[d] = jVal[d].datosPersonales.genero; });
+        Object.keys(eVal).forEach(d => { if (eVal[d].datosPersonales?.genero) existingGenders[d] = eVal[d].datosPersonales.genero; });
+    } catch (e) {
+        console.error("Error pre-fetching genders:", e);
+    }
+
     const allUpdates = {};
     let processedCount = 0;
     let skippedCount = 0;
@@ -52,11 +67,12 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
     const modifiedRecords = [];
     const removedRecords = [];
 
-    const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta'];
+    const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta', 'genero'];
     const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'TEMPORADA', 'Numero', 'Numeros', 'categoriasAutorizadas'];
 
     data.forEach(row => {
-        const rootNode = row.TIPO.trim().toUpperCase() === 'ENTRENADOR/A' ? 'entrenadores' : 'jugadores';
+        const isCoach = row.TIPO.trim().toUpperCase() === 'ENTRENADOR/A';
+        const rootNode = isCoach ? 'entrenadores' : 'jugadores';
         const dni = row.DNI.trim();
         const temporada = manualSeason;
         const categoria = row.CATEGORIA ? row.CATEGORIA.trim() : '';
@@ -71,7 +87,17 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
                 else if (r.Numero && r.CATEGORIA) accumulatedNumeros[r.CATEGORIA] = r.Numero;
             });
 
-            const match = existingRecords[dni].find(r => r.CATEGORIA === categoria);
+            const match = existingRecords[dni].find(r => {
+                const isCoachMatch = r._tipo === 'entrenadores' || (r.TIPO && r.TIPO.trim().toUpperCase() === 'ENTRENADOR/A');
+                if (isCoach && isCoachMatch) {
+                    // Para entrenadores, deben coincidir categoría Y fecha (ALTA o LICencia)
+                    const rowFecha = row.FECHA_ALTA || '';
+                    const recFecha = r.FECHA_ALTA || r.FECHA_LIC || '';
+                    return r.CATEGORIA === categoria && recFecha === rowFecha;
+                }
+                // Para jugadores, solo importa la categoría en la temporada
+                return r.CATEGORIA === categoria;
+            });
             if (match) {
                 unmatchedPushIds.delete(match._pushId);
                 const recEstado = match['ESTADO LICENCIA'] || '';
@@ -92,6 +118,13 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
                 });
                 targetPushId = match._pushId;
             }
+        }
+
+        // Deducir género solo si no está disponible en datosPersonales (para no sobrescribir correcciones manuales)
+        const currentGender = existingGenders[dni];
+        if (row.NOMBRE && !currentGender) {
+            const deduced = deduceGender(row.NOMBRE, categoria);
+            if (deduced) row.genero = deduced;
         }
 
         if (!targetPushId) {
