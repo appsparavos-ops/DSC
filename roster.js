@@ -598,6 +598,7 @@ function renderPlayers() {
     });
 
     const authorized = players.filter(p => {
+        const pEquipo = String(p.EQUIPO || "").trim();
         const pCat = String(p.CATEGORIA || "").trim();
         const pAuthEquipo = String(p.equipoAutorizado || "").trim();
         const isAuth = p.esAutorizado === true || String(p.esAutorizado).toLowerCase() === 'true';
