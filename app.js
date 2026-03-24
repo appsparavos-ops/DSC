@@ -1228,6 +1228,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function showPlayerDetails(player, canEdit, playerIndex = -1, isEditing = false) {
         if (!mainContent || !playerDetailView) return;
+        const specialCategories = ["Liga Uruguaya de Basquet", "Liga de Desarrollo", "Liga Femenina de Basquet"];
 
         const isReadOnlyForAuth = player.esAutorizado && isEditing;
 
