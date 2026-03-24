@@ -19,6 +19,7 @@ const playersTableBody = document.getElementById('playersTableBody');
 const selectedCountEl = document.getElementById('selectedCount');
 const toast = document.getElementById('toast');
 const toastText = document.getElementById('toastText');
+const availableCountEl = document.getElementById('availableCount');
 
 const authorizedSection = document.getElementById('authorizedSection');
 const authorizedCountEl = document.getElementById('authorizedCount');
@@ -41,6 +42,7 @@ let sortCol = 'nombre';
 let sortDir = 'asc';
 let playerSanctions = {};
 let playedMatchesList = {}; // { mmdd: [categories] }
+let unrestrictedMode = false;
 
 let allGlobalPases = {};
 
@@ -124,6 +126,16 @@ function showToast(message, type = 'info') {
         toast.classList.remove('translate-y-0', 'opacity-100');
     }, 3000);
 }
+
+window.toggleUnrestrictedMode = function() {
+    unrestrictedMode = !unrestrictedMode;
+    if (unrestrictedMode) {
+        showToast("Modo sin restricciones ACTIVADO", "info");
+    } else {
+        showToast("Modo sin restricciones DESACTIVADO", "info");
+    }
+    renderPlayers();
+};
 
 // Autenticación
 // Cargar Sanciones
@@ -296,6 +308,7 @@ function loadPlayers(temporada) {
                 combined.NUMERO_TEMPORADA = record.Numero || record.NUMERO || record['Nº'] || "";
                 combined.esAutorizado = record.esAutorizado === true || String(record.esAutorizado).toLowerCase() === 'true';
                 combined.categoriasAutorizadas = record.categoriasAutorizadas || [];
+                combined.equipoAutorizado = record.equipoAutorizado || "";
 
                 return combined;
             }).filter(p => p._tipo === "jugadores" || p._tipo === "entrenadores");
@@ -307,7 +320,7 @@ function loadPlayers(temporada) {
 }
 
 function populateFilters() {
-    const teams = [...new Set(allPlayers.map(p => p.EQUIPO).filter(Boolean))].sort();
+    const teams = [...new Set(allPlayers.flatMap(p => [p.EQUIPO, p.equipoAutorizado]).filter(Boolean))].sort();
     const currentTeam = teamSelect.value;
     const currentCat = categorySelect.value;
 
@@ -317,7 +330,8 @@ function populateFilters() {
 
     let playersForCategories = allPlayers;
     if (teamSelect.value) {
-        playersForCategories = allPlayers.filter(p => String(p.EQUIPO || "").trim() === String(teamSelect.value).trim());
+        const selTeamVal = String(teamSelect.value).trim();
+        playersForCategories = allPlayers.filter(p => String(p.EQUIPO || "").trim() === selTeamVal || String(p.equipoAutorizado || "").trim() === selTeamVal);
     }
 
     const categoriesSet = new Set();
@@ -395,22 +409,26 @@ function renderPlayers() {
 
     const filtered = allPlayers.filter(p => {
         const pEquipo = String(p.EQUIPO || "").trim();
+        const pAuthEquipo = String(p.equipoAutorizado || "").trim();
         const pCategoria = String(p.CATEGORIA || "").trim();
         const pAuthArr = p.categoriasAutorizadas || [];
         const isAuthFlag = p.esAutorizado === true || String(p.esAutorizado).toLowerCase() === 'true';
 
-        // 1. Filtrar por equipo
-        if (pEquipo !== selTeam) return false;
+        // 1. Pertenencia al equipo (directo o por autorización)
+        const belongsToTeam = (pEquipo === selTeam) || (pAuthEquipo === selTeam);
+        if (!belongsToTeam) return false;
 
-        // 2. Filtrar por pertenencia a la categoría (directo o autorizado)
+        // 2. Pertenencia a la categoría (directo o por autorización)
         const matchesMainCat = pCategoria === selCat;
-        const matchesAuthArr = pAuthArr.some(c => String(c).trim() === selCat);
-        const matchesAuthFlag = isAuthFlag && pCategoria === selCat;
-        const belongsToCat = matchesMainCat || matchesAuthArr || matchesAuthFlag;
+        // Solo es autorizado en selCat para este selTeam si:
+        // - El equipoAutorizado es este selTeam
+        // - O si no tiene equipoAutorizado pero el equipo principal es este selTeam (autorización interna)
+        const isAuthorizedInCatForThisTeam = pAuthArr.some(c => String(c).trim() === selCat) && (pAuthEquipo === selTeam || (pEquipo === selTeam && !pAuthEquipo));
+        const matchesAuthFlag = isAuthFlag && pCategoria === selCat && pEquipo === selTeam;
 
-        if (!belongsToCat) return false;
+        if (!((matchesMainCat && pEquipo === selTeam) || isAuthorizedInCatForThisTeam || matchesAuthFlag)) return false;
 
-        // 3. NUEVO: Filtrar por selección si el modo lo requiere
+        // 3. NUEVO: Filtrar por selección si el modo lo requiere (Restaurado)
         if (rosterViewMode === 'selected-num' || rosterViewMode === 'selected-alpha') {
             const node = p._tipo === 'entrenadores' ? 'staff' : 'jugadores';
             const isSelected = rosterData[node] && rosterData[node][p.DNI] && rosterData[node][p.DNI].seleccionado;
@@ -504,6 +522,22 @@ function renderPlayers() {
         p._disabilityData = { isDisabled, disabledText, isExpired, expDate, isFUBBInvalid, estadoLicencia, isSancionado, paseIsExpired, isCurrentlyCedido, fechasRestantes };
     });
 
+    // Calcular disponibles (jugadores que NO están deshabilitados originalmente)
+    const availablePlayers = filtered.filter(p => p._tipo === 'jugadores' && !p._disabilityData.isDisabled);
+    const availableCount = availablePlayers.length;
+    availableCountEl.textContent = `${availableCount} Disponibles`;
+    
+    //Feedback visual para el botón de disponibles
+    if (unrestrictedMode) {
+        availableCountEl.classList.add('bg-red-600', 'ring-2', 'ring-white');
+        availableCountEl.classList.remove('bg-gray-400/20');
+        availableCountEl.innerHTML = `⚠️ Sin Restricciones`;
+    } else {
+        availableCountEl.classList.remove('bg-red-600', 'ring-2', 'ring-white');
+        availableCountEl.classList.add('bg-gray-400/20');
+        availableCountEl.innerHTML = `${availableCount} Disponibles`;
+    }
+
     filtered.sort((a, b) => {
         let comparison = 0;
         
@@ -565,11 +599,14 @@ function renderPlayers() {
 
     const authorized = players.filter(p => {
         const pCat = String(p.CATEGORIA || "").trim();
+        const pAuthEquipo = String(p.equipoAutorizado || "").trim();
         const isAuth = p.esAutorizado === true || String(p.esAutorizado).toLowerCase() === 'true';
 
-        // El mismo chequeo que en app.js (lineas ~876-878)
-        const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.some(cat => String(cat).trim() === selCat) && pCat !== selCat;
-        const isCrossSeasonAuth = isAuth && pCat === selCat;
+        // El mismo chequeo que en app.js y renderPlayers
+        const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.some(cat => String(cat).trim() === selCat) && 
+                                 (pAuthEquipo === selTeam || (pEquipo === selTeam && !pAuthEquipo)) &&
+                                 pCat !== selCat;
+        const isCrossSeasonAuth = isAuth && pCat === selCat && pEquipo === selTeam;
 
         return isSameSeasonAuth || isCrossSeasonAuth;
     });
@@ -725,7 +762,10 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
     }
 
     const isConflict = rosterEntry.seleccionado && numeroAMostrar && duplicateNumbers.includes(String(numeroAMostrar).trim());
-    const inputStyle = isConflict ? 'border-red-500 bg-red-50 focus:ring-red-500/20' : 'border-gray-200 focus:ring-blue-500/20';
+    let inputStyle = isConflict ? 'border-red-500 bg-red-50 focus:ring-red-500/20' : 'border-gray-200 focus:ring-blue-500/20';
+    if (unrestrictedMode && !isCoach && isDisabled) {
+        inputStyle = 'border-red-500 bg-red-50 focus:ring-red-500/20';
+    }
 
     const tr = document.createElement('tr');
     tr.className = `player-row border-b border-gray-50 ${rosterEntry.seleccionado ? 'selected-row' : ''}`;
@@ -762,7 +802,7 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
                     <input type="text" value="${numeroAMostrar}" 
                         class="w-12 text-center border ${inputStyle} rounded-xl py-2 font-bold text-blue-900 outline-none transition-all shadow-sm"
                         onchange="updateNumber('${dni}', this.value)"
-                        ${isDisabled ? 'disabled' : ''}>
+                        ${(isDisabled && !unrestrictedMode) ? 'disabled' : ''}>
                     ${isConflict ? `
                         <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[9px] text-red-600 font-bold whitespace-nowrap bg-white px-1">
                             Número Repetido
@@ -772,7 +812,7 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
             </div>
         </td>
         <td class="px-6 py-4 text-right">
-            ${isDisabled ? `
+            ${(isDisabled && !unrestrictedMode) ? `
                 <span class="text-[10px] bg-red-100 text-red-600 px-3 py-1.5 rounded-full font-bold uppercase tracking-wider">${disabledText}</span>
             ` : `
                 <input type="checkbox" ${rosterEntry.seleccionado ? 'checked' : ''} 

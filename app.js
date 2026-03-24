@@ -489,6 +489,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
                 const selectElement = document.getElementById('edit-categoriasAutorizadas');
                 finalData.categoriasAutorizadas = selectElement ? Array.from(selectElement.selectedOptions).map(o => o.value) : (playerToUpdate.categoriasAutorizadas || []);
+                const equipoAuthElement = document.getElementById('edit-equipoAutorizado');
+                finalData.equipoAutorizado = equipoAuthElement ? equipoAuthElement.value.trim() : (playerToUpdate.equipoAutorizado || '');
                 finalData.Numeros = newNumeros;
                 finalData.Numero = newPrimaryNumber;
             }
@@ -499,7 +501,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const personalKeys = ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta', 'genero'];
-            const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'Numero', 'categoriasAutorizadas', 'Numeros', 'TEMPORADA'];
+            const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'Numero', 'categoriasAutorizadas', 'equipoAutorizado', 'Numeros', 'TEMPORADA'];
             const personalDataToUpdate = {}, seasonalDataToUpdate = {};
             personalKeys.forEach(k => { if (finalData[k] !== undefined) personalDataToUpdate[k] = finalData[k]; });
             seasonalKeys.forEach(k => { if (finalData[k] !== undefined) seasonalDataToUpdate[k] = finalData[k]; });
@@ -576,8 +578,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const playersForCategoryList = allPlayers.filter(p => !selectedEquipo || p.EQUIPO === selectedEquipo);
         populateCategoryFilter(playersForCategoryList);
 
-        // Para el filtro de equipos, consideramos la categoría seleccionada
-        const playersForEquipoList = allPlayers.filter(p => !selectedCategory || p.CATEGORIA === selectedCategory || (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) || (p.esAutorizado && p.CATEGORIA === selectedCategory));
+        // Para el filtro de equipos, consideramos la categoría seleccionada y las autorizaciones cruzadas
+        const playersForEquipoList = allPlayers.filter(p => {
+            if (!selectedCategory) return true;
+            const matchesMainCat = p.CATEGORIA === selectedCategory;
+            const matchesAuthCat = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory);
+            const matchesEsAuth = p.esAutorizado && p.CATEGORIA === selectedCategory;
+            return matchesMainCat || matchesAuthCat || matchesEsAuth;
+        });
         populateEquipoFilter(playersForEquipoList);
 
         updateSearchSuggestions(allPlayers);
@@ -586,7 +594,7 @@ document.addEventListener('DOMContentLoaded', function () {
             (!nameTerm || (p.NOMBRE && p.NOMBRE.toLowerCase().includes(nameTerm))) &&
             (!dniTerm || (p.DNI && String(p.DNI).toLowerCase().includes(dniTerm))) &&
             (!selectedCategory || p.CATEGORIA === selectedCategory || (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) || (p.esAutorizado && p.CATEGORIA === selectedCategory)) &&
-            (!selectedEquipo || p.EQUIPO === selectedEquipo)
+            (!selectedEquipo || p.EQUIPO === selectedEquipo || (p.equipoAutorizado === selectedEquipo && p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)))
         );
 
         displayPlayers(filteredPlayers);
@@ -1032,7 +1040,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const playersInCategory = sortPlayers(players.filter(p => p.CATEGORIA === selectedCategory && !p.esAutorizado && p.TIPO !== 'ENTRENADOR/A'), selectedCategory);
             const coaches = players.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A');
             const authorizedPlayers = sortPlayers(players.filter(p => {
-                const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) && p.CATEGORIA !== selectedCategory;
+                const pAuthEquipo = String(p.equipoAutorizado || "").trim();
+                const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) && 
+                                         (pAuthEquipo === selectedEquipo || (p.EQUIPO === selectedEquipo && !pAuthEquipo)) &&
+                                         p.CATEGORIA !== selectedCategory;
                 const isCrossSeasonAuth = p.esAutorizado && p.CATEGORIA === selectedCategory;
                 return isSameSeasonAuth || isCrossSeasonAuth;
             }), selectedCategory);
@@ -1317,6 +1328,21 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <div id="categorias-content" class="hidden">
                                     <select multiple id="edit-categoriasAutorizadas" class="mt-1 block w-full h-24 px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm"></select>
                                     <p class="mt-1 text-xs text-gray-500">Mantén Ctrl (o Cmd) para seleccionar varias.</p>
+                                    
+                                    <div class="mt-4">
+                                        <label for="edit-equipoAutorizado" class="block text-sm font-medium text-gray-600">Equipo Autorizado (Otro Equipo)</label>
+                                        <input type="text" id="edit-equipoAutorizado" list="edit-equipos-list" data-key="equipoAutorizado" value="${player.equipoAutorizado || player.EQUIPO || ''}" 
+                                            placeholder="Seleccione o escriba un equipo..."
+                                            class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
+                                        <datalist id="edit-equipos-list">
+                                            ${(() => {
+                                                const progressionCats = PROGRESSION_RULES[player.CATEGORIA] || [];
+                                                const allAuthCats = [...new Set([...progressionCats, ...specialCategories])];
+                                                const teamsForCats = [...new Set(allPlayers.filter(p => allAuthCats.includes(p.CATEGORIA)).map(p => p.EQUIPO).filter(Boolean))].sort();
+                                                return teamsForCats.map(eq => `<option value="${eq}">${eq}</option>`).join('');
+                                            })()}
+                                        </datalist>
+                                    </div>
                                 </div>
                             </div>
                         </div>` : ''}
