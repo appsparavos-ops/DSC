@@ -407,6 +407,12 @@ function renderPlayers() {
     const selTeam = String(team).trim();
     const selCat = String(category).trim();
 
+    // 0. Cálculo de Fecha del Partido (para filtros de pases y FM)
+    const matchDateStr = dateSelect.value;
+    const matchDateParts = matchDateStr.split('-');
+    const matchDate = new Date(parseInt(matchDateParts[0]), parseInt(matchDateParts[1]) - 1, parseInt(matchDateParts[2]));
+    matchDate.setHours(0, 0, 0, 0);
+
     const filtered = allPlayers.filter(p => {
         const pEquipo = String(p.EQUIPO || "").trim();
         const pAuthEquipo = String(p.equipoAutorizado || "").trim();
@@ -439,10 +445,6 @@ function renderPlayers() {
     });
 
     // --- PRE-CÁLCULO ESTADO DE ELEGIBILIDAD ---
-    const matchDateStr = dateSelect.value;
-    const matchDateParts = matchDateStr.split('-');
-    const matchDate = new Date(parseInt(matchDateParts[0]), parseInt(matchDateParts[1]) - 1, parseInt(matchDateParts[2]));
-    matchDate.setHours(0, 0, 0, 0);
 
     filtered.forEach(p => {
         const dni = String(p.DNI);
@@ -494,6 +496,7 @@ function renderPlayers() {
         const pase = allGlobalPases[dni];
         let paseIsExpired = false;
         let isCurrentlyCedido = false;
+        let isPasePendiente = false;
 
         if (pase && !isCoach) {
             const pStatus = classifyPaseLogic(pase, matchDate);
@@ -502,6 +505,8 @@ function renderPlayers() {
             const clubDestino = (pase['CLUB DESTINO'] || '').toUpperCase().trim();
 
             if (pStatus === 'vencido') paseIsExpired = true;
+            if (pStatus === 'pendiente') isPasePendiente = true;
+
             if (clubOrigen.includes('DEFENSOR') && !clubDestino.includes('DEFENSOR') &&
                 tipoPase.includes('TEMPORAL') && (pStatus === 'vigente' || pStatus === 'aVencer')) {
                 isCurrentlyCedido = true;
@@ -509,21 +514,34 @@ function renderPlayers() {
         }
 
         const needsFM = !isCoach;
-        const isDisabled = (needsFM && isExpired) || isFUBBInvalid || isSancionado || paseIsExpired || isCurrentlyCedido;
+        const isDisabled = (needsFM && isExpired) || isFUBBInvalid || isSancionado || paseIsExpired || isCurrentlyCedido || isPasePendiente;
 
         let disabledText = (needsFM && isExpired) ? 'FICHA MEDICA' : 'FUBB (No Hab.)';
         if (paseIsExpired) disabledText = 'PASE VENCIDO';
         else if (isCurrentlyCedido) disabledText = 'PRESTADO A OTRO';
+        else if (isPasePendiente) disabledText = 'PASE PENDIENTE';
         else if (isSancionado) {
             const unit = (sanction && sanction.tipoSancion === 'tiempo') ? ' días' : ' fechas';
             disabledText = `Sanción (${fechasRestantes}${unit})`;
         }
 
-        p._disabilityData = { isDisabled, disabledText, isExpired, expDate, isFUBBInvalid, estadoLicencia, isSancionado, paseIsExpired, isCurrentlyCedido, fechasRestantes };
+        p._disabilityData = { isDisabled, disabledText, isExpired, expDate, isFUBBInvalid, estadoLicencia, isSancionado, paseIsExpired, isCurrentlyCedido, isPasePendiente, fechasRestantes };
+    });
+
+    // --- FILTRADO FINAL DE VISIBILIDAD (Ocultar bajas, vencidos y cedidos) ---
+    const finalFiltered = filtered.filter(p => {
+        if (p._tipo === 'entrenadores') return true; // Nunca ocultar staff por estas reglas
+
+        const d = p._disabilityData;
+        if (d.estadoLicencia === 'BAJA') return false;
+        if (d.paseIsExpired) return false;
+        if (d.isCurrentlyCedido) return false;
+
+        return true;
     });
 
     // Calcular disponibles (jugadores que NO están deshabilitados originalmente)
-    const availablePlayers = filtered.filter(p => p._tipo === 'jugadores' && !p._disabilityData.isDisabled);
+    const availablePlayers = finalFiltered.filter(p => p._tipo === 'jugadores' && !p._disabilityData.isDisabled);
     const availableCount = availablePlayers.length;
     availableCountEl.textContent = `${availableCount} Disponibles`;
     
@@ -538,7 +556,7 @@ function renderPlayers() {
         availableCountEl.innerHTML = `${availableCount} Disponibles`;
     }
 
-    filtered.sort((a, b) => {
+    finalFiltered.sort((a, b) => {
         let comparison = 0;
         
         if (sortCol === 'nombre') {
@@ -587,8 +605,8 @@ function renderPlayers() {
     });
 
     // Separar por TIPO: Jugadores vs Entrenadores
-    const coaches = filtered.filter(p => p._tipo === 'entrenadores');
-    const players = filtered.filter(p => p._tipo === 'jugadores');
+    const coaches = finalFiltered.filter(p => p._tipo === 'entrenadores');
+    const players = finalFiltered.filter(p => p._tipo === 'jugadores');
 
     // Separar Titulares de Autorizados (Refuerzos)
     const regulars = players.filter(p => {

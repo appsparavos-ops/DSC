@@ -102,38 +102,54 @@ export function filterLatestRecords(data) {
  * Retorna { filtered, pendientes } donde pendientes mapea NIF → datos a guardar como NUEVA SOLICITUD.
  */
 export function filterLatestPases(data) {
-    const mainMap = new Map();      // NIF → registro principal (activo)
-    const pendingMap = new Map();   // NIF → registro pendiente (solicitud)
-    const processedNifs = new Set(); // NIFs que ya tienen su "main" final determinado
+    const bestMain = new Map();    // NIF → registro principal (activo)
+    const bestPending = new Map(); // NIF → registro pendiente (solicitud)
 
     data.forEach(row => {
         const nif = (row.NIF || row.DNI || '').trim();
-        if (!nif || processedNifs.has(nif)) return;
+        if (!nif) return;
 
-        // Para que el pase sea VIGENTE (main), se requiere que FEDERACION = SÍ
         const fedStatus = (row['FEDERACION ACEPTA'] || '').trim().toUpperCase();
-        // Robustez: Comprobamos 'SÍ' (con tilde) y 'SI' (sin tilde)
         const hasAcepta = fedStatus === 'SÍ' || fedStatus === 'SI';
 
+        const rawAcepta = row['FECHA FEDERACION ACEPTA'];
+        const rawSolicitud = row['FECHA SOLICITUD'];
+        
+        const rowDate = parseDate(rawAcepta) || parseDate(rawSolicitud);
+        if (!rowDate) return;
+
         if (hasAcepta) {
-            // Caso A: Es el primer registro con aceptación que vemos -> es el más reciente (Fuente: Orden CSV)
-            mainMap.set(nif, row);
-            processedNifs.add(nif);
-            // Al marcar como procesado, cualquier registro posterior (más viejo) se ignorará.
-            // Si ya habíamos guardado un "pendiente" para este NIF (que estaba más arriba en el CSV),
-            // se mantiene como tal.
-        } else {
-            // Caso B: No tiene aceptación -> Es una solicitud pendiente.
-            // Si es la primera vez que vemos una solicitud para este NIF, la guardamos.
-            if (!pendingMap.has(nif)) {
-                pendingMap.set(nif, row);
+            const currentMain = bestMain.get(nif);
+            const currentMainDate = currentMain ? (parseDate(currentMain['FECHA FEDERACION ACEPTA']) || parseDate(currentMain['FECHA SOLICITUD'])) : null;
+
+            if (!currentMain || rowDate.getTime() > currentMainDate.getTime()) {
+                bestMain.set(nif, row);
             }
-            // NO marcamos como procesado el NIF porque aún necesitamos encontrar
-            // el pase activo (con fecha) más reciente que esté abajo en el CSV.
+        } else {
+            const currentPending = bestPending.get(nif);
+            const currentPendingDate = currentPending ? parseDate(currentPending['FECHA SOLICITUD']) : null;
+
+            if (!currentPending || rowDate.getTime() > currentPendingDate.getTime()) {
+                bestPending.set(nif, row);
+            }
         }
     });
 
-    return { filtered: Array.from(mainMap.values()), pendientes: pendingMap };
+    // Arbitraje Final: Si la aceptación es posterior o igual a la solicitud, eliminar la solicitud.
+    // (Un pase aceptado es el resultado final, no necesita mostrarse además como pendiente)
+    bestPending.forEach((pendingRow, nif) => {
+        const main = bestMain.get(nif);
+        if (main) {
+            const mainDate = parseDate(main['FECHA FEDERACION ACEPTA']) || parseDate(main['FECHA SOLICITUD']);
+            const pendingDate = parseDate(pendingRow['FECHA SOLICITUD']);
+            
+            if (mainDate && pendingDate && mainDate.getTime() >= pendingDate.getTime()) {
+                bestPending.delete(nif);
+            }
+        }
+    });
+
+    return { filtered: Array.from(bestMain.values()), pendientes: bestPending };
 }
 
 /**
