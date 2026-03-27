@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const navToGestionNumeros = document.getElementById('navToGestionNumeros');
     const navToRoster = document.getElementById('navToRoster');
     const navToConstancias = document.getElementById('navToConstancias');
+    const forgotPasswordLink = document.getElementById('forgot-password-link');
     const toggleSearchButton = document.getElementById('toggleSearchButton');
     const searchBar = document.getElementById('searchBar');
     const nameSearchInput = document.getElementById('nameSearchInput');
@@ -246,6 +247,27 @@ document.addEventListener('DOMContentLoaded', function () {
             showToast('Has cerrado la sesión.');
         });
     });
+
+    if (forgotPasswordLink) {
+        forgotPasswordLink.addEventListener('click', () => {
+            const email = loginEmailInput.value;
+            if (!email) {
+                showToast("Por favor, ingresa tu correo electrónico primero.", "error");
+                return;
+            }
+            auth.sendPasswordResetEmail(email)
+                .then(() => {
+                    showToast("Se ha enviado un correo para restablecer tu contraseña.", "success");
+                })
+                .catch(error => {
+                    console.error("Error al enviar correo de restablecimiento:", error);
+                    let msg = "Error al enviar el correo.";
+                    if (error.code === 'auth/user-not-found') msg = "No existe un usuario con ese correo.";
+                    else if (error.code === 'auth/invalid-email') msg = "El correo electrónico no es válido.";
+                    showToast(msg, "error");
+                });
+        });
+    }
 
     // --- LÓGICA DE LA APLICACIÓN ---
     function getDniFromUrl() {
