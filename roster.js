@@ -179,7 +179,38 @@ function handlePostLogin(user) {
     const guestExitBtn = document.getElementById('guestExitBtn');
 
     if (backBtn && !isGuest) {
-        backBtn.classList.remove('hidden');
+        // Verificar si es administrador para decidir la ruta y el texto
+        database.ref('admins/' + uid).once('value').then(snapshot => {
+            if (snapshot.exists()) {
+                backBtn.href = "mantenimiento.html";
+                backBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    Regresar a Mantenimiento
+                `;
+            } else {
+                backBtn.href = "index.html";
+                backBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    Regresar al Inicio
+                `;
+            }
+            backBtn.classList.remove('hidden');
+        }).catch(err => {
+            console.error("Error al verificar admin en roster:", err);
+            // Fallback por defecto a index.html si hay error de permisos (común en no-admins)
+            backBtn.href = "index.html";
+            backBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Regresar al Inicio
+            `;
+            backBtn.classList.remove('hidden');
+        });
     }
 
     if (guestExitBtn && isGuest) {

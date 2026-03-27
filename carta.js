@@ -17,6 +17,7 @@ const statusMessage = document.getElementById('statusMessage');
 let playersList = [];
 let selectedPlayer = null;
 let isGuest = false;
+let isAdmin = false;
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -33,10 +34,40 @@ function autoLogin() {
             isGuest = user.email === GUEST_EMAIL;
             updateStatus(`Sesión: ${user.email}`, "success");
             
-            // Mostrar botón de regreso si no es invitado
+            // Configurar botón de regreso y verificar rol
             const backBtn = document.getElementById('backToMaintenance');
             if (backBtn && !isGuest) {
-                backBtn.classList.remove('hidden');
+                database.ref('admins/' + user.uid).once('value').then(snapshot => {
+                    isAdmin = snapshot.exists();
+                    if (isAdmin) {
+                        backBtn.href = "mantenimiento.html";
+                        backBtn.innerHTML = `
+                           <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                           </svg>
+                           Regresar a Mantenimiento
+                        `;
+                    } else {
+                        backBtn.href = "index.html";
+                        backBtn.innerHTML = `
+                           <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                           </svg>
+                           Regresar al Inicio
+                        `;
+                    }
+                    backBtn.classList.remove('hidden');
+                }).catch(() => {
+                    isAdmin = false;
+                    backBtn.href = "index.html";
+                    backBtn.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        Regresar al Inicio
+                    `;
+                    backBtn.classList.remove('hidden');
+                });
             }
             
             if (typeof AuditLogger !== 'undefined') {
@@ -319,8 +350,10 @@ function exitApp() {
                 window.location.href = 'about:blank';
             }, 500);
         });
-    } else {
+    } else if (isAdmin) {
         window.location.href = 'mantenimiento.html';
+    } else {
+        window.location.href = 'index.html';
     }
 }
 

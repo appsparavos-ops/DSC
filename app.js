@@ -46,6 +46,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const loginErrorMessage = document.getElementById('login-error-message');
     const logoutButton = document.getElementById('logout-button');
     const navToGestionNumeros = document.getElementById('navToGestionNumeros');
+    const navToRoster = document.getElementById('navToRoster');
+    const navToConstancias = document.getElementById('navToConstancias');
     const toggleSearchButton = document.getElementById('toggleSearchButton');
     const searchBar = document.getElementById('searchBar');
     const nameSearchInput = document.getElementById('nameSearchInput');
@@ -177,6 +179,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 navToGestionNumeros.classList.remove('hidden');
             } else {
                 navToGestionNumeros.classList.add('hidden');
+            }
+        }
+
+        if (navToRoster) {
+            if (currentUserRole !== 'admin') {
+                navToRoster.classList.remove('hidden');
+            } else {
+                navToRoster.classList.add('hidden');
+            }
+        }
+
+        if (navToConstancias) {
+            if (currentUserRole !== 'admin') {
+                navToConstancias.classList.remove('hidden');
+            } else {
+                navToConstancias.classList.add('hidden');
             }
         }
 
@@ -548,6 +566,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (categoryFilter) categoryFilter.addEventListener('change', applyFilters);
     if (equipoFilter) equipoFilter.addEventListener('change', applyFilters);
     if (navToGestionNumeros) navToGestionNumeros.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'mantenimiento.html'; });
+    if (navToRoster) navToRoster.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'roster.html'; });
+    if (navToConstancias) navToConstancias.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'carta.html'; });
     if (seasonFilter) seasonFilter.addEventListener('change', () => {
         if (nameSearchInput) nameSearchInput.value = '';
         if (dniSearchInput) dniSearchInput.value = '';
