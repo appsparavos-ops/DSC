@@ -14,7 +14,9 @@ document.addEventListener('DOMContentLoaded', function () {
         appId: "1:798100493177:web:8e2ae324f8b5cb893a55a8"
     };
 
-    firebase.initializeApp(firebaseConfig);
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
     const database = firebase.database();
     const auth = firebase.auth();
 
@@ -249,21 +251,25 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     if (forgotPasswordLink) {
+        console.log("Listener de recuperación de contraseña adjuntado.");
         forgotPasswordLink.addEventListener('click', () => {
-            const email = loginEmailInput.value;
+            const email = loginEmailInput.value.trim();
             if (!email) {
                 showToast("Por favor, ingresa tu correo electrónico primero.", "error");
                 return;
             }
+            console.log("Intentando enviar correo de restablecimiento a:", email);
             auth.sendPasswordResetEmail(email)
                 .then(() => {
-                    showToast("Se ha enviado un correo para restablecer tu contraseña.", "success");
+                    console.log("Correo de restablecimiento enviado con éxito.");
+                    showToast("Se ha enviado un correo para restablecer tu contraseña. Revisa también tu carpeta de SPAM.", "success");
                 })
                 .catch(error => {
                     console.error("Error al enviar correo de restablecimiento:", error);
                     let msg = "Error al enviar el correo.";
                     if (error.code === 'auth/user-not-found') msg = "No existe un usuario con ese correo.";
                     else if (error.code === 'auth/invalid-email') msg = "El correo electrónico no es válido.";
+                    else if (error.code === 'auth/too-many-requests') msg = "Demasiadas solicitudes. Intentalo más tarde.";
                     showToast(msg, "error");
                 });
         });

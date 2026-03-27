@@ -26,7 +26,7 @@ body {
     }
     body {
         -webkit-print-color-adjust: exact;
-        color-adjust: exact;
+        print-color-adjust: exact;
     }
     #main-content, #resultsArea, body {
         margin: 0 !important;
@@ -199,6 +199,14 @@ body {
 .toast-notification.show {
     bottom: 40px;
     opacity: 1;
+}
+
+.toast-notification.error {
+    background-color: #dc3545; /* Rojo error */
+}
+
+.toast-notification.success {
+    background-color: #28a745; /* Verde éxito */
 }
 
 .table-cell-style {
