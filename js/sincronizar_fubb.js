@@ -27,7 +27,9 @@ let fubbPlayers = [];
 
 // Bookmarklet Code
 const bookmarkletSource = `javascript:(function(){const tables=document.querySelectorAll('table');if(tables.length<2){alert("No se encontró la tabla de jugadores autorizados.");return;}const rows=Array.from(tables[1].querySelectorAll('tr')).slice(1);const data=rows.map(row=>{const cells=row.querySelectorAll('td');if(cells.length<3)return null;return{dni:cells[2].innerText.trim().replace(/\\D/g,''),nombre:cells[1].innerText.trim()};}).filter(item=>item!==null);const json=JSON.stringify(data);navigator.clipboard.writeText(json).then(()=>{alert("Copiado: "+data.length+" jugadores.");}).catch(()=>{console.log(json);alert("Error al copiar. Ver consola.");});})();`;
-bookmarkletCode.value = bookmarkletSource;
+if (bookmarkletCode) {
+    bookmarkletCode.value = bookmarkletSource;
+}
 
 // Auth check
 auth.onAuthStateChanged(user => {
@@ -253,7 +255,7 @@ function renderResults(missingInFirebase, missingInFubb) {
     missingInFubbBody.innerHTML = '';
 
     if (missingInFirebase.length === 0 && missingInFubb.length === 0) {
-        statusBadge.classList.remove('hidden');
+        if (statusBadge) statusBadge.classList.remove('hidden');
         resultsContent.classList.add('hidden');
         noResultsState.classList.remove('hidden');
         noResultsState.innerHTML = `
@@ -266,7 +268,7 @@ function renderResults(missingInFirebase, missingInFubb) {
             </div>
         `;
     } else {
-        statusBadge.classList.add('hidden');
+        if (statusBadge) statusBadge.classList.add('hidden');
         resultsContent.classList.remove('hidden');
         noResultsState.classList.add('hidden');
 
