@@ -316,6 +316,22 @@
                         <p class="text-xs text-gray-400">Control de acceso y roles</p>
                     </div>
                 </a>
+
+                <!-- Sincronización FUBB -->
+                <a href="sincronizar_fubb.html" data-id="sincro_fubb"
+                    class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5 hover:!bg-orange-900/20 hover:!border-orange-500/50">
+                    <div class="icon-box !bg-gradient-to-br !from-orange-600 !to-orange-800">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                            </path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg">Sincronizar FUBB</h3>
+                        <p class="text-xs text-gray-400">Comparar autorizados con portal FUBB</p>
+                    </div>
+                </a>
             </div>
 
             <div class="mt-12 flex justify-center">
@@ -414,16 +430,18 @@
         function reorganizeButtons(order) {
             const buttons = Array.from(grid.querySelectorAll('.nav-button'));
             const buttonMap = {};
-            buttons.forEach(btn => {
-                buttonMap[btn.getAttribute('data-id')] = btn;
-            });
-
-            // Re-inyectar en el nuevo orden
+            buttons.forEach(btn => buttonMap[btn.getAttribute('data-id')] = btn);
+            grid.innerHTML = '';
             order.forEach(id => {
-                if (buttonMap[id]) {
-                    grid.appendChild(buttonMap[id]);
-                }
+                if (buttonMap[id]) grid.appendChild(buttonMap[id]);
             });
+        }
+
+        // Detección de móvil para Sincronización FUBB
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const syncBtn = document.getElementById('sincro_fubb');
+        if (syncBtn && isMobile) {
+            syncBtn.href = 'sincronizar_fubb_movil.html';
         }
     </script>
 </body>
