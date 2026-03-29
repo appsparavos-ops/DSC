@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sincronización FUBB - Defensor Sporting Club</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_SportingCuad.png" type="image/png">
-    
+    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_SportingCuad.png"
+        type="image/png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -20,16 +22,27 @@
             min-height: 100vh;
             color: white;
         }
+
         .glass-card {
             background: rgba(255, 255, 255, 0.03);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 24px;
         }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
-        
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
         /* Estilos para selectores y opciones */
         select option {
             background-color: #1e1b4b;
@@ -41,9 +54,13 @@
             border-color: #7c3aed;
             color: #a78bfa;
         }
-        .uninitialized { opacity: 0; }
+
+        .uninitialized {
+            opacity: 0;
+        }
     </style>
 </head>
+
 <body class="uninitialized">
 
     <div class="container max-w-6xl mx-auto p-4 md:p-8">
@@ -51,21 +68,27 @@
             <div class="flex items-center gap-4">
                 <a href="mantenimiento.html" class="p-2 rounded-full hover:bg-white/10 transition-colors">
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                     </svg>
                 </a>
                 <div>
-                    <h1 class="text-2xl font-bold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">Comparador FUBB</h1>
+                    <h1
+                        class="text-2xl font-bold bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent">
+                        Comparador FUBB</h1>
                     <p class="text-xs text-gray-400">Sincronización de Jugadores Autorizados</p>
                 </div>
             </div>
-            
+
             <div class="flex flex-wrap gap-3">
-                <select id="seasonSelect" class="bg-indigo-950/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-orange-500 transition-all"></select>
-                <select id="teamSelect" class="bg-indigo-950/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-orange-500 transition-all">
+                <select id="seasonSelect"
+                    class="bg-indigo-950/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-orange-500 transition-all"></select>
+                <select id="teamSelect"
+                    class="bg-indigo-950/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-orange-500 transition-all">
                     <option value="">Selecciona equipo</option>
                 </select>
-                <select id="categorySelect" class="bg-indigo-950/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-orange-500 transition-all">
+                <select id="categorySelect"
+                    class="bg-indigo-950/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-orange-500 transition-all">
                     <option value="">Selecciona categoría</option>
                 </select>
             </div>
@@ -77,22 +100,40 @@
                 <div class="glass-card p-6">
                     <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
                         <svg class="h-5 w-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01">
+                            </path>
                         </svg>
                         Datos de FUBB
                     </h2>
-                    <p class="text-xs text-gray-400 mb-4">Pega aquí el JSON generado por el bookmarklet en el portal de la FUBB.</p>
-                    <textarea id="fubbDataInput" rows="10" 
+                    <p class="text-xs text-gray-400 mb-4">Pega aquí el JSON generado en FUBB. ¡Ahora soporta el
+                        <strong>Super Marcador Masivo</strong> para todas tus categorías a la vez!</p>
+                    <textarea id="fubbDataInput" rows="10"
                         class="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-xs font-mono text-orange-200 focus:outline-none focus:border-orange-500 custom-scrollbar mb-4"
                         placeholder='[{"dni":"1234567","nombre":"EJEMPLO..."}, ...]'></textarea>
-                    <button id="compareBtn" class="w-full py-3 bg-orange-600 hover:bg-orange-700 rounded-xl font-bold transition-all shadow-lg shadow-orange-900/20 active:scale-95">
+                    <button id="compareBtn"
+                        class="w-full py-3 bg-orange-600 hover:bg-orange-700 rounded-xl font-bold transition-all shadow-lg shadow-orange-900/20 active:scale-95">
                         Comparar con Firebase
                     </button>
-                    
+
                     <div class="mt-8 p-4 bg-white/5 rounded-xl border border-white/5">
-                        <h3 class="text-sm font-bold mb-2 text-gray-300">Bookmarklet de Extracción</h3>
-                        <p class="text-[10px] text-gray-500 mb-3">Crea un marcador con esta URL para extraer los datos desde la FUBB:</p>
-                        <textarea readonly class="w-full bg-black/20 text-[10px] p-2 rounded border border-white/5 text-gray-400 h-20 overflow-hidden cursor-pointer" onclick="this.select()" id="bookmarkletCode"></textarea>
+                        <div class="flex items-center justify-between cursor-pointer group"
+                            onclick="document.getElementById('bookmarkletContent').classList.toggle('hidden'); document.getElementById('bookmarkletIcon').textContent = document.getElementById('bookmarkletContent').classList.contains('hidden') ? '+' : '-'">
+                            <h3 class="text-sm font-bold text-gray-300 flex items-center gap-2">
+                                <div id="bookmarkletIcon"
+                                    class="w-5 h-5 flex items-center justify-center bg-white/10 rounded text-xs font-bold group-hover:bg-white/20 transition-colors">
+                                    +</div>
+                                Marcador de Extracción Masiva
+                            </h3>
+                        </div>
+                        <div id="bookmarkletContent" class="hidden mt-3">
+                            <p class="text-[10px] text-gray-500 mb-3">Crea un marcador con esta URL, entra a
+                                "Convocatorias" en FUBB, y haz clic en él para extraer TODOS los planteles de la semana:
+                            </p>
+                            <textarea readonly
+                                class="w-full bg-black/20 text-[10px] p-2 rounded border border-white/5 text-gray-400 h-20 overflow-hidden cursor-pointer"
+                                onclick="this.select()" id="bookmarkletCode"></textarea>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -102,7 +143,8 @@
                 <div class="glass-card p-6 min-h-[600px]">
                     <div class="flex items-center justify-between mb-6">
                         <h2 class="text-xl font-bold">Resultados del Análisis</h2>
-                        <div id="statusBadge" class="hidden px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-bold border border-green-500/30">
+                        <div id="statusBadge"
+                            class="hidden px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-bold border border-green-500/30">
                             Sincronizado
                         </div>
                     </div>
@@ -149,9 +191,12 @@
                         </div>
                     </div>
 
-                    <div id="noResultsState" class="flex flex-col items-center justify-center h-full text-gray-500 py-20">
+                    <div id="noResultsState"
+                        class="flex flex-col items-center justify-center h-full text-gray-500 py-20">
                         <svg class="h-16 w-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4">
+                            </path>
                         </svg>
                         <p>Carga los datos de la FUBB y selecciona una categoría para empezar.</p>
                     </div>
@@ -161,7 +206,8 @@
     </div>
 
     <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 translate-y-24 opacity-0 pointer-events-none">
+    <div id="toast"
+        class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 translate-y-24 opacity-0 pointer-events-none">
         <div class="bg-gray-900 text-white px-8 py-4 rounded-2xl shadow-2xl font-semibold flex items-center gap-3">
             <span id="toastText"></span>
         </div>
@@ -170,4 +216,5 @@
     <script src="js/audit-logger.js"></script>
     <script src="js/sincronizar_fubb.js"></script>
 </body>
+
 </html>
