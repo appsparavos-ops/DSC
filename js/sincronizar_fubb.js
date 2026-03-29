@@ -16,8 +16,10 @@ const compareBtn = document.getElementById('compareBtn');
 const bookmarkletCode = document.getElementById('bookmarkletCode');
 const resultsContent = document.getElementById('resultsContent');
 const noResultsState = document.getElementById('noResultsState');
-const missingInFirebaseBody = document.getElementById('missingInFirebaseBody');
-const missingInFubbBody = document.getElementById('missingInFubbBody');
+const missingInFirebaseBodyOwn = document.getElementById('missingInFirebaseBodyOwn');
+const missingInFubbBodyOwn = document.getElementById('missingInFubbBodyOwn');
+const missingInFirebaseBodyAuth = document.getElementById('missingInFirebaseBodyAuth');
+const missingInFubbBodyAuth = document.getElementById('missingInFubbBodyAuth');
 const statusBadge = document.getElementById('statusBadge');
 const toast = document.getElementById('toast');
 const toastText = document.getElementById('toastText');
@@ -196,11 +198,10 @@ const _bmkFn = async function() {
                 lg('  -> HTML (' + html.length + 'b). Texto: ' + bodyText.substring(0, 80));
                 lg('  -> Total tablas encontradas: ' + tbls.length);
 
-                var validTbls = Array.from(tbls).filter(function(t) { return t.querySelectorAll('td').length > 5; });
                 var validTbls = Array.from(tbls).filter(function(t) { return t.querySelectorAll('td').length >= 4; });
 
-                if (validTbls.length < 2) {
-                    errors.push('[' + (i + 1) + '] No se encontro tabla de Autorizados');
+                if (validTbls.length === 0) {
+                    errors.push('[' + (i + 1) + '] No se encontro tabla de Jugadores');
                     continue;
                 }
 
@@ -209,24 +210,29 @@ const _bmkFn = async function() {
                 if (/DEFENSOR|FUSIONADO/i.test(eqL)) miEquipo = eqL;
 
                 var n = 0;
-                var tblAutorizados = validTbls[1];
+                var tablas = [];
+                if (validTbls.length > 0) tablas.push(validTbls[0]);
+                if (validTbls.length > 1) tablas.push(validTbls[1]);
                 
-                Array.from(tblAutorizados.querySelectorAll('tr')).forEach(function(tr) {
-                    var c = tr.querySelectorAll('td');
-                    if (c.length < 5) return;
-                    
-                    var rol = c[4].innerText.trim().toUpperCase();
-                    if (rol.indexOf('DIRECTOR') !== -1 || rol.indexOf('TECNICO') !== -1) return;
+                tablas.forEach(function(tbl, tIdx) {
+                    var isAuth = (tIdx === 1);
+                    Array.from(tbl.querySelectorAll('tr')).forEach(function(tr) {
+                        var c = tr.querySelectorAll('td');
+                        if (c.length < 5) return;
+                        
+                        var rol = c[4].innerText.trim().toUpperCase();
+                        if (rol.indexOf('DIRECTOR') !== -1 || rol.indexOf('TECNICO') !== -1 || rol.indexOf('ENTRENADOR') !== -1 || rol.indexOf('PREPARADOR') !== -1 || rol.indexOf('DELEGADO') !== -1 || rol.indexOf('MEDICO') !== -1 || rol.indexOf('AYUDANTE') !== -1 || rol.indexOf('UTILERO') !== -1 || rol.indexOf('ESTADISTICO') !== -1) return;
 
-                    var dni    = c[2].innerText.trim().replace(/\D/g, '');
-                    var nombre = c[1].innerText.trim();
-                    if (dni && dni.length >= 7) {
-                        allPlayers.push({ dni: dni, nombre: nombre, equipo: miEquipo, categoria: cat });
-                        n++;
-                    }
+                        var dni    = c[2].innerText.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                        var nombre = c[1].innerText.trim();
+                        if (dni && dni.length >= 7) {
+                            allPlayers.push({ dni: dni, nombre: nombre, equipo: miEquipo, categoria: cat, isAuth: isAuth });
+                            n++;
+                        }
+                    });
                 });
                 
-                lg('  -> ' + n + ' jugadores autorizados');
+                lg('  -> ' + n + ' jugadores extraidos');
 
             } catch(e) {
                 errors.push('[' + (i + 1) + '] ' + e.message);
@@ -316,8 +322,16 @@ async function loadPlayersForSeason(temporada) {
             return;
         }
 
-        const records = snapshot.val();
-        const recordsArray = Object.values(records);
+        const rawRecords = snapshot.val();
+
+        // Filtrar aquellos que no sean jugadores explícitamente (ignorar cuerpo técnico)
+        const filteredKeys = Object.keys(rawRecords).filter(key => {
+            const r = rawRecords[key];
+            const tipo = (r._tipo || '').trim().toLowerCase();
+            return !tipo || tipo.includes('jugador');
+        });
+
+        const recordsArray = filteredKeys.map(k => rawRecords[k]);
 
         // Cargar nombres desde /jugadores
         const dniList = [...new Set(recordsArray.map(r => String(r._dni || r.DNI || "")))];
@@ -328,8 +342,8 @@ async function loadPlayersForSeason(temporada) {
             namesMap[dniList[i]] = snap.val() || 'N/N';
         });
 
-        allPlayers = Object.keys(records).map(key => {
-            const r = records[key];
+        allPlayers = filteredKeys.map(key => {
+            const r = rawRecords[key];
             const dni = String(r._dni || r.DNI || "");
             return {
                 dbKey: key,
@@ -424,21 +438,47 @@ compareBtn.onclick = async () => {
         showToast(`Se detectaron ${fubbPlayers.length} jugadores del texto`, "info");
     }
 
+    if (!seasonSelect.value) {
+        showToast("Selecciona una temporada primero", "error");
+        return;
+    }
+
+    const isIntermedia = seasonSelect.value.includes('-');
+
     if (isMassive) {
-        // Force season 2026 automatically in massive mode
-        if (seasonSelect.value !== '2026') {
-            seasonSelect.value = '2026';
-            await loadPlayersForSeason('2026');
+        fubbPlayers = fubbPlayers.filter(p => {
+            const catName = (p.categoria || '').trim().toLowerCase();
+            const isPro = catName.includes('liga uruguaya') || catName.includes('liga de desarrollo') || catName === 'lub' || catName === 'ldd';
+            return isIntermedia ? isPro : !isPro;
+        });
+
+        if (fubbPlayers.length === 0) {
+            showToast("No hay jugadores válidos para esta temporada según el filtro de Liga.", "info");
+            return;
         }
+
         runMassiveComparison();
     } else {
         const selectedCat = categorySelect.value;
         if (!selectedTeam || !selectedCat) {
-            showToast("Modo Simple: Selecciona equipo y categoría primero", "error"); return;
+            showToast("Modo Simple: Selecciona equipo y categoría primero", "error"); 
+            return;
         }
+
+        const catName = selectedCat.toLowerCase();
+        const isPro = catName.includes('liga uruguaya') || catName.includes('liga de desarrollo') || catName === 'lub' || catName === 'ldd';
+
+        if (isIntermedia && !isPro) {
+            showToast("La temporada seleccionada es intermedia: solo admite Liga Uruguaya y Desarrollo.", "error");
+            return;
+        }
+        if (!isIntermedia && isPro) {
+            showToast("La temporada seleccionada es entera: no admite ligas como LUB/LDD.", "error");
+            return;
+        }
+
         runComparison(selectedTeam, selectedCat);
     }
-    fubbDataInput.value = '';
 };
 
 function runMassiveComparison() {
@@ -457,58 +497,58 @@ function runMassiveComparison() {
         fubbGroups[eq][p.categoria].push(p);
     });
 
-    let totalMissingFirebase = [];
-    let totalMissingFubb = [];
+    let mFirebaseOwn = [], mFubbOwn = [], mFirebaseAuth = [], mFubbAuth = [];
 
     Object.keys(fubbGroups).forEach(team => {
         Object.keys(fubbGroups[team]).forEach(category => {
-            const catFubbPlayers = fubbGroups[team][category];
-            const fubbDnis = new Set(catFubbPlayers.map(p => String(p.dni)));
+            const catFubbPlayersOwn = fubbGroups[team][category].filter(p => p.isAuth === false);
+            const catFubbPlayersAuth = fubbGroups[team][category].filter(p => p.isAuth === true || p.isAuth === undefined);
+            
+            const fubbDnisOwn = new Set(catFubbPlayersOwn.map(p => String(p.dni)));
+            const fubbDnisAuth = new Set(catFubbPlayersAuth.map(p => String(p.dni)));
 
-            const firebasePlayers = allPlayers.filter(p => {
+            const fbPlayersOwn = allPlayers.filter(p => p.EQUIPO === team && p.CATEGORIA === category);
+            const fbPlayersAuth = allPlayers.filter(p => {
                 const matchesTeam = p.EQUIPO === team || p.equipoAutorizado === team;
                 const isAuthorized = (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category)) || p.esAutorizado;
-                const isRefuerzo = isAuthorized && (p.CATEGORIA !== category);
-                return matchesTeam && (isAuthorized || isRefuerzo);
+                return matchesTeam && isAuthorized && p.CATEGORIA !== category;
             });
 
-            const firebaseDnis = new Set(firebasePlayers.map(p => String(p.DNI)));
+            const fbDnisOwn = new Set(fbPlayersOwn.map(p => String(p.DNI)));
+            const fbDnisAuth = new Set(fbPlayersAuth.map(p => String(p.DNI)));
 
-            // Missing in Firebase
-            catFubbPlayers.filter(p => !firebaseDnis.has(String(p.dni))).forEach(p => {
-                p.view_categoria = category;
-                p.view_equipo = team;
-                totalMissingFirebase.push(p);
-            });
+            catFubbPlayersOwn.filter(p => !fbDnisOwn.has(String(p.dni))).forEach(p => { p.view_categoria = category; p.view_equipo = team; mFirebaseOwn.push(p); });
+            fbPlayersOwn.filter(p => !fubbDnisOwn.has(String(p.DNI))).forEach(p => { mFubbOwn.push({...p, view_categoria: category, view_equipo: team}); });
 
-            // Missing in Fubb
-            firebasePlayers.filter(p => !fubbDnis.has(String(p.DNI))).forEach(p => {
-                const copy = {...p, view_categoria: category, view_equipo: team};
-                totalMissingFubb.push(copy);
-            });
+            catFubbPlayersAuth.filter(p => !fbDnisAuth.has(String(p.dni))).forEach(p => { p.view_categoria = category; p.view_equipo = team; mFirebaseAuth.push(p); });
+            fbPlayersAuth.filter(p => !fubbDnisAuth.has(String(p.DNI))).forEach(p => { mFubbAuth.push({...p, view_categoria: category, view_equipo: team}); });
         });
     });
 
-    renderResults(totalMissingFirebase, totalMissingFubb, true);
+    renderResults(mFirebaseOwn, mFubbOwn, mFirebaseAuth, mFubbAuth, true);
 }
 
 function parseSmartText(text) {
     const lines = text.split('\n');
     const result = [];
-    const dniRegex = /(\d{1,3}\.?\d{3}\.?\d{3}-?\d?)/;
+    const dniRegex = /([a-zA-Z]?\s*\d{1,3}\.?\d{3}\.?\d{3}-?\d?|[a-zA-Z]?\d{7,9})/;
     
     lines.forEach(line => {
         if (!line.trim()) return;
+        
+        const lineUpper = line.toUpperCase();
+        if (lineUpper.indexOf('DIRECTOR') !== -1 || lineUpper.indexOf('TECNICO') !== -1 || lineUpper.indexOf('ENTRENADOR') !== -1 || lineUpper.indexOf('PREPARADOR') !== -1 || lineUpper.indexOf('DELEGADO') !== -1 || lineUpper.indexOf('MEDICO') !== -1 || lineUpper.indexOf('AYUDANTE') !== -1 || lineUpper.indexOf('UTILERO') !== -1 || lineUpper.indexOf('ESTADISTICO') !== -1) return;
+
         const dniMatch = line.match(dniRegex);
         if (dniMatch) {
             const dniStr = dniMatch[0];
-            const dniNumeric = dniStr.replace(/\D/g, '');
+            const dniClean = dniStr.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
             
-            let nombre = line.replace(dniStr, '').replace(/^\d+/, '').trim();
+            let nombre = line.replace(dniStr, '').replace(/^\s*[\-\.]?\s*/, '').replace(/^\d+\s*/, '').trim();
             
-            if (dniNumeric.length >= 7) {
+            if (dniClean.length >= 7) {
                 result.push({
-                    dni: dniNumeric,
+                    dni: dniClean,
                     nombre: nombre || 'Desconocido'
                 });
             }
@@ -518,28 +558,41 @@ function parseSmartText(text) {
 }
 
 function runComparison(team, category) {
-    const firebasePlayers = allPlayers.filter(p => {
+    const fubbPlayersOwn = fubbPlayers.filter(p => p.isAuth === false);
+    // Para modo texto (sin isAuth), asumimos Auth por defecto para retrocompatibilidad
+    const fubbPlayersAuth = fubbPlayers.filter(p => p.isAuth === true || p.isAuth === undefined);
+
+    const fubbDnisOwn = new Set(fubbPlayersOwn.map(p => String(p.dni)));
+    const fubbDnisAuth = new Set(fubbPlayersAuth.map(p => String(p.dni)));
+
+    const fbPlayersOwn = allPlayers.filter(p => p.EQUIPO === team && p.CATEGORIA === category);
+    const fbPlayersAuth = allPlayers.filter(p => {
         const matchesTeam = p.EQUIPO === team || p.equipoAutorizado === team;
         const isAuthorized = (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category)) || p.esAutorizado;
-        const isRefuerzo = isAuthorized && (p.CATEGORIA !== category);
-        
-        return matchesTeam && (isAuthorized || isRefuerzo);
+        return matchesTeam && isAuthorized && p.CATEGORIA !== category;
     });
 
-    const fubbDnis = new Set(fubbPlayers.map(p => String(p.dni)));
-    const firebaseDnis = new Set(firebasePlayers.map(p => String(p.DNI)));
+    const fbDnisOwn = new Set(fbPlayersOwn.map(p => String(p.DNI)));
+    const fbDnisAuth = new Set(fbPlayersAuth.map(p => String(p.DNI)));
 
-    const missingInFirebase = fubbPlayers.filter(p => !firebaseDnis.has(String(p.dni)));
-    const missingInFubb = firebasePlayers.filter(p => !fubbDnis.has(String(p.DNI)));
+    const mFirebaseOwn = fubbPlayersOwn.filter(p => !fbDnisOwn.has(String(p.dni)));
+    const mFubbOwn = fbPlayersOwn.filter(p => !fubbDnisOwn.has(String(p.DNI)));
+    
+    const mFirebaseAuth = fubbPlayersAuth.filter(p => !fbDnisAuth.has(String(p.dni)));
+    const mFubbAuth = fbPlayersAuth.filter(p => !fubbDnisAuth.has(String(p.DNI)));
 
-    renderResults(missingInFirebase, missingInFubb);
+    renderResults(mFirebaseOwn, mFubbOwn, mFirebaseAuth, mFubbAuth, false);
 }
 
-function renderResults(missingInFirebase, missingInFubb, isMassive = false) {
-    missingInFirebaseBody.innerHTML = '';
-    missingInFubbBody.innerHTML = '';
+function renderResults(mFirebaseOwn, mFubbOwn, mFirebaseAuth, mFubbAuth, isMassive = false) {
+    missingInFirebaseBodyOwn.innerHTML = '';
+    missingInFubbBodyOwn.innerHTML = '';
+    missingInFirebaseBodyAuth.innerHTML = '';
+    missingInFubbBodyAuth.innerHTML = '';
 
-    if (missingInFirebase.length === 0 && missingInFubb.length === 0) {
+    const extTotal = mFirebaseOwn.length + mFubbOwn.length + mFirebaseAuth.length + mFubbAuth.length;
+
+    if (extTotal === 0) {
         if (statusBadge) statusBadge.classList.remove('hidden');
         resultsContent.classList.add('hidden');
         noResultsState.classList.remove('hidden');
@@ -549,7 +602,7 @@ function renderResults(missingInFirebase, missingInFubb, isMassive = false) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 <p class="text-xl font-bold">¡Todo sincronizado!</p>
-                <p class="text-sm opacity-60">Los datos de la FUBB coinciden con Firebase.</p>
+                <p class="text-sm opacity-60">Los datos de la FUBB coinciden con Firebase en ambas tablas.</p>
             </div>
         `;
     } else {
@@ -557,73 +610,53 @@ function renderResults(missingInFirebase, missingInFubb, isMassive = false) {
         resultsContent.classList.remove('hidden');
         noResultsState.classList.add('hidden');
 
-        if (window.mobileView) {
-            missingInFirebase.forEach(p => {
-                const div = document.createElement('div');
-                div.className = "bg-white/5 border border-white/10 p-4 rounded-xl flex justify-between items-center mb-2 active:bg-orange-600/20";
-                div.onclick = () => authorizePlayer(p, isMassive ? p.view_categoria : null, isMassive ? p.view_equipo : null);
-                div.innerHTML = `
-                    <div>
-                        <div class="font-bold text-sm">${p.nombre} ${isMassive ? '<span class="text-[9px] bg-indigo-900/60 px-1 rounded ml-1">' + p.view_equipo + '</span><span class="text-[9px] bg-orange-900/60 px-1 rounded ml-1">' + p.view_categoria + '</span>' : ''}</div>
-                        <div class="text-[10px] text-orange-300 font-mono">${formatDni(p.dni)}</div>
-                    </div>
-                    <button class="bg-orange-600 px-4 py-2 rounded-lg text-xs font-bold shadow-lg shadow-orange-900/40">Autorizar</button>
-                `;
-                missingInFirebaseBody.appendChild(div);
-            });
+        const createFirebaseMissingRow = (p, container, isAuth) => {
+            const tr = document.createElement('tr');
+            tr.className = "border-t border-white/5 hover:bg-orange-500/10 transition-colors cursor-pointer group";
+            tr.onclick = () => authorizePlayer(p, isMassive ? p.view_categoria : null, isMassive ? p.view_equipo : null, isAuth);
+            tr.innerHTML = `
+                <td class="px-4 py-3 font-mono text-orange-300 text-xs">${formatDni(p.dni)}</td>
+                <td class="px-4 py-3">
+                    <div class="font-medium">${p.nombre} ${isMassive ? '<span class="text-[10px] bg-indigo-900/60 text-indigo-200 px-1 rounded ml-1">' + p.view_equipo + '</span><span class="text-[10px] bg-orange-900/60 px-1 rounded ml-1">' + p.view_categoria + '</span>' : ''}</div>
+                    <div class="text-[10px] text-gray-500">${isAuth ? 'Haz clic para autorizar como refuerzo' : 'Haz clic para vincular propio'}</div>
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <button class="bg-orange-600/20 text-orange-400 border border-orange-500/30 px-3 py-1 rounded-lg text-[10px] font-bold group-hover:bg-orange-600 group-hover:text-white transition-all">
+                        Vincular
+                    </button>
+                </td>
+            `;
+            container.appendChild(tr);
+        };
 
-            missingInFubb.forEach(p => {
-                const div = document.createElement('div');
-                div.className = "bg-white/5 border border-white/10 p-4 rounded-xl flex justify-between items-center mb-2 active:bg-blue-600/20";
-                div.onclick = () => removeAuthorization(p, isMassive ? p.view_categoria : null);
-                div.innerHTML = `
-                    <div>
-                        <div class="font-bold text-sm">${p.NOMBRE} ${isMassive ? '<span class="text-[9px] bg-indigo-900/60 px-1 rounded ml-1">' + p.view_equipo + '</span><span class="text-[9px] bg-blue-900/60 px-1 rounded ml-1">' + p.view_categoria + '</span>' : ''}</div>
-                        <div class="text-[10px] text-blue-300 font-mono">${formatDni(p.DNI)}</div>
-                    </div>
-                    <button class="bg-blue-600 px-4 py-2 rounded-lg text-xs font-bold shadow-lg shadow-blue-900/40">Quitar</button>
-                `;
-                missingInFubbBody.appendChild(div);
-            });
-        } else {
-            missingInFirebase.forEach(p => {
-                const tr = document.createElement('tr');
-                tr.className = "border-t border-white/5 hover:bg-orange-500/10 transition-colors cursor-pointer group";
-                tr.onclick = () => authorizePlayer(p, isMassive ? p.view_categoria : null, isMassive ? p.view_equipo : null);
-                tr.innerHTML = `
-                    <td class="px-4 py-3 font-mono text-orange-300 text-xs">${formatDni(p.dni)}</td>
-                    <td class="px-4 py-3">
-                        <div class="font-medium">${p.nombre} ${isMassive ? '<span class="text-[10px] bg-indigo-900/60 text-indigo-200 px-1 rounded ml-1">' + p.view_equipo + '</span><span class="text-[10px] bg-orange-900/60 px-1 rounded ml-1">' + p.view_categoria + '</span>' : ''}</div>
-                        <div class="text-[10px] text-gray-500">Haz clic para autorizar como refuerzo${isMassive ? ' ('+p.view_categoria+')' : ''}</div>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                        <button class="bg-orange-600/20 text-orange-400 border border-orange-500/30 px-3 py-1 rounded-lg text-[10px] font-bold group-hover:bg-orange-600 group-hover:text-white transition-all">
-                            Autorizar
-                        </button>
-                    </td>
-                `;
-                missingInFirebaseBody.appendChild(tr);
-            });
+        const createFubbMissingRow = (p, container, isAuth) => {
+            const tr = document.createElement('tr');
+            tr.className = "border-t border-white/5 hover:bg-blue-500/10 transition-colors cursor-pointer group";
+            tr.onclick = () => removeAuthorization(p, isMassive ? p.view_categoria : null, isAuth);
+            tr.innerHTML = `
+                <td class="px-4 py-3 font-mono text-blue-300 text-xs">${formatDni(p.DNI)}</td>
+                <td class="px-4 py-3">
+                    <div class="font-medium">${p.NOMBRE} ${isMassive ? '<span class="text-[10px] bg-indigo-900/60 text-indigo-200 px-1 rounded ml-1">' + p.view_equipo + '</span><span class="text-[10px] bg-blue-900/60 px-1 rounded ml-1">' + p.view_categoria + '</span>' : ''}</div>
+                    <div class="text-[10px] text-gray-500">${isAuth ? 'Haz clic para quitar autorización' : 'Haz clic para desvincular'}</div>
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <button class="bg-blue-600/20 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-lg text-[10px] font-bold group-hover:bg-blue-600 group-hover:text-white transition-all">
+                        Quitar
+                    </button>
+                </td>
+            `;
+            container.appendChild(tr);
+        };
 
-            missingInFubb.forEach(p => {
-                const tr = document.createElement('tr');
-                tr.className = "border-t border-white/5 hover:bg-blue-500/10 transition-colors cursor-pointer group";
-                tr.onclick = () => removeAuthorization(p, isMassive ? p.view_categoria : null);
-                tr.innerHTML = `
-                    <td class="px-4 py-3 font-mono text-blue-300 text-xs">${formatDni(p.DNI)}</td>
-                    <td class="px-4 py-3">
-                        <div class="font-medium">${p.NOMBRE} ${isMassive ? '<span class="text-[10px] bg-indigo-900/60 text-indigo-200 px-1 rounded ml-1">' + p.view_equipo + '</span><span class="text-[10px] bg-blue-900/60 px-1 rounded ml-1">' + p.view_categoria + '</span>' : ''}</div>
-                        <div class="text-[10px] text-gray-500">Haz clic para quitar autorización${isMassive ? ' ('+p.view_categoria+')' : ''}</div>
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                        <button class="bg-blue-600/20 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-lg text-[10px] font-bold group-hover:bg-blue-600 group-hover:text-white transition-all">
-                            Quitar
-                        </button>
-                    </td>
-                `;
-                missingInFubbBody.appendChild(tr);
-            });
-        }
+        mFirebaseOwn.forEach(p => createFirebaseMissingRow(p, missingInFirebaseBodyOwn, false));
+        mFubbOwn.forEach(p => createFubbMissingRow(p, missingInFubbBodyOwn, false));
+        mFirebaseAuth.forEach(p => createFirebaseMissingRow(p, missingInFirebaseBodyAuth, true));
+        mFubbAuth.forEach(p => createFubbMissingRow(p, missingInFubbBodyAuth, true));
+        
+        const btnTabOwn = document.getElementById('btnTabOwn');
+        const btnTabAuth = document.getElementById('btnTabAuth');
+        btnTabOwn.innerHTML = `Jugadores Propios <span class="ml-2 bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full text-xs">${mFirebaseOwn.length + mFubbOwn.length}</span>`;
+        btnTabAuth.innerHTML = `Jugadores Autorizados <span class="ml-2 bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full text-xs">${mFirebaseAuth.length + mFubbAuth.length}</span>`;
     }
 }
 
@@ -631,36 +664,43 @@ function formatDni(dni) {
     return String(dni);
 }
 
-async function authorizePlayer(fubbPlayer, overrideCategory = null, overrideTeam = null) {
+async function authorizePlayer(fubbPlayer, overrideCategory = null, overrideTeam = null, asAuth = true) {
     const season = seasonSelect.value;
     const team = overrideTeam || teamSelect.value || (fubbPlayer ? fubbPlayer.equipo : null) || (fubbPlayer ? fubbPlayer.view_equipo : null);
     const category = overrideCategory || categorySelect.value;
     const dni = String(fubbPlayer.dni);
 
-    if (!confirm(`¿Deseas autorizar a ${fubbPlayer.nombre} (${dni}) para ${team} en la categoría ${category}?`)) return;
+    const titleAction = asAuth ? 'autorizar' : 'vincular como PROPIO';
+    if (!confirm(`¿Deseas ${titleAction} a ${fubbPlayer.nombre} (${dni}) para ${team} en la categoría ${category}?`)) return;
 
     try {
-        showToast("Procesando autorización...", "info");
+        showToast("Procesando...", "info");
         
         const existingInSeason = allPlayers.find(p => p.DNI === dni);
         
         if (existingInSeason) {
-            const cats = existingInSeason.categoriasAutorizadas || [];
-            if (!cats.includes(category)) {
-                cats.push(category);
+            if (asAuth) {
+                const cats = existingInSeason.categoriasAutorizadas || [];
+                if (!cats.includes(category)) {
+                    cats.push(category);
+                }
+                const updates = {
+                    categoriasAutorizadas: cats,
+                    equipoAutorizado: team,
+                    esAutorizado: true
+                };
+                await database.ref(`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`).update(updates);
+            } else {
+                const updates = {
+                    CATEGORIA: category,
+                    EQUIPO: team
+                };
+                await database.ref(`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`).update(updates);
             }
-            
-            const updates = {
-                categoriasAutorizadas: cats,
-                equipoAutorizado: team,
-                esAutorizado: true
-            };
-
-            await database.ref(`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`).update(updates);
         } else {
             const snapshot = await database.ref(`/jugadores/${dni}/datosPersonales`).once('value');
             if (!snapshot.exists()) {
-                showToast("El jugador no existe en la base global (/jugadores). Por favor, regístralo primero.", "error");
+                showToast("El jugador no existe en global (/jugadores). Por favor, regístralo primero.", "error");
                 return;
             }
 
@@ -671,51 +711,63 @@ async function authorizePlayer(fubbPlayer, overrideCategory = null, overrideTeam
                 NOMBRE: personalData.NOMBRE || fubbPlayer.nombre,
                 EQUIPO: team,
                 CATEGORIA: category,
-                esAutorizado: true,
-                equipoAutorizado: team,
-                categoriasAutorizadas: [category],
                 _tipo: 'jugadores'
             };
+
+            if (asAuth) {
+                newRecord.esAutorizado = true;
+                newRecord.equipoAutorizado = team;
+                newRecord.categoriasAutorizadas = [category];
+            }
 
             await database.ref(`/registrosPorTemporada/${season}`).push(newRecord);
         }
 
-        showToast("¡Jugador autorizado correctamente!", "success");
+        showToast("¡Jugador procesado correctamente!", "success");
         loadPlayersForSeason(season);
         
     } catch (e) {
-        console.error("Error al autorizar:", e);
-        showToast("Error al procesar la autorización", "error");
+        console.error("Error al procesar:", e);
+        showToast("Error al procesar en Firebase", "error");
     }
 }
 
-async function removeAuthorization(player, overrideCategory = null) {
+async function removeAuthorization(player, overrideCategory = null, asAuth = true) {
     const season = seasonSelect.value;
     const category = overrideCategory || categorySelect.value;
 
-    if (!confirm(`¿Deseas QUITAR la autorización de ${player.NOMBRE} para la categoría ${category}?`)) return;
+    const actionText = asAuth ? 'QUITAR la autorización' : 'DESVINCULAR de los propios';
+    if (!confirm(`¿Deseas ${actionText} a ${player.NOMBRE} para la categoría ${category}?`)) return;
 
     try {
         showToast("Procesando...", "info");
         
-        let cats = player.categoriasAutorizadas || [];
-        cats = cats.filter(c => c !== category);
-        
-        const updates = {
-            categoriasAutorizadas: cats
-        };
+        if (asAuth) {
+            let cats = player.categoriasAutorizadas || [];
+            cats = cats.filter(c => c !== category);
+            
+            const updates = {
+                categoriasAutorizadas: cats
+            };
 
-        if (cats.length === 0) {
-            updates.esAutorizado = false;
-            updates.equipoAutorizado = "";
+            if (cats.length === 0) {
+                updates.esAutorizado = false;
+                updates.equipoAutorizado = "";
+            }
+
+            await database.ref(`/registrosPorTemporada/${season}/${player.dbKey}`).update(updates);
+        } else {
+            const updates = {
+                CATEGORIA: "",
+                EQUIPO: ""
+            };
+            await database.ref(`/registrosPorTemporada/${season}/${player.dbKey}`).update(updates);
         }
-
-        await database.ref(`/registrosPorTemporada/${season}/${player.dbKey}`).update(updates);
         
-        showToast("Autorización quitada", "success");
+        showToast("Acción completada", "success");
         loadPlayersForSeason(season);
     } catch (e) {
-        console.error("Error al quitar autorización:", e);
+        console.error("Error al quitar/desvincular:", e);
         showToast("Error al procesar", "error");
     }
 }
