@@ -315,51 +315,50 @@ async function loadPlayersForSeason(temporada) {
 
     showToast("Cargando datos de temporada...", "info");
 
-    database.ref('/registrosPorTemporada/' + temporada).once('value', async snapshot => {
-        if (!snapshot.exists()) {
-            allPlayers = [];
-            updateCategoryFilter();
-            return;
-        }
+    const snapshot = await database.ref('/registrosPorTemporada/' + temporada).once('value');
+    if (!snapshot.exists()) {
+        allPlayers = [];
+        updateCategoryFilter();
+        return;
+    }
 
-        const rawRecords = snapshot.val();
+    const rawRecords = snapshot.val();
 
-        // Filtrar aquellos que no sean jugadores explícitamente (ignorar cuerpo técnico)
-        const filteredKeys = Object.keys(rawRecords).filter(key => {
-            const r = rawRecords[key];
-            const tipo = (r._tipo || '').trim().toLowerCase();
-            return !tipo || tipo.includes('jugador');
-        });
-
-        const recordsArray = filteredKeys.map(k => rawRecords[k]);
-
-        // Cargar nombres desde /jugadores
-        const dniList = [...new Set(recordsArray.map(r => String(r._dni || r.DNI || "")))];
-        const namesPromises = dniList.map(dni => database.ref(`/jugadores/${dni}/datosPersonales/NOMBRE`).once('value'));
-        const nameSnapshots = await Promise.all(namesPromises);
-        const namesMap = {};
-        nameSnapshots.forEach((snap, i) => {
-            namesMap[dniList[i]] = snap.val() || 'N/N';
-        });
-
-        allPlayers = filteredKeys.map(key => {
-            const r = rawRecords[key];
-            const dni = String(r._dni || r.DNI || "");
-            return {
-                dbKey: key,
-                DNI: dni,
-                NOMBRE: namesMap[dni] || r.NOMBRE || 'N/N',
-                EQUIPO: r.EQUIPO || "",
-                equipoAutorizado: r.equipoAutorizado || "",
-                CATEGORIA: r.CATEGORIA || "",
-                categoriasAutorizadas: r.categoriasAutorizadas || [],
-                esAutorizado: r.esAutorizado === true || String(r.esAutorizado).toLowerCase() === 'true'
-            };
-        });
-
-        updateTeamFilter();
-        showToast("Lista actualizada", "success");
+    // Filtrar aquellos que no sean jugadores explícitamente (ignorar cuerpo técnico)
+    const filteredKeys = Object.keys(rawRecords).filter(key => {
+        const r = rawRecords[key];
+        const tipo = (r._tipo || '').trim().toLowerCase();
+        return !tipo || tipo.includes('jugador');
     });
+
+    const recordsArray = filteredKeys.map(k => rawRecords[k]);
+
+    // Cargar nombres desde /jugadores
+    const dniList = [...new Set(recordsArray.map(r => String(r._dni || r.DNI || "")))];
+    const namesPromises = dniList.map(dni => database.ref(`/jugadores/${dni}/datosPersonales/NOMBRE`).once('value'));
+    const nameSnapshots = await Promise.all(namesPromises);
+    const namesMap = {};
+    nameSnapshots.forEach((snap, i) => {
+        namesMap[dniList[i]] = snap.val() || 'N/N';
+    });
+
+    allPlayers = filteredKeys.map(key => {
+        const r = rawRecords[key];
+        const dni = String(r._dni || r.DNI || "");
+        return {
+            dbKey: key,
+            DNI: dni,
+            NOMBRE: namesMap[dni] || r.NOMBRE || 'N/N',
+            EQUIPO: r.EQUIPO || "",
+            equipoAutorizado: r.equipoAutorizado || "",
+            CATEGORIA: r.CATEGORIA || "",
+            categoriasAutorizadas: r.categoriasAutorizadas || [],
+            esAutorizado: r.esAutorizado === true || String(r.esAutorizado).toLowerCase() === 'true'
+        };
+    });
+
+    updateTeamFilter();
+    showToast("Lista actualizada", "success");
 }
 
 function updateTeamFilter() {
@@ -724,7 +723,8 @@ async function authorizePlayer(fubbPlayer, overrideCategory = null, overrideTeam
         }
 
         showToast("¡Jugador procesado correctamente!", "success");
-        loadPlayersForSeason(season);
+        await loadPlayersForSeason(season);
+        if (fubbDataInput.value.trim().length > 0) compareBtn.click();
         
     } catch (e) {
         console.error("Error al procesar:", e);
@@ -765,7 +765,8 @@ async function removeAuthorization(player, overrideCategory = null, asAuth = tru
         }
         
         showToast("Acción completada", "success");
-        loadPlayersForSeason(season);
+        await loadPlayersForSeason(season);
+        if (fubbDataInput.value.trim().length > 0) compareBtn.click();
     } catch (e) {
         console.error("Error al quitar/desvincular:", e);
         showToast("Error al procesar", "error");
