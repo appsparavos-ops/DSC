@@ -742,25 +742,42 @@ async function removeAuthorization(player, overrideCategory = null, asAuth = tru
     try {
         showToast("Procesando...", "info");
         
+        let shouldRemove = false;
+        let updates = {};
+
         if (asAuth) {
             let cats = player.categoriasAutorizadas || [];
             cats = cats.filter(c => c !== category);
-            
-            const updates = {
-                categoriasAutorizadas: cats
-            };
 
             if (cats.length === 0) {
-                updates.esAutorizado = false;
-                updates.equipoAutorizado = "";
+                // Sin más autorizaciones: si tampoco tiene categoría propia válida, eliminar el nodo completo
+                if (!player.CATEGORIA || player.CATEGORIA === "") {
+                    shouldRemove = true;
+                } else {
+                    // Tiene categoría propia → solo limpiar los campos de autorización
+                    updates = {
+                        categoriasAutorizadas: [],
+                        esAutorizado: false,
+                        equipoAutorizado: ""
+                    };
+                }
+            } else {
+                // Aún quedan autorizaciones → solo actualizar la lista
+                updates = {
+                    categoriasAutorizadas: cats
+                };
             }
-
-            await database.ref(`/registrosPorTemporada/${season}/${player.dbKey}`).update(updates);
         } else {
-            const updates = {
-                CATEGORIA: "",
-                EQUIPO: ""
-            };
+            // Regla de Negocio: eliminar la categoría propia retira al jugador completamente de la temporada.
+            // Se borra el nodo entero del ID push para no dejar basura (CATEGORIA/EQUIPO sin rol funcional).
+            shouldRemove = true;
+        }
+        
+        if (shouldRemove) {
+            // Eliminar de Firebase para no acumular basura (arrastrando cualquier autorización previa si la hubiera)
+            await database.ref(`/registrosPorTemporada/${season}/${player.dbKey}`).remove();
+        } else {
+            // Solo actualizamos (mantiene su llave) si aún le quedan asignaciones funcionales (ej: quitamos autorización pero sigue en categoría propia)
             await database.ref(`/registrosPorTemporada/${season}/${player.dbKey}`).update(updates);
         }
         
