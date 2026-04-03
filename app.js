@@ -2229,7 +2229,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         drawPDFFooter(doc);
         const tsAno = new Date(); const tsAnoStr = `${tsAno.getFullYear()}${String(tsAno.getMonth() + 1).padStart(2, '0')}${String(tsAno.getDate()).padStart(2, '0')}-${String(tsAno.getHours()).padStart(2, '0')}${String(tsAno.getMinutes()).padStart(2, '0')}`;
-        doc.save(`Sin_Autorizar_${selectedEquipo.replace(/\s+/g, '_')}_${tsAnoStr}.pdf`);
+        doc.save(`No_Diligenciados_${selectedEquipo.replace(/\s+/g, '_')}_${tsAnoStr}.pdf`);
         showToast("PDF de anómalos generado.", "success");
     }
 
