@@ -1089,9 +1089,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const coaches = players.filter(p => p.CATEGORIA === selectedCategory && p.TIPO === 'ENTRENADOR/A');
             const authorizedPlayers = sortPlayers(players.filter(p => {
                 const pAuthEquipo = String(p.equipoAutorizado || "").trim();
-                const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) && 
-                                         (pAuthEquipo === selectedEquipo || (p.EQUIPO === selectedEquipo && !pAuthEquipo)) &&
-                                         p.CATEGORIA !== selectedCategory;
+                const isSameSeasonAuth = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory) &&
+                    (pAuthEquipo === selectedEquipo || (p.EQUIPO === selectedEquipo && !pAuthEquipo)) &&
+                    p.CATEGORIA !== selectedCategory;
                 const isCrossSeasonAuth = p.esAutorizado && p.CATEGORIA === selectedCategory;
                 return isSameSeasonAuth || isCrossSeasonAuth;
             }), selectedCategory);
@@ -1385,11 +1385,11 @@ document.addEventListener('DOMContentLoaded', function () {
                                             class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">
                                         <datalist id="edit-equipos-list">
                                             ${(() => {
-                                                const progressionCats = PROGRESSION_RULES[player.CATEGORIA] || [];
-                                                const allAuthCats = [...new Set([...progressionCats, ...specialCategories])];
-                                                const teamsForCats = [...new Set(allPlayers.filter(p => allAuthCats.includes(p.CATEGORIA)).map(p => p.EQUIPO).filter(Boolean))].sort();
-                                                return teamsForCats.map(eq => `<option value="${eq}">${eq}</option>`).join('');
-                                            })()}
+                    const progressionCats = PROGRESSION_RULES[player.CATEGORIA] || [];
+                    const allAuthCats = [...new Set([...progressionCats, ...specialCategories])];
+                    const teamsForCats = [...new Set(allPlayers.filter(p => allAuthCats.includes(p.CATEGORIA)).map(p => p.EQUIPO).filter(Boolean))].sort();
+                    return teamsForCats.map(eq => `<option value="${eq}">${eq}</option>`).join('');
+                })()}
                                         </datalist>
                                     </div>
                                 </div>
@@ -2039,9 +2039,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const modal = document.getElementById('pdfOptionsModal');
         const btnYes = document.getElementById('pdfOptionYes');
         const btnNo = document.getElementById('pdfOptionNo');
+        const btnAnomalos = document.getElementById('pdfOptionAnomalos');
+        const btnPotenciales = document.getElementById('pdfOptionPotenciales');
         const btnCancel = document.getElementById('pdfOptionCancel');
 
         if (!modal || !btnYes || !btnNo || !btnCancel) return;
+
+        // Mostrar/ocultar botones según contexto (solo equipo tiene anómalos y potenciales)
+        if (btnAnomalos) btnAnomalos.style.display = selectedEquipo ? '' : 'none';
+        if (btnPotenciales) btnPotenciales.style.display = selectedEquipo ? '' : 'none';
 
         modal.classList.remove('hidden');
 
@@ -2062,16 +2068,343 @@ document.addEventListener('DOMContentLoaded', function () {
                 await generateCategoryPDF(selectedCategory, false);
             }
         };
+        const handleAnomalos = async () => {
+            closeModal();
+            if (selectedEquipo) {
+                await generateTeamAnomalousPDF(selectedEquipo);
+            }
+        };
+        const handlePotenciales = async () => {
+            closeModal();
+            if (selectedEquipo) {
+                await generateTeamPotentialPDF(selectedEquipo);
+            }
+        };
         const closeModal = () => {
             modal.classList.add('hidden');
             btnYes.removeEventListener('click', handleYes);
             btnNo.removeEventListener('click', handleNo);
+            if (btnAnomalos) btnAnomalos.removeEventListener('click', handleAnomalos);
+            if (btnPotenciales) btnPotenciales.removeEventListener('click', handlePotenciales);
             btnCancel.removeEventListener('click', closeModal);
         };
 
         btnYes.addEventListener('click', handleYes);
         btnNo.addEventListener('click', handleNo);
+        if (btnAnomalos) btnAnomalos.addEventListener('click', handleAnomalos);
+        if (btnPotenciales) btnPotenciales.addEventListener('click', handlePotenciales);
         btnCancel.addEventListener('click', closeModal);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // PDF: ANÓMALOS (jugadores con ESTADO LICENCIA ≠ DILIGENCIADO) por equipo
+    // ─────────────────────────────────────────────────────────────────────────────
+    async function generateTeamAnomalousPDF(selectedEquipo) {
+        if (typeof window.jspdf === 'undefined') {
+            return showToast("Librería PDF no disponible.", "error");
+        }
+
+        // Filtrar jugadores del equipo (no cedidos, no entrenadores) con estado ≠ DILIGENCIADO
+        const anomalousPlayers = currentlyDisplayedPlayers.filter(p => {
+            if (p._isCedido) return false;
+            if ((p.TIPO || '').toUpperCase() === 'ENTRENADOR/A') return false;
+            if (String(p.EQUIPO || '').trim().toUpperCase() !== selectedEquipo.trim().toUpperCase()) return false;
+            const estado = String(p['ESTADO LICENCIA'] || '').toUpperCase();
+            return estado !== 'DILIGENCIADO';
+        });
+
+        if (anomalousPlayers.length === 0) {
+            return showToast("No hay jugadores anómalos en este equipo.", "error");
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait' });
+        const title = `Anómalos - Equipo: ${selectedEquipo}`;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const pageMargin = 15;
+        let yPosition = pageMargin;
+
+        const maskDNI = dni => { const s = String(dni || ''); return s.length > 4 ? '****' + s.substring(4) : s; };
+
+        // Cargar logo
+        let logoImage = null;
+        try {
+            logoImage = await new Promise((resolve, reject) => {
+                const img = new Image(); img.crossOrigin = 'Anonymous';
+                img.onload = () => resolve(img); img.onerror = err => reject(err);
+                img.src = LOGO_URL;
+            });
+        } catch (e) { console.error("No se pudo cargar el logo:", e); }
+
+        if (logoImage) {
+            const logoSize = 15, logoWidth = 10;
+            doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoWidth, logoSize);
+            doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
+        }
+
+        doc.setFontSize(16); doc.setFont(undefined, 'bold');
+        doc.text(title, pageWidth / 2, pageMargin + 10, { align: 'center' });
+        yPosition = pageMargin + 22;
+
+        // Subtítulo explicativo
+        doc.setFontSize(9); doc.setFont(undefined, 'italic'); doc.setTextColor(120, 60, 0);
+        doc.text('Jugadores con Estado de Licencia distinto de DILIGENCIADO', pageWidth / 2, yPosition, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        yPosition += 8;
+
+        const columns = ['DNI', 'NOMBRE', 'ESTADO LICENCIA', 'FM Hasta'];
+        const baseWidth = pageWidth - 2 * pageMargin;
+        const colWidths = {
+            'DNI': baseWidth * 0.13,
+            'NOMBRE': baseWidth * 0.44,
+            'ESTADO LICENCIA': baseWidth * 0.27,
+            'FM Hasta': baseWidth * 0.16
+        };
+
+        // Agrupar por categoría
+        const playersByCat = {};
+        anomalousPlayers.forEach(p => {
+            const cat = p.CATEGORIA || 'SIN CATEGORÍA';
+            if (!playersByCat[cat]) playersByCat[cat] = [];
+            playersByCat[cat].push(p);
+        });
+        const sortedCats = Object.keys(playersByCat).sort(globalCategorySort);
+
+        for (const catName of sortedCats) {
+            if (yPosition > pageHeight - pageMargin - 30) { doc.addPage(); yPosition = pageMargin + 5; }
+
+            doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.setTextColor(25, 50, 100);
+            doc.text(`CATEGORÍA: ${catName.toUpperCase()}`, pageMargin, yPosition);
+            doc.line(pageMargin, yPosition + 1, pageWidth - pageMargin, yPosition + 1);
+            yPosition += 9;
+
+            const catPlayers = playersByCat[catName].sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
+            const rowHeight = 6, headerHeight = 7, fontSize = 8;
+
+            // Encabezado de tabla
+            const drawTableHeader = (y) => {
+                let x = pageMargin;
+                doc.setFontSize(fontSize + 1); doc.setFont(undefined, 'bold');
+                columns.forEach(col => {
+                    const w = colWidths[col];
+                    doc.setFillColor(180, 100, 0); doc.setDrawColor(120, 60, 0); doc.setTextColor(255, 255, 255);
+                    doc.rect(x, y, w, headerHeight, 'FD');
+                    doc.text(col, x + 2, y + 5);
+                    x += w;
+                });
+                doc.setFont(undefined, 'normal'); doc.setFontSize(fontSize);
+                doc.setTextColor(0, 0, 0); doc.setDrawColor(0, 0, 0);
+                return y + headerHeight;
+            };
+
+            yPosition = drawTableHeader(yPosition);
+
+            for (const player of catPlayers) {
+                if (yPosition > pageHeight - pageMargin - rowHeight) {
+                    doc.addPage(); yPosition = pageMargin; yPosition = drawTableHeader(yPosition);
+                }
+                const estado = String(player['ESTADO LICENCIA'] || '-').toUpperCase();
+                // Color por tipo de anomalía
+                let fillColor = [255, 243, 205]; // amarillo suave por defecto
+                let textColor = [0, 0, 0];
+                if (estado === 'SIN INSCRIBIR') { fillColor = [254, 226, 226]; textColor = [153, 27, 27]; }
+                else if (estado === 'BAJA') { fillColor = [153, 27, 27]; textColor = [255, 255, 255]; }
+
+                let x = pageMargin;
+                columns.forEach(colName => {
+                    const w = colWidths[colName];
+                    doc.setFillColor(...fillColor); doc.setDrawColor(0, 0, 0); doc.setTextColor(...textColor);
+                    let cellValue = player[colName] || '-';
+                    if (colName === 'DNI') cellValue = maskDNI(player[colName]);
+                    if (colName === 'FM Hasta' && (cellValue === '1/1/1900' || cellValue === '-')) cellValue = 'Sin Ficha';
+                    doc.rect(x, yPosition, w, rowHeight, 'FD');
+                    doc.text(String(cellValue), x + 2, yPosition + 4, { maxWidth: w - 4 });
+                    x += w;
+                });
+                yPosition += rowHeight;
+            }
+            yPosition += 8;
+        }
+
+        drawPDFFooter(doc);
+        const tsAno = new Date(); const tsAnoStr = `${tsAno.getFullYear()}${String(tsAno.getMonth() + 1).padStart(2, '0')}${String(tsAno.getDate()).padStart(2, '0')}-${String(tsAno.getHours()).padStart(2, '0')}${String(tsAno.getMinutes()).padStart(2, '0')}`;
+        doc.save(`Sin_Autorizar_${selectedEquipo.replace(/\s+/g, '_')}_${tsAnoStr}.pdf`);
+        showToast("PDF de anómalos generado.", "success");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // PDF: POTENCIALES (jugadores que pueden subir de categoría) por equipo
+    // ─────────────────────────────────────────────────────────────────────────────
+    async function generateTeamPotentialPDF(selectedEquipo) {
+        if (typeof window.jspdf === 'undefined') {
+            return showToast("Librería PDF no disponible.", "error");
+        }
+
+        // Reunir todas las categorías del equipo para buscar potenciales hacia cada una
+        const teamCategories = [...new Set(
+            allPlayers
+                .filter(p => String(p.EQUIPO || '').trim().toUpperCase() === selectedEquipo.trim().toUpperCase())
+                .map(p => p.CATEGORIA)
+                .filter(Boolean)
+        )].sort(globalCategorySort);
+
+        // Para cada categoría del equipo, buscar jugadores del mismo equipo que puedan subir a ella
+        const potentialsByDestCat = {};
+        for (const cat of teamCategories) {
+            const potentials = allPlayers.filter(p => {
+                if ((p.TIPO || '').toUpperCase() === 'ENTRENADOR/A') return false;
+                if (p.CATEGORIA === cat) return false;
+                if (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(cat)) return false;
+                if (p.esAutorizado && p.CATEGORIA === cat) return false;
+                if (p._isCedido) return false;
+                if (String(p.EQUIPO || '').trim().toUpperCase() !== selectedEquipo.trim().toUpperCase()) return false;
+                const possibleDest = PROGRESSION_RULES[p.CATEGORIA] || [];
+                if (!possibleDest.includes(cat)) return false;
+                // Reglas de género
+                if (p.genero === 'Masculino' && isFemaleCategory(cat)) return false;
+                if (p.genero === 'Femenino' && isMaleCategory(cat)) return false;
+                // Exclusión mutua mixta/superior
+                const catIsMixed = isMixedCategory(cat);
+                const auths = p.categoriasAutorizadas || [];
+                if (catIsMixed) {
+                    const hasHigherFem = auths.some(a => !isMixedCategory(a) && getCategoryOrder(a) > getCategoryOrder(p.CATEGORIA));
+                    if (hasHigherFem) return false;
+                } else {
+                    const isHigher = getCategoryOrder(cat) > getCategoryOrder(p.CATEGORIA);
+                    if (isHigher) {
+                        const hasMixed = auths.some(a => isMixedCategory(a));
+                        if (hasMixed) return false;
+                    }
+                }
+                return true;
+            }).sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
+
+            if (potentials.length > 0) {
+                potentialsByDestCat[cat] = potentials;
+            }
+        }
+
+        if (Object.keys(potentialsByDestCat).length === 0) {
+            return showToast("No hay jugadores potenciales para este equipo.", "error");
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'portrait' });
+        const title = `Potenciales - Equipo: ${selectedEquipo}`;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const pageMargin = 15;
+        let yPosition = pageMargin;
+
+        const maskDNI = dni => { const s = String(dni || ''); return s.length > 4 ? '****' + s.substring(4) : s; };
+
+        // Cargar logo
+        let logoImage = null;
+        try {
+            logoImage = await new Promise((resolve, reject) => {
+                const img = new Image(); img.crossOrigin = 'Anonymous';
+                img.onload = () => resolve(img); img.onerror = err => reject(err);
+                img.src = LOGO_URL;
+            });
+        } catch (e) { console.error("No se pudo cargar el logo:", e); }
+
+        if (logoImage) {
+            const logoSize = 15, logoWidth = 10;
+            doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoWidth, logoSize);
+            doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
+        }
+
+        doc.setFontSize(16); doc.setFont(undefined, 'bold');
+        doc.text(title, pageWidth / 2, pageMargin + 10, { align: 'center' });
+        yPosition = pageMargin + 22;
+
+        // Subtítulo
+        doc.setFontSize(9); doc.setFont(undefined, 'italic'); doc.setTextColor(5, 80, 40);
+        doc.text('Jugadores que cumplen reglas de progresión y aún no han sido autorizados', pageWidth / 2, yPosition, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        yPosition += 8;
+
+        const columns = ['DNI', 'NOMBRE', 'CAT. ORIGEN', 'FM Hasta'];
+        const baseWidth = pageWidth - 2 * pageMargin;
+        const colWidths = {
+            'DNI': baseWidth * 0.13,
+            'NOMBRE': baseWidth * 0.44,
+            'CAT. ORIGEN': baseWidth * 0.27,
+            'FM Hasta': baseWidth * 0.16
+        };
+
+        const sortedDestCats = Object.keys(potentialsByDestCat).sort(globalCategorySort);
+
+        for (const destCat of sortedDestCats) {
+            if (yPosition > pageHeight - pageMargin - 30) { doc.addPage(); yPosition = pageMargin + 5; }
+
+            doc.setFontSize(12); doc.setFont(undefined, 'bold'); doc.setTextColor(5, 100, 50);
+            doc.text(`PUEDE SUBIR A: ${destCat.toUpperCase()}`, pageMargin, yPosition);
+            doc.line(pageMargin, yPosition + 1, pageWidth - pageMargin, yPosition + 1);
+            yPosition += 9;
+
+            const rowHeight = 6, headerHeight = 7, fontSize = 8;
+
+            const drawTableHeader = (y) => {
+                let x = pageMargin;
+                doc.setFontSize(fontSize + 1); doc.setFont(undefined, 'bold');
+                columns.forEach(col => {
+                    const w = colWidths[col];
+                    doc.setFillColor(5, 100, 50); doc.setDrawColor(5, 80, 40); doc.setTextColor(255, 255, 255);
+                    doc.rect(x, y, w, headerHeight, 'FD');
+                    doc.text(col, x + 2, y + 5);
+                    x += w;
+                });
+                doc.setFont(undefined, 'normal'); doc.setFontSize(fontSize);
+                doc.setTextColor(0, 0, 0); doc.setDrawColor(0, 0, 0);
+                return y + headerHeight;
+            };
+
+            yPosition = drawTableHeader(yPosition);
+
+            for (const player of potentialsByDestCat[destCat]) {
+                if (yPosition > pageHeight - pageMargin - rowHeight) {
+                    doc.addPage(); yPosition = pageMargin; yPosition = drawTableHeader(yPosition);
+                }
+                let fmHasta = player['FM Hasta'] || '-';
+                if (fmHasta === '1/1/1900' || fmHasta === '-') fmHasta = 'Sin Ficha';
+
+                const rowData = {
+                    'DNI': maskDNI(player.DNI),
+                    'NOMBRE': player.NOMBRE || '-',
+                    'CAT. ORIGEN': player.CATEGORIA || '-',
+                    'FM Hasta': fmHasta
+                };
+
+                // Colorear según estado FM
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                const expDate = parseDateDDMMYYYY(player['FM Hasta']);
+                let fillColor = [220, 252, 231]; // verde suave
+                let textColor = [0, 0, 0];
+                if (!expDate || expDate < today) { fillColor = [254, 226, 226]; }
+                else {
+                    const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
+                    if (expDate <= thirtyDays) fillColor = [255, 237, 213];
+                }
+
+                let x = pageMargin;
+                columns.forEach(colName => {
+                    const w = colWidths[colName];
+                    doc.setFillColor(...fillColor); doc.setDrawColor(0, 0, 0); doc.setTextColor(...textColor);
+                    doc.rect(x, yPosition, w, rowHeight, 'FD');
+                    doc.text(String(rowData[colName]), x + 2, yPosition + 4, { maxWidth: w - 4 });
+                    x += w;
+                });
+                yPosition += rowHeight;
+            }
+            yPosition += 8;
+        }
+
+        drawPDFFooter(doc);
+        const tsPot = new Date(); const tsPotStr = `${tsPot.getFullYear()}${String(tsPot.getMonth() + 1).padStart(2, '0')}${String(tsPot.getDate()).padStart(2, '0')}-${String(tsPot.getHours()).padStart(2, '0')}${String(tsPot.getMinutes()).padStart(2, '0')}`;
+        doc.save(`Sin_Autorizar_${selectedEquipo.replace(/\s+/g, '_')}_${tsPotStr}.pdf`);
+        showToast("PDF de potenciales generado.", "success");
     }
 
     async function generateExpiringPDF() {
@@ -2487,7 +2820,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         drawPDFFooter(doc);
-        doc.save(`Reporte_Equipo_${selectedEquipo}.pdf`);
+        const tsEq = new Date(); const tsEqStr = `${tsEq.getFullYear()}${String(tsEq.getMonth() + 1).padStart(2, '0')}${String(tsEq.getDate()).padStart(2, '0')}-${String(tsEq.getHours()).padStart(2, '0')}${String(tsEq.getMinutes()).padStart(2, '0')}`;
+        doc.save(`Reporte_Equipo_${selectedEquipo}_${tsEqStr}.pdf`);
         showToast("PDF de equipo generado.", "success");
     }
 
@@ -2753,7 +3087,8 @@ document.addEventListener('DOMContentLoaded', function () {
             fileName += ' FUS';
         }
 
-        doc.save(`${fileName}.pdf`);
+        const tsCat = new Date(); const tsCatStr = `${tsCat.getFullYear()}${String(tsCat.getMonth() + 1).padStart(2, '0')}${String(tsCat.getDate()).padStart(2, '0')}-${String(tsCat.getHours()).padStart(2, '0')}${String(tsCat.getMinutes()).padStart(2, '0')}`;
+        doc.save(`${fileName}_${tsCatStr}.pdf`);
         showToast("PDF generado.", "success");
     }
 
