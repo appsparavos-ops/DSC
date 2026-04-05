@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const playerDetailView = document.getElementById('playerDetailView');
 
     let allPlayers = [], originalHeaders = [], currentlyDisplayedPlayers = [], currentColumnsForPDF = [];
+    let allPlayersGlobal = [];
     let currentSortCol = 'NOMBRE', currentSortDir = 'asc';
     let isEditModeActive = false, currentUserRole = null, currentPlayerIndex = -1, currentSeasonListener = null;
 
@@ -346,16 +347,66 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    function conectarTemporada(temporada) {
+    async function conectarTemporada(temporada) {
         if (!temporada) {
-            allPlayers = [];
-            displayPlayers([]);
             if (messageEl) {
-                messageEl.textContent = 'Por favor, selecciona una temporada.';
+                messageEl.textContent = 'Cargando datos de todas las temporadas...';
                 messageEl.style.display = 'block';
+            }
+            if (tableContainer) tableContainer.innerHTML = '';
+            
+            if (currentSeasonListener) {
+                currentSeasonListener.ref.off('value', currentSeasonListener.callback);
+                currentSeasonListener = null;
+            }
+
+            try {
+                const [jugadoresSnap, entrenadoresSnap] = await Promise.all([
+                    database.ref('/jugadores').once('value'),
+                    database.ref('/entrenadores').once('value')
+                ]);
+
+                const globalPlayers = [];
+                const processNode = (snap, tipo) => {
+                    if (snap.exists()) {
+                        const data = snap.val();
+                        Object.keys(data).forEach(dni => {
+                            const p = data[dni];
+                            if (p.datosPersonales) {
+                                const seasons = p.temporadas ? Object.keys(p.temporadas).sort().reverse() : [];
+                                globalPlayers.push({
+                                    ...p.datosPersonales,
+                                    DNI: p.datosPersonales.DNI || dni,
+                                    TIPO: tipo,
+                                    _allSeasons: seasons,
+                                    TEMPORADA: 'Todas',
+                                    _isGlobal: true
+                                });
+                            }
+                        });
+                    }
+                };
+
+                processNode(jugadoresSnap, 'JUGADOR/A');
+                processNode(entrenadoresSnap, 'ENTRENADOR/A');
+
+                allPlayers = globalPlayers;
+                populateCategoryFilter([]); // Clear or handle differently
+                populateEquipoFilter([]);
+                if (categoryFilter) categoryFilter.disabled = true;
+                if (equipoFilter) equipoFilter.disabled = true;
+
+                applyFilters();
+                if (messageEl) messageEl.style.display = 'none';
+            } catch (error) {
+                console.error("Error cargando todos los jugadores:", error);
+                if (messageEl) messageEl.textContent = 'Error al cargar datos globales.';
             }
             return;
         }
+
+        if (categoryFilter) categoryFilter.disabled = false;
+        if (equipoFilter) equipoFilter.disabled = false;
 
         if (messageEl) {
             messageEl.textContent = `Conectando a la temporada ${temporada}...`;
@@ -621,31 +672,49 @@ document.addEventListener('DOMContentLoaded', function () {
         const selectedCategory = categoryFilter ? categoryFilter.value : '';
         const selectedEquipo = equipoFilter ? equipoFilter.value : '';
 
-        // Poblar filtros DINÁMICAMENTE basados en la selección cruzada
-        // Para el filtro de categorías, consideramos el equipo seleccionado
-        const playersForCategoryList = allPlayers.filter(p => !selectedEquipo || p.EQUIPO === selectedEquipo);
-        populateCategoryFilter(playersForCategoryList);
+        const isGlobalMode = allPlayers.length > 0 && allPlayers[0]._isGlobal;
 
-        // Para el filtro de equipos, consideramos la categoría seleccionada y las autorizaciones cruzadas
-        const playersForEquipoList = allPlayers.filter(p => {
-            if (!selectedCategory) return true;
-            const matchesMainCat = p.CATEGORIA === selectedCategory;
-            const matchesAuthCat = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory);
-            const matchesEsAuth = p.esAutorizado && p.CATEGORIA === selectedCategory;
-            return matchesMainCat || matchesAuthCat || matchesEsAuth;
-        });
-        populateEquipoFilter(playersForEquipoList);
+        if (!isGlobalMode) {
+            // Poblar filtros DINÁMICAMENTE basados en la selección cruzada
+            // Para el filtro de categorías, consideramos el equipo seleccionado
+            const playersForCategoryList = allPlayers.filter(p => !selectedEquipo || p.EQUIPO === selectedEquipo);
+            populateCategoryFilter(playersForCategoryList);
+
+            // Para el filtro de equipos, consideramos la categoría seleccionada y las autorizaciones cruzadas
+            const playersForEquipoList = allPlayers.filter(p => {
+                if (!selectedCategory) return true;
+                const matchesMainCat = p.CATEGORIA === selectedCategory;
+                const matchesAuthCat = p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory);
+                const matchesEsAuth = p.esAutorizado && p.CATEGORIA === selectedCategory;
+                return matchesMainCat || matchesAuthCat || matchesEsAuth;
+            });
+            populateEquipoFilter(playersForEquipoList);
+        }
 
         updateSearchSuggestions(allPlayers);
 
-        let filteredPlayers = allPlayers.filter(p =>
-            (!nameTerm || (p.NOMBRE && p.NOMBRE.toLowerCase().includes(nameTerm))) &&
-            (!dniTerm || (p.DNI && String(p.DNI).toLowerCase().includes(dniTerm))) &&
-            (!selectedCategory || p.CATEGORIA === selectedCategory || (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) || (p.esAutorizado && p.CATEGORIA === selectedCategory)) &&
-            (!selectedEquipo || p.EQUIPO === selectedEquipo || (p.equipoAutorizado === selectedEquipo && p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)))
-        );
+        let filteredPlayers = allPlayers.filter(p => {
+            const matchesName = !nameTerm || (p.NOMBRE && p.NOMBRE.toLowerCase().includes(nameTerm));
+            const matchesDni = !dniTerm || (p.DNI && String(p.DNI).toLowerCase().includes(dniTerm));
+            if (isGlobalMode) {
+                // En modo global solo importa nombre y DNI
+                return matchesName && matchesDni;
+            }
+            const matchesCat = !selectedCategory || p.CATEGORIA === selectedCategory || (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory)) || (p.esAutorizado && p.CATEGORIA === selectedCategory);
+            const matchesEq = !selectedEquipo || p.EQUIPO === selectedEquipo || (p.equipoAutorizado === selectedEquipo && p.categoriasAutorizadas && p.categoriasAutorizadas.includes(selectedCategory));
+            return matchesName && matchesDni && matchesCat && matchesEq;
+        });
 
-        displayPlayers(filteredPlayers);
+        if (isGlobalMode) {
+            // Solo mostrar resultados si hay un término de búsqueda
+            if (!nameTerm && !dniTerm) {
+                displayPlayers([], 'Ingrese un nombre para buscar en todas las temporadas');
+                return;
+            }
+            displayPlayers(filteredPlayers, '', ['NOMBRE', 'DNI', 'TIPO', 'TEMPORADAS']);
+        } else {
+            displayPlayers(filteredPlayers);
+        }
     }
 
     function parseDateDDMMYYYY(dateString) {
@@ -927,7 +996,9 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             let cellValue;
-            if (colName === 'CATEGORIA' && player.esAutorizado) {
+            if (colName === 'TEMPORADAS') {
+                cellValue = (player._allSeasons || []).join(', ');
+            } else if (colName === 'CATEGORIA' && player.esAutorizado) {
                 cellValue = player.categoriaOrigen || player.CATEGORIA;
             } else {
                 cellValue = (colName === 'Numero') ? ((player.Numeros && player.Numeros[categoryContext || player.CATEGORIA]) || player.Numero || '-') : (player[colName] || '-');
@@ -958,7 +1029,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     iconHtml += '<span class="inline-flex items-center justify-center bg-white text-red-600 font-bold rounded-full mr-1" style="width: 1.1rem; height: 1.1rem; font-size: 0.75rem;">X</span>';
                 } else if (isCedido) {
                     iconHtml += '<span title="Cedido en Pase" class="inline-flex items-center justify-center bg-blue-100 text-blue-800 font-bold rounded-full mr-1" style="width: 1.2rem; height: 1.2rem; font-size: 0.75rem;">⇄</span>';
-                } else if (!isDiligenciado && player.TIPO !== 'ENTRENADOR/A') {
+                } else if (!isDiligenciado && player.TIPO !== 'ENTRENADOR/A' && !player._isGlobal) {
                     if (isSinInscribir) {
                         iconHtml += '<span title="Sin Inscribir" class="inline-flex items-center justify-center bg-red-600 text-white font-black mr-1" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%); width: 1.1rem; height: 1rem; font-size: 0.65rem; padding-top: 0.3rem;">!</span>';
                     } else {
@@ -1035,9 +1106,9 @@ document.addEventListener('DOMContentLoaded', function () {
         currentlyDisplayedPlayers = players;
 
         tableContainer.innerHTML = '';
-        if (players.length === 0 && !customTitle) {
+        if (players.length === 0) {
             messageEl.style.display = 'block';
-            messageEl.textContent = 'No se encontraron jugadores que coincidan con la búsqueda.';
+            messageEl.textContent = customTitle || 'No se encontraron jugadores que coincidan con la búsqueda.';
             return;
         }
         messageEl.style.display = 'none';
@@ -1340,6 +1411,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                     <div class="md:col-span-2">
                         <h3 class="text-xl font-semibold border-b border-gray-300 pb-2 mb-4">Detalles</h3>
+                        ${player._isGlobal ? `
+                            <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-sm">
+                                <span class="font-bold">Historial de Temporadas:</span> ${player._allSeasons.join(', ')}
+                            </div>
+                        ` : ''}
                         <div id="player-data-list" class="space-y-4">
                             ${detailRows.map(row => `
                                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
