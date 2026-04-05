@@ -44,6 +44,14 @@ export function parseCSV(csvText, currentAction) {
         if (rowObject['COMPETICIÓN'] && !rowObject.COMPETICION) rowObject.COMPETICION = rowObject['COMPETICIÓN'];
         if (rowObject[' NOMBRE'] && !rowObject.NOMBRE) rowObject.NOMBRE = rowObject[' NOMBRE'];
         if (rowObject.FECHA_LIC && !rowObject.FECHA_ALTA) rowObject.FECHA_ALTA = rowObject.FECHA_LIC;
+        
+        // Estandarizar equipo (DSC -> DEFENSOR SPORTING)
+        const teamFields = ['EQUIPO', 'CLUB'];
+        teamFields.forEach(field => {
+            if (rowObject[field] && rowObject[field].trim().toUpperCase() === 'DSC') {
+                rowObject[field] = 'DEFENSOR SPORTING';
+            }
+        });
 
         if (!rowObject.DNI) continue;
 
