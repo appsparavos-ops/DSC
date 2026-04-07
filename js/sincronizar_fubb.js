@@ -225,7 +225,7 @@ const _bmkFn = async function() {
 
                         var dni    = c[2].innerText.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
                         var nombre = c[1].innerText.trim();
-                        var numero = c[0].innerText.trim().replace(/\D/g, ''); // Extraer solo dígitos de la primera columna
+                        var numero = c[0].innerText.trim().replace(/\D/g, '');
                         if (dni && dni.length >= 7) {
                             allPlayers.push({ dni: dni, nombre: nombre, equipo: miEquipo, categoria: cat, isAuth: isAuth, numero: numero });
                             n++;
