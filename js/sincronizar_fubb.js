@@ -741,6 +741,8 @@ function renderResults(mFirebaseOwn, mFubbOwn, mFirebaseAuth, mFubbAuth, mNumber
             else btnTabNums.classList.add('hidden');
         }
 
+        window._currentMissingOwn = mFirebaseOwn;
+        window._currentMissingAuth = mFirebaseAuth;
         window._currentMismatchedNumbers = mNumbers;
     }
 }
@@ -767,6 +769,7 @@ async function authorizePlayer(fubbPlayer, overrideCategory = null, overrideTeam
             const currentCat = existingInSeason.CATEGORIA || "";
             const cats = existingInSeason.categoriasAutorizadas || [];
             const currentNum = (existingInSeason.Numeros && existingInSeason.Numeros[category]) || existingInSeason.Numero || "";
+            const isClubPropio = (existingInSeason.EQUIPO === team && currentCat !== "");
 
             const updates = {};
             // Si la FUBB trae número y Firebase no tiene para esta categoría, lo asignamos
@@ -778,31 +781,39 @@ async function authorizePlayer(fubbPlayer, overrideCategory = null, overrideTeam
             }
 
             if (asAuth) {
-                if (!cats.includes(category)) {
+                // Vincular como Autorizado
+                if (!cats.includes(category) && currentCat !== category) {
                     cats.push(category);
                 }
                 updates.categoriasAutorizadas = cats;
                 updates.equipoAutorizado = team;
-                updates.esAutorizado = true;
+                // Solo es "Autorizado" (refuerzo) si NO es ya propio del club
+                updates.esAutorizado = !isClubPropio;
                 
                 await database.ref(`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`).update(updates);
-                // Actualizar también en el nodo canónico
                 await database.ref(`/${existingInSeason._tipo}/${dni}/temporadas/${season}/${existingInSeason.dbKey}`).update(updates);
             } else {
+                // Vincular como Propio
                 if (currentCat && currentCat !== category) {
+                    // Ya tiene otra categoría principal, lo autorizamos en esta nueva pero sigue siendo propio
                     if (!cats.includes(category)) {
                         cats.push(category);
                     }
                     updates.categoriasAutorizadas = cats;
                     updates.equipoAutorizado = team;
-                    updates.esAutorizado = true;
+                    updates.esAutorizado = false; // Sigue siendo propio
                     
                     await database.ref(`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`).update(updates);
                     await database.ref(`/${existingInSeason._tipo}/${dni}/temporadas/${season}/${existingInSeason.dbKey}`).update(updates);
-                    showToast("El jugador ya tiene categoría principal. Vinculado como autorizado.", "info");
+                    showToast(`Jugador ya propio de ${currentCat}. Vinculado como autorizado en ${category}.`, "info");
                 } else {
+                    // Misma categoría o primera vez: Establecer como propio
                     updates.CATEGORIA = category;
                     updates.EQUIPO = team;
+                    updates.esAutorizado = false;
+                    // Limpiar de autorizadas si estaba por error
+                    updates.categoriasAutorizadas = cats.filter(c => c !== category);
+                    
                     await database.ref(`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`).update(updates);
                     await database.ref(`/${existingInSeason._tipo}/${dni}/temporadas/${season}/${existingInSeason.dbKey}`).update(updates);
                 }
@@ -933,7 +944,8 @@ async function removeAuthorization(player, overrideCategory = null, asAuth = tru
 
             if (cats.length === 0) {
                 // Sin más autorizaciones: si tampoco tiene categoría propia válida, eliminar el nodo completo
-                if (!player.CATEGORIA || player.CATEGORIA === "") {
+                const isPropio = player.CATEGORIA && player.CATEGORIA !== "";
+                if (!isPropio) {
                     shouldRemove = true;
                 } else {
                     // Tiene categoría propia → solo limpiar los campos de autorización
@@ -948,11 +960,21 @@ async function removeAuthorization(player, overrideCategory = null, asAuth = tru
                 updates = {
                     categoriasAutorizadas: cats
                 };
+                // Si es propio, asegurar que esAutorizado sea siempre false
+                if (player.CATEGORIA && player.CATEGORIA !== "") {
+                    updates.esAutorizado = false;
+                }
             }
         } else {
-            // Regla de Negocio: eliminar la categoría propia retira al jugador completamente de la temporada.
-            // Se borra el nodo entero del ID push para no dejar basura (CATEGORIA/EQUIPO sin rol funcional).
-            shouldRemove = true;
+            // Regla de Negocio: si deja de ser propio, automáticamente deja de ser autorizado (limpiar todo)
+            // Para evitar dejar un nodo vacío sin rol, borramos el "registro" pero mantenemos la lógica solicitada
+            updates = {
+                CATEGORIA: "",
+                categoriasAutorizadas: [],
+                esAutorizado: false,
+                equipoAutorizado: ""
+            };
+            shouldRemove = true; // Por ahora el flujo borra el nodo si deja de ser propio para no dejar basura
         }
         
         if (shouldRemove) {
@@ -985,6 +1007,126 @@ function showToast(message, type = 'info') {
         toast.classList.add('translate-y-24', 'opacity-0');
         toast.classList.remove('translate-y-0', 'opacity-100');
     }, 3000);
+}
+
+async function syncAllMissing(asAuth = false) {
+    const players = asAuth ? window._currentMissingAuth : window._currentMissingOwn;
+    if (!players || players.length === 0) return;
+    
+    const typeLabel = asAuth ? 'autorizados' : 'propios';
+    if (!confirm(`¿Deseas vincular los ${players.length} jugadores ${typeLabel} detectados automáticamente?`)) return;
+
+    try {
+        const season = seasonSelect.value;
+        const updates = {};
+        let count = 0;
+        let skipped = 0;
+
+        showToast(`Procesando ${players.length} jugadores...`, "info");
+
+        for (const p of players) {
+            const dni = String(p.dni);
+            const team = p.view_equipo || teamSelect.value;
+            const category = p.view_categoria || categorySelect.value;
+            
+            const existingInSeason = allPlayers.find(rec => String(rec.DNI) === dni);
+            
+            if (existingInSeason) {
+                // Ya tiene registro en la temporada -> Actualizar
+                const currentCat = existingInSeason.CATEGORIA || "";
+                const cats = existingInSeason.categoriasAutorizadas || [];
+                const isClubPropio = (existingInSeason.EQUIPO === team && currentCat !== "");
+                
+                const up = {};
+                if (asAuth) {
+                    if (!cats.includes(category) && currentCat !== category) {
+                        cats.push(category);
+                    }
+                    up.categoriasAutorizadas = cats;
+                    up.equipoAutorizado = team;
+                    up.esAutorizado = !isClubPropio;
+                } else {
+                    if (currentCat && currentCat !== category) {
+                        if (!cats.includes(category)) cats.push(category);
+                        up.categoriasAutorizadas = cats;
+                        up.equipoAutorizado = team;
+                        up.esAutorizado = false;
+                    } else {
+                        up.CATEGORIA = category;
+                        up.EQUIPO = team;
+                        up.esAutorizado = false;
+                        up.categoriasAutorizadas = cats.filter(c => c !== category);
+                    }
+                }
+                
+                // Número
+                if (p.numero) {
+                    const newNumeros = { ...(existingInSeason.Numeros || {}) };
+                    newNumeros[category] = p.numero;
+                    up.Numero = p.numero;
+                    up.Numeros = newNumeros;
+                }
+
+                updates[`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`] = { ...existingInSeason, ...up };
+                updates[`/${existingInSeason._tipo || 'jugadores'}/${dni}/temporadas/${season}/${existingInSeason.dbKey}`] = { ...existingInSeason, ...up };
+                count++;
+
+            } else {
+                // No tiene registro en la temporada -> Verificar global
+                const snap = await database.ref(`/jugadores/${dni}/datosPersonales`).once('value');
+                if (snap.exists()) {
+                    const personalData = snap.val();
+                    const newId = database.ref(`/registrosPorTemporada/${season}`).push().key;
+                    
+                    const newRecord = {
+                        DNI: dni,
+                        NOMBRE: personalData.NOMBRE || p.nombre,
+                        EQUIPO: team,
+                        CATEGORIA: asAuth ? "" : category,
+                        _tipo: 'jugadores',
+                        dbKey: newId,
+                        _pushId: newId,
+                        _dni: dni
+                    };
+
+                    if (p.numero) {
+                        newRecord.Numero = p.numero;
+                        newRecord.Numeros = {};
+                        newRecord.Numeros[category] = p.numero;
+                    }
+
+                    if (asAuth) {
+                        newRecord.esAutorizado = true;
+                        newRecord.equipoAutorizado = team;
+                        newRecord.categoriasAutorizadas = [category];
+                    } else {
+                        newRecord.esAutorizado = false;
+                        newRecord.categoriasAutorizadas = [];
+                    }
+
+                    updates[`/registrosPorTemporada/${season}/${newId}`] = newRecord;
+                    updates[`/jugadores/${dni}/temporadas/${season}/${newId}`] = newRecord;
+                    count++;
+                } else {
+                    skipped++;
+                }
+            }
+        }
+
+        if (count > 0) {
+            await database.ref().update(updates);
+            showToast(`¡Sincronización completa! ${count} registros afectados.`, "success");
+            if (skipped > 0) showToast(`${skipped} jugadores no encontrados en el sistema global.`, "warning");
+            await loadPlayersForSeason(season);
+            if (fubbDataInput.value.trim().length > 0) compareBtn.click();
+        } else {
+            showToast("No se pudo vincular a nadie. Asegúrate que existan en el sistema global.", "error");
+        }
+
+    } catch (e) {
+        console.error(e);
+        showToast("Error en vinculación masiva", "error");
+    }
 }
 
 // Auto Team Fix
