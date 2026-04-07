@@ -324,6 +324,7 @@ async function loadPlayersForSeason(temporada) {
     }
 
     const rawRecords = snapshot.val();
+    window._rawFirebaseRecords = rawRecords; // Guardar para sincronización masiva
 
     // Filtrar aquellos que no sean jugadores explícitamente (ignorar cuerpo técnico)
     const filteredKeys = Object.keys(rawRecords).filter(key => {
@@ -347,6 +348,7 @@ async function loadPlayersForSeason(temporada) {
         const r = rawRecords[key];
         const dni = String(r._dni || r.DNI || "");
         return {
+            ...r, // Preservar TODOS los campos originales de Firebase (ESTADO LICENCIA, FM Hasta, etc.)
             dbKey: key,
             DNI: dni,
             NOMBRE: namesMap[dni] || r.NOMBRE || 'N/N',
@@ -1067,8 +1069,9 @@ async function syncAllMissing(asAuth = false) {
                     up.Numeros = newNumeros;
                 }
 
-                updates[`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`] = { ...existingInSeason, ...up };
-                updates[`/${existingInSeason._tipo || 'jugadores'}/${dni}/temporadas/${season}/${existingInSeason.dbKey}`] = { ...existingInSeason, ...up };
+                const originalRecord = (window._rawFirebaseRecords && window._rawFirebaseRecords[existingInSeason.dbKey]) || existingInSeason;
+                updates[`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`] = { ...originalRecord, ...up };
+                updates[`/${existingInSeason._tipo || 'jugadores'}/${dni}/temporadas/${season}/${existingInSeason.dbKey}`] = { ...originalRecord, ...up };
                 count++;
 
             } else {
