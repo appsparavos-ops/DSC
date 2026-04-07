@@ -509,7 +509,7 @@ function runMassiveComparison() {
             const fbPlayersOwn = allPlayers.filter(p => p.EQUIPO === team && p.CATEGORIA === category);
             const fbPlayersAuth = allPlayers.filter(p => {
                 const matchesTeam = p.EQUIPO === team || p.equipoAutorizado === team;
-                const isAuthorized = (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category)) || p.esAutorizado;
+                const isAuthorized = (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category));
                 return matchesTeam && isAuthorized && p.CATEGORIA !== category;
             });
 
@@ -567,7 +567,7 @@ function runComparison(team, category) {
     const fbPlayersOwn = allPlayers.filter(p => p.EQUIPO === team && p.CATEGORIA === category);
     const fbPlayersAuth = allPlayers.filter(p => {
         const matchesTeam = p.EQUIPO === team || p.equipoAutorizado === team;
-        const isAuthorized = (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category)) || p.esAutorizado;
+        const isAuthorized = (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category));
         return matchesTeam && isAuthorized && p.CATEGORIA !== category;
     });
 
@@ -678,8 +678,10 @@ async function authorizePlayer(fubbPlayer, overrideCategory = null, overrideTeam
         const existingInSeason = allPlayers.find(p => p.DNI === dni);
         
         if (existingInSeason) {
+            const currentCat = existingInSeason.CATEGORIA || "";
+            const cats = existingInSeason.categoriasAutorizadas || [];
+
             if (asAuth) {
-                const cats = existingInSeason.categoriasAutorizadas || [];
                 if (!cats.includes(category)) {
                     cats.push(category);
                 }
@@ -690,11 +692,25 @@ async function authorizePlayer(fubbPlayer, overrideCategory = null, overrideTeam
                 };
                 await database.ref(`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`).update(updates);
             } else {
-                const updates = {
-                    CATEGORIA: category,
-                    EQUIPO: team
-                };
-                await database.ref(`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`).update(updates);
+                if (currentCat && currentCat !== category) {
+                    // Si ya tiene categoría principal, lo sumamos como autorizado para no pisarla
+                    if (!cats.includes(category)) {
+                        cats.push(category);
+                    }
+                    const updates = {
+                        categoriasAutorizadas: cats,
+                        equipoAutorizado: team,
+                        esAutorizado: true
+                    };
+                    await database.ref(`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`).update(updates);
+                    showToast("El jugador ya tiene categoría principal. Vinculado como autorizado.", "info");
+                } else {
+                    const updates = {
+                        CATEGORIA: category,
+                        EQUIPO: team
+                    };
+                    await database.ref(`/registrosPorTemporada/${season}/${existingInSeason.dbKey}`).update(updates);
+                }
             }
         } else {
             const snapshot = await database.ref(`/jugadores/${dni}/datosPersonales`).once('value');
