@@ -2129,19 +2129,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Handlers temporales
         const handleYes = async () => {
+            const includePotentials = document.getElementById('includePotentialsCheckbox') ? document.getElementById('includePotentialsCheckbox').checked : false;
             closeModal();
             if (selectedEquipo) {
-                await generateTeamPDF(selectedEquipo, true);
+                await generateTeamPDF(selectedEquipo, true, includePotentials);
             } else {
-                await generateCategoryPDF(selectedCategory, true);
+                await generateCategoryPDF(selectedCategory, true, includePotentials);
             }
         };
         const handleNo = async () => {
+            const includePotentials = document.getElementById('includePotentialsCheckbox') ? document.getElementById('includePotentialsCheckbox').checked : false;
             closeModal();
             if (selectedEquipo) {
-                await generateTeamPDF(selectedEquipo, false);
+                await generateTeamPDF(selectedEquipo, false, includePotentials);
             } else {
-                await generateCategoryPDF(selectedCategory, false);
+                await generateCategoryPDF(selectedCategory, false, includePotentials);
             }
         };
         const handleAnomalos = async () => {
@@ -2158,6 +2160,10 @@ document.addEventListener('DOMContentLoaded', function () {
         };
         const closeModal = () => {
             modal.classList.add('hidden');
+            // Limpiar checkbox para la próxima vez
+            const chk = document.getElementById('includePotentialsCheckbox');
+            if (chk) chk.checked = false;
+
             btnYes.removeEventListener('click', handleYes);
             btnNo.removeEventListener('click', handleNo);
             if (btnAnomalos) btnAnomalos.removeEventListener('click', handleAnomalos);
@@ -2683,7 +2689,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // This is the full implementation of generateCategoryPDF, including the nested helpers.
-    async function generateTeamPDF(selectedEquipo, includeLicense = false) {
+    async function generateTeamPDF(selectedEquipo, includeLicense = false, includePotentials = false) {
         if (typeof window.jspdf === 'undefined') {
             return showToast("Librería PDF no disponible.", "error");
         }
@@ -2886,7 +2892,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return true;
             }).sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
 
-            if (potentialPlayersList.length > 0) {
+            if (includePotentials && potentialPlayersList.length > 0) {
                 yPosition = drawSectionHeader('Jugadores Potenciales (Sin Autorizar)', yPosition, 10);
                 yPosition = drawTable(columns, potentialPlayersList, yPosition, cat);
                 yPosition += 5;
@@ -2901,7 +2907,7 @@ document.addEventListener('DOMContentLoaded', function () {
         showToast("PDF de equipo generado.", "success");
     }
 
-    async function generateCategoryPDF(selectedCategory, includeLicense = false) {
+    async function generateCategoryPDF(selectedCategory, includeLicense = false, includePotentials = false) {
         if (typeof window.jspdf === 'undefined') {
             return showToast("Librería PDF no disponible.", "error");
         }
@@ -3141,7 +3147,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return true;
             }).sort((a, b) => (a.NOMBRE || '').localeCompare(b.NOMBRE || ''));
 
-            if (potentialPlayersList.length > 0) {
+            if (includePotentials && potentialPlayersList.length > 0) {
                 // Forzar espacio o nueva página si queda poco espacio
                 if (yPosition > doc.internal.pageSize.getHeight() - 40) {
                     doc.addPage();
