@@ -267,6 +267,7 @@ const _bmkFn = async function() {
 };
 
 const _bmkSrc = _bmkFn.toString()
+    .replace(/(^|[^:])\/\/.*$/gm, '$1 ') // Eliminar comentarios // (respetando http://)
     .replace(/\n\s*/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -673,6 +674,7 @@ function renderResults(mFirebaseOwn, mFubbOwn, mFirebaseAuth, mFubbAuth, mNumber
             tr.className = "border-t border-white/5 hover:bg-orange-500/10 transition-colors cursor-pointer group";
             tr.onclick = () => authorizePlayer(p, isMassive ? p.view_categoria : null, isMassive ? p.view_equipo : null, isAuth);
             tr.innerHTML = `
+                <td class="px-4 py-3 text-center"><input type="checkbox" checked class="row-checkbox accent-orange-500" data-dni="${p.dni}" onclick="event.stopPropagation()"></td>
                 <td class="px-4 py-3 font-mono text-orange-300 text-xs">${formatDni(p.dni)}</td>
                 <td class="px-4 py-3">
                     <div class="font-medium">${p.nombre} ${isMassive ? '<span class="text-[10px] bg-indigo-900/60 text-indigo-200 px-1 rounded ml-1">' + p.view_equipo + '</span><span class="text-[10px] bg-orange-900/60 px-1 rounded ml-1">' + p.view_categoria + '</span>' : ''}</div>
@@ -692,6 +694,7 @@ function renderResults(mFirebaseOwn, mFubbOwn, mFirebaseAuth, mFubbAuth, mNumber
             tr.className = "border-t border-white/5 hover:bg-blue-500/10 transition-colors cursor-pointer group";
             tr.onclick = () => removeAuthorization(p, isMassive ? p.view_categoria : null, isAuth);
             tr.innerHTML = `
+                <td class="px-4 py-3 text-center"><input type="checkbox" checked class="row-checkbox accent-blue-500" data-dni="${p.DNI}" onclick="event.stopPropagation()"></td>
                 <td class="px-4 py-3 font-mono text-blue-300 text-xs">${formatDni(p.DNI)}</td>
                 <td class="px-4 py-3">
                     <div class="font-medium">${p.NOMBRE} ${isMassive ? '<span class="text-[10px] bg-indigo-900/60 text-indigo-200 px-1 rounded ml-1">' + p.view_equipo + '</span><span class="text-[10px] bg-blue-900/60 px-1 rounded ml-1">' + p.view_categoria + '</span>' : ''}</div>
@@ -711,6 +714,7 @@ function renderResults(mFirebaseOwn, mFubbOwn, mFirebaseAuth, mFubbAuth, mNumber
             tr.className = "border-t border-white/5 hover:bg-amber-500/10 transition-colors cursor-pointer group";
             tr.onclick = () => updatePlayerNumber(numObj.dbKey, numObj.dni, numObj.fubbNum, numObj.categoria, numObj._tipo);
             tr.innerHTML = `
+                <td class="px-4 py-3 text-center"><input type="checkbox" checked class="row-checkbox accent-amber-500" data-dni="${numObj.dni}" data-cat="${numObj.categoria}" onclick="event.stopPropagation()"></td>
                 <td class="px-4 py-3">
                     <div class="font-medium">${numObj.nombre} <span class="text-[10px] bg-orange-900/60 px-1 rounded ml-1">${numObj.categoria}</span></div>
                     <div class="text-[10px] text-gray-500">DNI: ${formatDni(numObj.dni)}</div>
@@ -897,15 +901,24 @@ async function syncAllNumbers() {
     const records = window._currentMismatchedNumbers || [];
     if (records.length === 0) return;
     
-    if (!confirm(`¿Vincular los ${records.length} números detectados automáticamente?`)) return;
+    // Filtrar por selección de checkbox
+    const container = document.getElementById('missingInFirebaseBodyNums');
+    const checkedDnis = Array.from(container.querySelectorAll('.row-checkbox:checked')).map(cb => ({ dni: cb.dataset.dni, cat: cb.dataset.cat }));
+    const filteredRecords = records.filter(rec => checkedDnis.some(c => String(c.dni) === String(rec.dni) && c.cat === rec.categoria));
+
+    if (filteredRecords.length === 0) {
+        showToast("No hay registros seleccionados para vincular.", "warning");
+        return;
+    }
+
+    if (!confirm(`¿Vincular los ${filteredRecords.length} números seleccionados automáticamente?`)) return;
 
     try {
-        showToast(`Procesando ${records.length} números...`, "info");
+        showToast(`Procesando ${filteredRecords.length} números...`, "info");
         const season = seasonSelect.value;
         const updates = {};
         
-        // Necesitamos obtener los Numeros actuales para no pisar otros
-        for (const rec of records) {
+        for (const rec of filteredRecords) {
             const snap = await database.ref(`/registrosPorTemporada/${season}/${rec.dbKey}`).once('value');
             const currentData = snap.val() || {};
             const newNumeros = { ...(currentData.Numeros || {}) };
@@ -918,7 +931,7 @@ async function syncAllNumbers() {
         }
 
         await database.ref().update(updates);
-        showToast(`¡${records.length} números sincronizados!`, "success");
+        showToast(`¡${filteredRecords.length} números sincronizados!`, "success");
         await loadPlayersForSeason(season);
         if (fubbDataInput.value.trim().length > 0) compareBtn.click();
     } catch (e) {
@@ -1015,8 +1028,19 @@ async function syncAllMissing(asAuth = false) {
     const players = asAuth ? window._currentMissingAuth : window._currentMissingOwn;
     if (!players || players.length === 0) return;
     
+    // Filtrar por selección de checkbox
+    const containerId = asAuth ? 'missingInFirebaseBodyAuth' : 'missingInFirebaseBodyOwn';
+    const container = document.getElementById(containerId);
+    const checkedDnis = Array.from(container.querySelectorAll('.row-checkbox:checked')).map(cb => String(cb.dataset.dni));
+    const filteredPlayers = players.filter(p => checkedDnis.includes(String(p.dni)));
+
+    if (filteredPlayers.length === 0) {
+        showToast("No hay jugadores seleccionados para vincular.", "warning");
+        return;
+    }
+
     const typeLabel = asAuth ? 'autorizados' : 'propios';
-    if (!confirm(`¿Deseas vincular los ${players.length} jugadores ${typeLabel} detectados automáticamente?`)) return;
+    if (!confirm(`¿Deseas vincular los ${filteredPlayers.length} jugadores ${typeLabel} seleccionados?`)) return;
 
     try {
         const season = seasonSelect.value;
@@ -1024,9 +1048,9 @@ async function syncAllMissing(asAuth = false) {
         let count = 0;
         let skipped = 0;
 
-        showToast(`Procesando ${players.length} jugadores...`, "info");
+        showToast(`Procesando ${filteredPlayers.length} jugadores...`, "info");
 
-        for (const p of players) {
+        for (const p of filteredPlayers) {
             const dni = String(p.dni);
             const team = p.view_equipo || teamSelect.value;
             const category = p.view_categoria || categorySelect.value;
@@ -1130,6 +1154,13 @@ async function syncAllMissing(asAuth = false) {
         console.error(e);
         showToast("Error en vinculación masiva", "error");
     }
+}
+
+function toggleAllCheckboxes(master, bodyId) {
+    const body = document.getElementById(bodyId);
+    if (!body) return;
+    const checkboxes = body.querySelectorAll('.row-checkbox');
+    checkboxes.forEach(cb => cb.checked = master.checked);
 }
 
 // Auto Team Fix
