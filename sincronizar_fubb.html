@@ -157,6 +157,7 @@
                         <div class="flex space-x-4 border-b border-white/10 mb-6 font-bold text-sm">
                             <button id="btnTabOwn" class="px-4 py-3 border-b-2 border-orange-500 text-orange-400 transition-all" onclick="switchTab('own')">Jugadores Propios</button>
                             <button id="btnTabAuth" class="px-4 py-3 border-b-2 border-transparent text-gray-500 hover:text-white transition-all" onclick="switchTab('auth')">Jugadores Autorizados</button>
+                            <button id="btnTabNums" class="hidden px-4 py-3 border-b-2 border-transparent text-gray-500 hover:text-white transition-all" onclick="switchTab('nums')">Números</button>
                         </div>
 
                         <!-- TAB PROPIOS -->
@@ -240,6 +241,33 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- TAB NUMEROS -->
+                        <div id="tabContentNums" class="space-y-8 hidden">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-sm font-bold text-amber-400 flex items-center gap-2">
+                                    <span class="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                    Discrepancias en Números de Camiseta
+                                </h3>
+                                <button onclick="syncAllNumbers()" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-lg active:scale-95">
+                                    Vincular todos los números
+                                </button>
+                            </div>
+                            
+                            <div class="overflow-hidden rounded-xl border border-white/5 bg-white/2">
+                                <table class="w-full text-sm text-left">
+                                    <thead class="bg-white/5 text-gray-400 text-xs">
+                                        <tr>
+                                            <th class="px-4 py-3">Jugador / Categoría</th>
+                                            <th class="px-4 py-3 text-center">Firebase</th>
+                                            <th class="px-4 py-3 text-center">FUBB</th>
+                                            <th class="px-4 py-3 text-right">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="missingInFirebaseBodyNums"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="noResultsState"
@@ -266,30 +294,21 @@
 
     <script>
         function switchTab(tab) {
-            const btnOwn = document.getElementById('btnTabOwn');
-            const btnAuth = document.getElementById('btnTabAuth');
-            const contentOwn = document.getElementById('tabContentOwn');
-            const contentAuth = document.getElementById('tabContentAuth');
-
-            if (tab === 'own') {
-                btnOwn.classList.replace('border-transparent', 'border-orange-500');
-                btnOwn.classList.replace('text-gray-500', 'text-orange-400');
+            const tabs = ['own', 'auth', 'nums'];
+            tabs.forEach(t => {
+                const btn = document.getElementById('btnTab' + t.charAt(0).toUpperCase() + t.slice(1));
+                const content = document.getElementById('tabContent' + t.charAt(0).toUpperCase() + t.slice(1));
                 
-                btnAuth.classList.replace('border-orange-500', 'border-transparent');
-                btnAuth.classList.replace('text-orange-400', 'text-gray-500');
-
-                contentOwn.classList.remove('hidden');
-                contentAuth.classList.add('hidden');
-            } else {
-                btnAuth.classList.replace('border-transparent', 'border-orange-500');
-                btnAuth.classList.replace('text-gray-500', 'text-orange-400');
-                
-                btnOwn.classList.replace('border-orange-500', 'border-transparent');
-                btnOwn.classList.replace('text-orange-400', 'text-gray-500');
-
-                contentAuth.classList.remove('hidden');
-                contentOwn.classList.add('hidden');
-            }
+                if (t === tab) {
+                    btn.classList.replace('border-transparent', 'border-orange-500');
+                    btn.classList.replace('text-gray-500', 'text-orange-400');
+                    content.classList.remove('hidden');
+                } else {
+                    btn.classList.replace('border-orange-500', 'border-transparent');
+                    btn.classList.replace('text-orange-400', 'text-gray-500');
+                    content.classList.add('hidden');
+                }
+            });
         }
     </script>
     <script src="js/audit-logger.js"></script>
