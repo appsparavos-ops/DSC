@@ -638,13 +638,15 @@ function runComparison(team, category) {
     renderResults(mFirebaseOwn, mFubbOwn, mFirebaseAuth, mFubbAuth, mNumbers, false);
 }
 
-function renderResults(mFirebaseOwn, mFubbOwn, mFirebaseAuth, mFubbAuth, isMassive = false) {
+function renderResults(mFirebaseOwn, mFubbOwn, mFirebaseAuth, mFubbAuth, mNumbers = [], isMassive = false) {
     missingInFirebaseBodyOwn.innerHTML = '';
     missingInFubbBodyOwn.innerHTML = '';
     missingInFirebaseBodyAuth.innerHTML = '';
     missingInFubbBodyAuth.innerHTML = '';
+    const missingInFirebaseBodyNums = document.getElementById('missingInFirebaseBodyNums');
+    if (missingInFirebaseBodyNums) missingInFirebaseBodyNums.innerHTML = '';
 
-    const extTotal = mFirebaseOwn.length + mFubbOwn.length + mFirebaseAuth.length + mFubbAuth.length;
+    const extTotal = mFirebaseOwn.length + mFubbOwn.length + mFirebaseAuth.length + mFubbAuth.length + mNumbers.length;
 
     if (extTotal === 0) {
         if (statusBadge) statusBadge.classList.remove('hidden');
@@ -702,15 +704,44 @@ function renderResults(mFirebaseOwn, mFubbOwn, mFirebaseAuth, mFubbAuth, isMassi
             container.appendChild(tr);
         };
 
+        const createNumberMissingRow = (numObj, container) => {
+            const tr = document.createElement('tr');
+            tr.className = "border-t border-white/5 hover:bg-amber-500/10 transition-colors cursor-pointer group";
+            tr.onclick = () => updatePlayerNumber(numObj.dbKey, numObj.dni, numObj.fubbNum, numObj.categoria, numObj._tipo);
+            tr.innerHTML = `
+                <td class="px-4 py-3">
+                    <div class="font-medium">${numObj.nombre} <span class="text-[10px] bg-orange-900/60 px-1 rounded ml-1">${numObj.categoria}</span></div>
+                    <div class="text-[10px] text-gray-500">DNI: ${formatDni(numObj.dni)}</div>
+                </td>
+                <td class="px-4 py-3 font-mono text-gray-400 text-xs text-center">${numObj.fbNum || '---'}</td>
+                <td class="px-4 py-3 font-mono text-amber-300 text-xs text-center font-bold">${numObj.fubbNum}</td>
+                <td class="px-4 py-3 text-right">
+                    <button class="bg-amber-600/20 text-amber-400 border border-amber-500/30 px-3 py-1 rounded-lg text-[10px] font-bold group-hover:bg-amber-600 group-hover:text-white transition-all">
+                        Vincular
+                    </button>
+                </td>
+            `;
+            container.appendChild(tr);
+        };
+
         mFirebaseOwn.forEach(p => createFirebaseMissingRow(p, missingInFirebaseBodyOwn, false));
         mFubbOwn.forEach(p => createFubbMissingRow(p, missingInFubbBodyOwn, false));
         mFirebaseAuth.forEach(p => createFirebaseMissingRow(p, missingInFirebaseBodyAuth, true));
         mFubbAuth.forEach(p => createFubbMissingRow(p, missingInFubbBodyAuth, true));
+        if (missingInFirebaseBodyNums) mNumbers.forEach(n => createNumberMissingRow(n, missingInFirebaseBodyNums));
         
         const btnTabOwn = document.getElementById('btnTabOwn');
         const btnTabAuth = document.getElementById('btnTabAuth');
-        btnTabOwn.innerHTML = `Jugadores Propios <span class="ml-2 bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full text-xs">${mFirebaseOwn.length + mFubbOwn.length}</span>`;
-        btnTabAuth.innerHTML = `Jugadores Autorizados <span class="ml-2 bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full text-xs">${mFirebaseAuth.length + mFubbAuth.length}</span>`;
+        const btnTabNums = document.getElementById('btnTabNums');
+        if (btnTabOwn) btnTabOwn.innerHTML = `Jugadores Propios <span class="ml-2 bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full text-xs">${mFirebaseOwn.length + mFubbOwn.length}</span>`;
+        if (btnTabAuth) btnTabAuth.innerHTML = `Jugadores Autorizados <span class="ml-2 bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full text-xs">${mFirebaseAuth.length + mFubbAuth.length}</span>`;
+        if (btnTabNums) {
+            btnTabNums.innerHTML = `Números <span class="ml-2 bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full text-xs">${mNumbers.length}</span>`;
+            if (mNumbers.length > 0) btnTabNums.classList.remove('hidden');
+            else btnTabNums.classList.add('hidden');
+        }
+
+        window._currentMismatchedNumbers = mNumbers;
     }
 }
 
