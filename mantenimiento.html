@@ -21,7 +21,8 @@
         body {
             font-family: 'Outfit', sans-serif;
             background: radial-gradient(circle at top right, #1e1b4b, #000000);
-            min-height: screen;
+            min-height: 100vh;
+            position: relative;
             color: white;
             display: flex;
             align-items: center;
@@ -100,16 +101,31 @@
 
 <body class="uninitialized">
 
-    <div class="container max-w-4xl mx-auto p-6">
+    <!-- Botón Volver al Inicio en la esquina superior izquierda -->
+    <a href="index.html"
+        class="fixed top-4 left-4 md:top-8 md:left-8 group flex items-center px-4 py-3 md:px-6 md:py-3 rounded-full bg-white/5 backdrop-blur-md border border-white/20 hover:bg-white/10 hover:border-purple-500 transition-all z-50">
+        <svg class="h-5 w-5 md:mr-3 group-hover:-translate-x-1 transition-transform" fill="none"
+            stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        <span class="hidden md:inline font-semibold">Volver al Inicio</span>
+    </a>
+
+    <div class="container max-w-6xl mx-auto p-6 mt-16 md:mt-0">
         <div class="glass-card p-8 md:p-12">
             <header class="text-center mb-12 relative">
                 <!-- Botón Configuración (Toggle Sortable) -->
                 <button id="toggle-sort-btn" onclick="toggleSortable()"
                     class="absolute top-0 right-0 p-3 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-purple-500 transition-all group"
                     title="Configurar orden de botones">
-                    <svg id="config-icon" class="h-6 w-6 text-gray-400 group-hover:text-purple-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <svg id="config-icon" class="h-6 w-6 text-gray-400 group-hover:text-purple-400 transition-colors"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
+                        </path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                     </svg>
                 </button>
 
@@ -121,14 +137,13 @@
                         Centro de Mantenimiento</h1>
                     <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
                         alt="Logo DSC Derecha" class="h-16 md:h-20 drop-shadow-2xl">
-                </div>
-                <p class="text-gray-400 text-lg">Panel de administración del ecosistema DSC</p>
-                <div id="sort-status" class="text-xs font-bold text-purple-400 uppercase tracking-widest mt-2 hidden">
-                    Modo edición activo - Arrastra para reordenar
-                </div>
+                    <div id="sort-status"
+                        class="text-xs font-bold text-purple-400 uppercase tracking-widest mt-2 hidden">
+                        Modo edición activo - Arrastra para reordenar
+                    </div>
             </header>
 
-            <div id="buttons-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div id="buttons-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <!-- Fichas Medicas -->
                 <a href="actualizador.html" data-id="fichas"
                     class="nav-button flex items-center p-4 rounded-xl border border-white/10 bg-white/5">
@@ -334,17 +349,6 @@
                 </a>
             </div>
 
-            <div class="mt-12 flex justify-center">
-                <a href="index.html"
-                    class="group flex items-center px-8 py-3 rounded-full bg-white/5 border border-white/20 hover:bg-white/10 hover:border-purple-500 transition-all">
-                    <svg class="h-5 w-5 mr-3 group-hover:-translate-x-1 transition-transform" fill="none"
-                        stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                    </svg>
-                    <span class="font-semibold">Volver al Inicio</span>
-                </a>
-            </div>
         </div>
     </div>
 
@@ -405,15 +409,15 @@
 
         function toggleSortable() {
             if (!sortableInstance) return;
-            
+
             isSortableEnabled = !isSortableEnabled;
             sortableInstance.option('disabled', !isSortableEnabled);
-            
+
             // UI Updates
             const btn = document.getElementById('toggle-sort-btn');
             const icon = document.getElementById('config-icon');
             const status = document.getElementById('sort-status');
-            
+
             if (isSortableEnabled) {
                 document.body.classList.add('sortable-active');
                 btn.classList.add('bg-purple-600/20', 'border-purple-500');
@@ -432,7 +436,7 @@
             const buttonMap = {};
             buttons.forEach(btn => buttonMap[btn.getAttribute('data-id')] = btn);
             grid.innerHTML = '';
-            
+
             // 1. Agregar los botones en el orden guardado
             order.forEach(id => {
                 if (buttonMap[id]) {
@@ -440,7 +444,7 @@
                     delete buttonMap[id]; // Quitar de la lista de pendientes
                 }
             });
-            
+
             // 2. Agregar cualquier botón NUEVO al final
             Object.values(buttonMap).forEach(btn => {
                 grid.appendChild(btn);
@@ -450,19 +454,20 @@
         // Detección de móvil usando MutationObserver para esperar a Firebase
         document.addEventListener('DOMContentLoaded', () => {
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
-            
+
             if (isMobile) {
                 const observer = new MutationObserver((mutations, obs) => {
                     const syncBtn = document.querySelector('a[data-id="sincro_fubb"]');
                     if (syncBtn) {
                         syncBtn.href = 'sincronizar_fubb_movil.html';
-                        obs.disconnect(); 
+                        obs.disconnect();
                     }
                 });
-                
+
                 observer.observe(document.body, { childList: true, subtree: true });
             }
         });
     </script>
 </body>
+
 </html>
