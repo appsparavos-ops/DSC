@@ -45,6 +45,11 @@ export function parseCSV(csvText, currentAction) {
         if (rowObject[' NOMBRE'] && !rowObject.NOMBRE) rowObject.NOMBRE = rowObject[' NOMBRE'];
         if (rowObject.FECHA_LIC && !rowObject.FECHA_ALTA) rowObject.FECHA_ALTA = rowObject.FECHA_LIC;
         
+        // Normalizar TIPO (ENT. AYUDANTE -> ENTRENADOR/A)
+        if (rowObject.TIPO && rowObject.TIPO.trim().toUpperCase() === 'ENT. AYUDANTE') {
+            rowObject.TIPO = 'ENTRENADOR/A';
+        }
+
         // Estandarizar equipo (DSC -> DEFENSOR SPORTING)
         const teamFields = ['EQUIPO', 'CLUB'];
         teamFields.forEach(field => {
