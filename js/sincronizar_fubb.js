@@ -207,8 +207,8 @@ const _bmkFn = async function () {
                 }
 
                 var miEquipo = eqL;
-                if (/DEFENSOR|FUSIONADO/i.test(eqV)) miEquipo = eqV;
-                if (/DEFENSOR|FUSIONADO/i.test(eqL)) miEquipo = eqL;
+                if (/DEFENSOR SPORTING|FUSIONADO|DSC/i.test(eqV)) miEquipo = eqV;
+                if (/DEFENSOR SPORTING|FUSIONADO|DSC/i.test(eqL)) miEquipo = eqL;
 
                 var n = 0;
                 var tablas = [];
@@ -294,19 +294,39 @@ auth.onAuthStateChanged(user => {
 });
 
 function loadSeasons() {
-    database.ref('/temporadas').once('value').then(snapshot => {
+    database.ref('/temporadas').once('value').then(async snapshot => {
         seasonSelect.innerHTML = '<option value="">Selecciona temporada</option>';
         const seasons = snapshot.val();
         if (seasons) {
             Object.keys(seasons).sort().reverse().forEach(s => {
                 seasonSelect.appendChild(new Option(s, s));
             });
+
+            // Preseleccionar última temporada guardada
+            const user = auth.currentUser;
+            if (user) {
+                const prefSnap = await database.ref(`preferenciasUsuarios/${user.uid}/ultimaTemporadaSeleccionada`).once('value');
+                if (prefSnap.exists()) {
+                    const lastSeason = prefSnap.val();
+                    if (seasons[lastSeason]) {
+                        seasonSelect.value = lastSeason;
+                        loadPlayersForSeason(lastSeason);
+                    }
+                }
+            }
         }
     });
 }
 
 seasonSelect.onchange = () => {
-    loadPlayersForSeason(seasonSelect.value);
+    const selectedSeason = seasonSelect.value;
+    loadPlayersForSeason(selectedSeason);
+    
+    // Guardar preferencia del usuario
+    const user = auth.currentUser;
+    if (user && selectedSeason) {
+        database.ref(`preferenciasUsuarios/${user.uid}/ultimaTemporadaSeleccionada`).set(selectedSeason);
+    }
 };
 
 async function loadPlayersForSeason(temporada) {
@@ -498,7 +518,10 @@ function runMassiveComparison() {
     // Agrupar fubbPlayers por Equipo y Categoría
     const fubbGroups = {};
     fubbPlayers.forEach(p => {
-        const eq = p.equipo || 'Sin Equipo';
+        let eq = p.equipo || 'Sin Equipo';
+        // Normalizar DSC a DEFENSOR SPORTING
+        if (eq.trim().toUpperCase() === 'DSC') eq = 'DEFENSOR SPORTING';
+        
         if (!fubbGroups[eq]) fubbGroups[eq] = {};
         if (!fubbGroups[eq][p.categoria]) fubbGroups[eq][p.categoria] = [];
         fubbGroups[eq][p.categoria].push(p);
@@ -514,13 +537,26 @@ function runMassiveComparison() {
             const fubbDnisOwn = new Set(catFubbPlayersOwn.map(p => String(p.dni)));
             const fubbDnisAuth = new Set(catFubbPlayersAuth.map(p => String(p.dni)));
 
-            const fbPlayersOwn = allPlayers.filter(p => p.EQUIPO === team && p.CATEGORIA === category);
+            const fbPlayersOwn = allPlayers.filter(p => {
+                const pEq = (p.EQUIPO || "").trim().toUpperCase();
+                const targetEq = team.trim().toUpperCase();
+                return (pEq === targetEq || (pEq === 'DEFENSOR SPORTING' && targetEq === 'DSC') || (pEq === 'DSC' && targetEq === 'DEFENSOR SPORTING')) 
+                       && p.CATEGORIA === category;
+            });
+
             const fbPlayersAuth = allPlayers.filter(p => {
-                const matchesTeam = p.EQUIPO === team || p.equipoAutorizado === team;
+                const pEq = (p.EQUIPO || "").trim().toUpperCase();
+                const pEqAuth = (p.equipoAutorizado || "").trim().toUpperCase();
+                const targetEq = team.trim().toUpperCase();
+
+                const matchesTeam = (pEq === targetEq || (pEq === 'DEFENSOR SPORTING' && targetEq === 'DSC') || (pEq === 'DSC' && targetEq === 'DEFENSOR SPORTING')) ||
+                                   (pEqAuth === targetEq || (pEqAuth === 'DEFENSOR SPORTING' && targetEq === 'DSC') || (pEqAuth === 'DSC' && targetEq === 'DEFENSOR SPORTING'));
+                
                 const isAuthorized = (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category));
                 return matchesTeam && isAuthorized && p.CATEGORIA !== category;
             });
 
+            // Los sets de DNIs de FUBB ya fueron declarados arriba.
             const fbDnisOwn = new Set(fbPlayersOwn.map(p => String(p.DNI)));
             const fbDnisAuth = new Set(fbPlayersAuth.map(p => String(p.DNI)));
 
@@ -602,9 +638,22 @@ function runComparison(team, category) {
     const fubbDnisOwn = new Set(fubbPlayersOwn.map(p => String(p.dni)));
     const fubbDnisAuth = new Set(fubbPlayersAuth.map(p => String(p.dni)));
 
-    const fbPlayersOwn = allPlayers.filter(p => p.EQUIPO === team && p.CATEGORIA === category);
+    const fbPlayersOwn = allPlayers.filter(p => {
+        const pEq = (p.EQUIPO || "").trim().toUpperCase();
+        const targetEq = team.trim().toUpperCase();
+        // Comparación normalizada
+        return (pEq === targetEq || (pEq === 'DEFENSOR SPORTING' && targetEq === 'DSC') || (pEq === 'DSC' && targetEq === 'DEFENSOR SPORTING')) 
+               && p.CATEGORIA === category;
+    });
+
     const fbPlayersAuth = allPlayers.filter(p => {
-        const matchesTeam = p.EQUIPO === team || p.equipoAutorizado === team;
+        const pEq = (p.EQUIPO || "").trim().toUpperCase();
+        const pEqAuth = (p.equipoAutorizado || "").trim().toUpperCase();
+        const targetEq = team.trim().toUpperCase();
+
+        const matchesTeam = (pEq === targetEq || (pEq === 'DEFENSOR SPORTING' && targetEq === 'DSC') || (pEq === 'DSC' && targetEq === 'DEFENSOR SPORTING')) ||
+                           (pEqAuth === targetEq || (pEqAuth === 'DEFENSOR SPORTING' && targetEq === 'DSC') || (pEqAuth === 'DSC' && targetEq === 'DEFENSOR SPORTING'));
+        
         const isAuthorized = (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category));
         return matchesTeam && isAuthorized && p.CATEGORIA !== category;
     });
@@ -773,7 +822,11 @@ function formatDni(dni) {
 
 async function authorizePlayer(fubbPlayer, overrideCategory = null, overrideTeam = null, asAuth = true) {
     const season = seasonSelect.value;
-    const team = overrideTeam || teamSelect.value || (fubbPlayer ? fubbPlayer.equipo : null) || (fubbPlayer ? fubbPlayer.view_equipo : null);
+    let team = overrideTeam || teamSelect.value || (fubbPlayer ? fubbPlayer.equipo : null) || (fubbPlayer ? fubbPlayer.view_equipo : null);
+    
+    // Normalizar DSC a DEFENSOR SPORTING antes de guardar/comparar en Firebase
+    if (team && team.trim().toUpperCase() === 'DSC') team = 'DEFENSOR SPORTING';
+
     const category = overrideCategory || categorySelect.value;
     const dni = String(fubbPlayer.dni);
 
@@ -1066,7 +1119,10 @@ async function syncAllMissing(asAuth = false) {
 
         for (const p of filteredPlayers) {
             const dni = String(p.dni);
-            const team = p.view_equipo || teamSelect.value;
+            let team = p.view_equipo || teamSelect.value;
+            // Normalizar DSC a DEFENSOR SPORTING
+            if (team && team.trim().toUpperCase() === 'DSC') team = 'DEFENSOR SPORTING';
+            
             const category = p.view_categoria || categorySelect.value;
 
             const existingInSeason = allPlayers.find(rec => String(rec.DNI) === dni);
