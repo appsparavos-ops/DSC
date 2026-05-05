@@ -1,0 +1,94 @@
+/* Design System & Premium Aesthetics */
+
+:root {
+    --primary: #8b5cf6; /* violet-500 */
+    --primary-dark: #6d28d9; /* violet-700 */
+    --accent: #f59e0b; /* amber-500 */
+    --bg-dark: #020617; /* slate-950 */
+    --card-bg: #0f172a; /* slate-900 */
+}
+
+body.uninitialized #login-container,
+body.uninitialized #main-container {
+    display: none !important;
+}
+
+body {
+    background: radial-gradient(circle at top right, #1e1b4b, #020617);
+    background-attachment: fixed;
+}
+
+/* Glassmorphism */
+.glass {
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#tableBody tr, .fixture-card {
+    animation: fadeIn 0.4s ease forwards;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+}
+
+/* Table Enhancements */
+th {
+    background: rgba(30, 41, 59, 0.5);
+}
+
+tr:hover td {
+    background: rgba(139, 92, 246, 0.05);
+}
+
+.pos-1 { color: #facc15; font-weight: 800; }
+.pos-2 { color: #cbd5e1; font-weight: 700; }
+.pos-3 { color: #fb923c; font-weight: 700; }
+
+/* Fixture Cards */
+.fixture-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fixture-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--primary);
+    box-shadow: 0 10px 25px -5px rgba(139, 92, 246, 0.2);
+}
+
+/* Inputs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Loading Shimmer (Optional) */
+.shimmer {
+    background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}

@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const navToGestionNumeros = document.getElementById('navToGestionNumeros');
     const navToRoster = document.getElementById('navToRoster');
     const navToConstancias = document.getElementById('navToConstancias');
+    const navToTabla = document.getElementById('navToTabla');
     const forgotPasswordLink = document.getElementById('forgot-password-link');
     const toggleSearchButton = document.getElementById('toggleSearchButton');
     const searchBar = document.getElementById('searchBar');
@@ -647,6 +648,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (navToGestionNumeros) navToGestionNumeros.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'mantenimiento.html'; });
     if (navToRoster) navToRoster.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'roster.html'; });
     if (navToConstancias) navToConstancias.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'carta.html'; });
+    if (navToTabla) navToTabla.addEventListener('click', (e) => { 
+        e.preventDefault(); 
+        sessionStorage.setItem('fromIndex', 'true');
+        window.location.href = 'tabla.html'; 
+    });
     if (seasonFilter) seasonFilter.addEventListener('change', () => {
         if (nameSearchInput) nameSearchInput.value = '';
         if (dniSearchInput) dniSearchInput.value = '';
