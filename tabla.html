@@ -1,41 +1,50 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tabla General - Defensor Sporting</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_SportingCuad.png" type="image/png">
-    
+    <title>Tablas de Posiciones - Defensor Sporting</title>
+    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_SportingCuad.png"
+        type="image/png">
+
     <!-- Librerías Externas -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="firebase-config.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="tabla.css">
 </head>
+
 <body class="bg-slate-950 text-slate-100 font-['Inter'] min-h-screen uninitialized">
 
     <!-- Login Container -->
     <div id="login-container" class="min-h-screen flex items-center justify-center p-4 hidden">
         <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl">
             <div class="text-center mb-8">
-                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="Logo" class="h-20 w-auto mx-auto mb-4">
+                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="Logo"
+                    class="h-20 w-auto mx-auto mb-4">
                 <h1 class="text-2xl font-['Outfit'] font-bold text-white">Acceso a Tablas</h1>
                 <p class="text-slate-400 text-sm">Inicia sesión para ver las posiciones</p>
             </div>
             <form id="login-form" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Correo Electrónico</label>
-                    <input type="email" id="login-email" required class="w-full bg-slate-800 border-none rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none">
+                    <input type="email" id="login-email" required
+                        class="w-full bg-slate-800 border-none rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Contraseña</label>
-                    <input type="password" id="login-password" required class="w-full bg-slate-800 border-none rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none">
+                    <input type="password" id="login-password" required
+                        class="w-full bg-slate-800 border-none rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none">
                 </div>
                 <div id="login-error" class="text-red-400 text-xs hidden"></div>
-                <button type="submit" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-violet-900/20">
+                <button type="submit"
+                    class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-violet-900/20">
                     Ingresar
                 </button>
             </form>
@@ -44,116 +53,142 @@
 
     <div id="main-container" class="hidden">
         <!-- Header / Nav -->
-    <nav class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50">
-        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.href='index.html'">
-                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="DSC" class="h-10 w-auto">
-                <span class="font-['Outfit'] font-bold text-xl tracking-tight hidden sm:block">TABLA GENERAL</span>
-            </div>
-            <div class="flex items-center gap-4">
-                <!-- Botón de Regreso Dinámico -->
-                <button id="backBtn" class="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-all border border-slate-700">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-                    <span id="backBtnText">Regresar</span>
-                </button>
-                <div id="adminBadge" class="hidden px-2 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-500 text-xs font-bold rounded uppercase tracking-wider">Admin</div>
-
-            </div>
-        </div>
-    </nav>
-
-    <main class="container mx-auto px-4 py-8">
-             <!-- Selectores y Filtros -->
-        <div class="flex flex-wrap justify-center gap-4 mb-8">
-            <div class="w-full md:w-48 bg-slate-900 border border-slate-800 p-3 rounded-2xl shadow-xl">
-                <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Temporada</label>
-                <select id="seasonSelect" class="w-full bg-slate-800 border-none rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none">
-                    <option value="">Cargando...</option>
-                </select>
-            </div>
-            <div class="w-full md:w-48 bg-slate-900 border border-slate-800 p-3 rounded-2xl shadow-xl">
-                <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Categoría</label>
-                <select id="categorySelect" class="w-full bg-slate-800 border-none rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-violet-500 outline-none">
-                    <option value="ACUMULADA">TABLA ACUMULADA</option>
-                    <option value="U11">U11 (Presentación)</option>
-                    <option value="U12">U12 (Presentación)</option>
-                    <option value="U14">U14 (Presentación)</option>
-                    <option value="U16">U16 (FIBA)</option>
-                    <option value="U18">U18 (FIBA)</option>
-                    <option value="U20">U20 (FIBA)</option>
-                </select>
-            </div>
-            <div id="adminPanelBtn" class="hidden w-full md:w-72 flex items-end">
-                <button onclick="toggleAdminPanel()" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-violet-900/20 flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
-                    Panel Admin
-                </button>
-            </div>
-        </div>
- </div>
-
-        <!-- Contenido Dinámico -->
-        <div id="contentArea" class="space-y-8">
-            
-            <!-- Vista de Tabla -->
-            <section id="tableView" class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl max-w-2xl mx-auto">
-                <div class="px-6 py-4 bg-slate-800/50 border-b border-slate-800 flex justify-between items-center">
-                    <h2 id="tableTitle" class="font-['Outfit'] font-bold text-lg text-violet-400">Posiciones</h2>
-                    <span class="text-xs text-slate-500 font-mono">Actualizado en tiempo real</span>
+        <nav class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50">
+            <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+                <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.href='index.html'">
+                    <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
+                        alt="DSC" class="h-10 w-auto">
+                    <span class="font-['Outfit'] font-bold text-xl tracking-tight hidden sm:block">TABLA GENERAL</span>
                 </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="text-slate-400 text-xs uppercase tracking-wider">
-                                <th class="px-6 py-4 font-semibold">Pos</th>
-                                <th class="px-6 py-4 font-semibold">Equipo</th>
-                                <th class="px-6 py-4 font-semibold text-center">PJ</th>
-                                <th id="colG" class="px-6 py-4 font-semibold text-center">G</th>
-                                <th id="colP" class="px-6 py-4 font-semibold text-center">P</th>
-                                <th class="px-6 py-4 font-semibold text-center text-violet-400">Pts</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tableBody" class="divide-y divide-slate-800">
-                            <!-- JS insertará filas aquí -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                <div class="flex items-center gap-4">
+                    <!-- Botón de Regreso Dinámico -->
+                    <button id="backBtn"
+                        class="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-all border border-slate-700">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        <span id="backBtnText">Regresar</span>
+                    </button>
+                    <div id="adminBadge"
+                        class="hidden px-2 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-500 text-xs font-bold rounded uppercase tracking-wider">
+                        Admin</div>
 
-            <!-- Vista de Fixture (Solo si no es acumulada) -->
-            <section id="fixtureView" class="hidden">
-                <div class="flex items-center gap-4 mb-6">
-                    <h2 class="font-['Outfit'] font-bold text-2xl">Fixture y Resultados</h2>
-                    <div class="h-px bg-slate-800 flex-grow"></div>
                 </div>
-                <div id="fixtureGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <!-- JS insertará cards aquí -->
+            </div>
+        </nav>
+
+        <main class="container mx-auto px-4 py-8">
+            <!-- Selectores y Filtros -->
+            <div class="flex justify-center gap-2 mb-8">
+                <div
+                    class="flex-1 md:flex-none md:w-48 bg-slate-900 border border-slate-800 p-2 sm:p-3 rounded-2xl shadow-xl">
+                    <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Temporada</label>
+                    <select id="seasonSelect"
+                        class="w-full bg-slate-800 border-none rounded-xl px-2 py-2 sm:px-4 sm:py-3 text-white text-xs sm:text-base focus:ring-2 focus:ring-violet-500 outline-none">
+                        <option value="">Cargando...</option>
+                    </select>
                 </div>
-            </section>
+                <div
+                    class="flex-1 md:flex-none md:w-72 bg-slate-900 border border-slate-800 p-2 sm:p-3 rounded-2xl shadow-xl">
+                    <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Categoría</label>
+                    <select id="categorySelect"
+                        class="w-full bg-slate-800 border-none rounded-xl px-2 py-2 sm:px-4 sm:py-3 text-white text-xs sm:text-base focus:ring-2 focus:ring-violet-500 outline-none">
+                        <option value="ACUMULADA">TABLA ACUMULADA</option>
+                        <option value="U11">U11 (Presentación)</option>
+                        <option value="U12">U12 (Presentación)</option>
+                        <option value="U14">U14 (Presentación)</option>
+                        <option value="U16">U16 (FIBA)</option>
+                        <option value="U18">U18 (FIBA)</option>
+                        <option value="U20">U20 (FIBA)</option>
+                    </select>
+                </div>
+                <div id="adminPanelBtn" class="hidden w-full md:w-72 flex items-end">
+                    <button onclick="toggleAdminPanel()"
+                        class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-violet-900/20 flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
+                            </path>
+                        </svg>
+                        Panel Admin
+                    </button>
+                </div>
+            </div>
+    </div>
 
-            <section id="acumuladaNotice" class="text-center py-12 bg-slate-900/50 border border-dashed border-slate-800 rounded-3xl">
-                <p class="text-slate-500 text-sm">Selecciona una categoría específica para cargar resultados y ver el fixture detallado.</p>
-            </section>
+    <!-- Contenido Dinámico -->
+    <div id="contentArea" class="space-y-8">
 
-        </div>
+        <!-- Vista de Tabla -->
+        <section id="tableView"
+            class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl max-w-2xl mx-auto">
+            <div class="px-6 py-4 bg-slate-800/50 border-b border-slate-800 flex justify-between items-center">
+                <h2 id="tableTitle" class="font-['Outfit'] font-bold text-lg text-violet-400">Posiciones</h2>
+                <span class="text-xs text-slate-500 font-mono">Actualizado en tiempo real</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-slate-400 text-xs uppercase tracking-wider">
+                            <th class="px-6 py-4 font-semibold">Pos</th>
+                            <th class="px-6 py-4 font-semibold">Equipo</th>
+                            <th class="px-6 py-4 font-semibold text-center">PJ</th>
+                            <th id="colG" class="px-6 py-4 font-semibold text-center">G</th>
+                            <th id="colP" class="px-6 py-4 font-semibold text-center">P</th>
+                            <th class="px-6 py-4 font-semibold text-center text-violet-400">Pts</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-800">
+                        <!-- JS insertará filas aquí -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Vista de Fixture (Solo si no es acumulada) -->
+        <section id="fixtureView" class="hidden">
+            <div class="flex items-center gap-4 mb-6">
+                <h2 class="font-['Outfit'] font-bold text-2xl">Fixture y Resultados</h2>
+                <div class="h-px bg-slate-800 flex-grow"></div>
+            </div>
+            <div id="fixtureGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- JS insertará cards aquí -->
+            </div>
+        </section>
+
+        <section id="acumuladaNotice"
+            class="text-center py-12 bg-slate-900/50 border border-dashed border-slate-800 rounded-3xl">
+            <p class="text-slate-500 text-sm">Selecciona una categoría específica para cargar resultados y ver el
+                fixture detallado.</p>
+        </section>
+
+    </div>
     </main>
 
     </div> <!-- End Main Container -->
 
     <!-- Admin Modal -->
-    <div id="adminModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+    <div id="adminModal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+        <div
+            class="bg-slate-900 border border-slate-800 w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl">
             <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800/30">
                 <h3 class="font-['Outfit'] font-bold text-xl">Configuración de Temporada</h3>
-                <button onclick="toggleAdminPanel()" class="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                <button onclick="toggleAdminPanel()"
+                    class="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
                 </button>
             </div>
-            
+
             <div class="p-6 overflow-y-auto flex-grow space-y-8">
                 <!-- Configuración de Equipos -->
                 <div>
-                    <h4 class="text-xs font-bold text-violet-400 uppercase tracking-widest mb-4">Equipos de la Temporada (7 Rivales + DSC)</h4>
+                    <h4 class="text-xs font-bold text-violet-400 uppercase tracking-widest mb-4">Equipos de la Temporada
+                        (7 Rivales + DSC)</h4>
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" id="teamInputsContainer">
                         <!-- Inputs generados por JS -->
                     </div>
@@ -165,7 +200,9 @@
                 <div>
                     <div class="flex justify-between items-center mb-4">
                         <h4 class="text-xs font-bold text-violet-400 uppercase tracking-widest">Gestión de Fixture</h4>
-                        <button id="addManualMatchBtn" class="text-[10px] bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-full border border-slate-700 transition-colors">+ Agregar Partido Manual</button>
+                        <button id="addManualMatchBtn"
+                            class="text-[10px] bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-full border border-slate-700 transition-colors">+
+                            Agregar Partido Manual</button>
                     </div>
                     <div id="adminFixtureList" class="space-y-2 max-h-64 overflow-y-auto pr-2">
                         <!-- Lista de partidos para edición rápida -->
@@ -177,55 +214,74 @@
                 <!-- Carga Masiva (CSV) -->
                 <div id="importMassiveContainer">
                     <h4 class="text-xs font-bold text-violet-400 uppercase tracking-widest mb-2">Carga Masiva (CSV)</h4>
-                    <p class="text-[10px] text-slate-500 mb-4 italic">Formato: Jornada;Local;Visitante[;ScoreLoc;ScoreVis;NP_Loc;NP_Vis]</p>
-                    
+                    <p class="text-[10px] text-slate-500 mb-4 italic">Formato:
+                        Jornada;Local;Visitante[;ScoreLoc;ScoreVis;NP_Loc;NP_Vis]</p>
+
                     <div class="flex flex-col gap-4">
                         <!-- Selector de Archivo -->
                         <div class="flex items-center gap-3">
                             <input type="file" id="csvFileInput" accept=".csv, .txt" class="hidden">
-                            <button onclick="document.getElementById('csvFileInput').click()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-[10px] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
-                                <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                            <button onclick="document.getElementById('csvFileInput').click()"
+                                class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-[10px] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                                    </path>
+                                </svg>
                                 Seleccionar Archivo CSV
                             </button>
-                            <span id="fileNameDisplay" class="text-[10px] text-slate-500 italic truncate max-w-[150px]">Ningún archivo...</span>
+                            <span id="fileNameDisplay"
+                                class="text-[10px] text-slate-500 italic truncate max-w-[150px]">Ningún
+                                archivo...</span>
                         </div>
 
                         <div class="flex items-center gap-2">
                             <div class="h-px bg-slate-800 flex-grow"></div>
-                            <span class="text-[8px] text-slate-600 uppercase font-bold">o pega el contenido debajo</span>
+                            <span class="text-[8px] text-slate-600 uppercase font-bold">o pega el contenido
+                                debajo</span>
                             <div class="h-px bg-slate-800 flex-grow"></div>
                         </div>
 
-                        <textarea id="massiveFixtureInput" rows="3" placeholder="1;DEFENSOR SPORTING;RIVAL A;70;60;0;0" class="w-full bg-slate-800 border-none rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-violet-500 outline-none"></textarea>
-                        
-                        <button id="importMassiveBtn" class="w-full bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold py-3 rounded-xl transition-all shadow-lg shadow-violet-900/20">
+                        <textarea id="massiveFixtureInput" rows="3" placeholder="1;DEFENSOR SPORTING;RIVAL A;70;60;0;0"
+                            class="w-full bg-slate-800 border-none rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-violet-500 outline-none"></textarea>
+
+                        <button id="importMassiveBtn"
+                            class="w-full bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold py-3 rounded-xl transition-all shadow-lg shadow-violet-900/20">
                             Procesar e Importar Datos
                         </button>
                     </div>
-                    <p class="text-[8px] text-slate-600 mt-2">* NP_Loc/NP_Vis: 1 para No Presentación, 0 para Normal.</p>
+                    <p class="text-[8px] text-slate-600 mt-2">* NP_Loc/NP_Vis: 1 para No Presentación, 0 para Normal.
+                    </p>
                 </div>
 
                 <div class="h-px bg-slate-800"></div>
 
                 <!-- Acciones -->
                 <div class="flex flex-wrap gap-4">
-                    <button id="saveTeamsBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-colors flex items-center gap-2">
+                    <button id="saveTeamsBtn"
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-colors flex items-center gap-2">
                         Guardar Equipos
                     </button>
-                    <button id="generateFixtureBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors flex items-center gap-2">
+                    <button id="generateFixtureBtn"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors flex items-center gap-2">
                         Generar/Reiniciar Fixture
                     </button>
-                    <p class="text-[10px] text-slate-500 w-full mt-2 italic">* Generar el fixture borrará todos los resultados actuales de la temporada seleccionada.</p>
+                    <p class="text-[10px] text-slate-500 w-full mt-2 italic">* Generar el fixture borrará todos los
+                        resultados actuales de la temporada seleccionada.</p>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Modal Carga Resultados por Jornada -->
-    <div id="resultModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[110] hidden items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div id="resultModal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[110] hidden items-center justify-center p-4">
+        <div
+            class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div class="p-6 border-b border-slate-800 bg-slate-800/30">
-                <h3 class="font-['Outfit'] font-bold text-xl text-center" id="modalMatchTitle">Cargar Resultados: Jornada X - Categoría Y</h3>
+                <h3 class="font-['Outfit'] font-bold text-xl text-center" id="modalMatchTitle">Cargar Resultados:
+                    Jornada X - Categoría Y</h3>
             </div>
             <div class="p-6 overflow-y-auto">
                 <div class="space-y-6" id="jornadaResultsContainer">
@@ -233,10 +289,12 @@
                 </div>
             </div>
             <div class="p-6 border-t border-slate-800 bg-slate-800/30 flex gap-4">
-                <button id="saveJornadaResultsBtn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-emerald-900/20">
+                <button id="saveJornadaResultsBtn"
+                    class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-emerald-900/20">
                     Guardar Resultados de Jornada
                 </button>
-                <button onclick="closeResultModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl transition-all">
+                <button onclick="closeResultModal()"
+                    class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl transition-all">
                     Cancelar
                 </button>
             </div>
@@ -244,12 +302,18 @@
     </div>
 
     <!-- Modal Historial de Equipo -->
-    <div id="teamResultsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[120] hidden items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+    <div id="teamResultsModal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[120] hidden items-center justify-center p-4">
+        <div
+            class="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
             <div class="p-6 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
                 <h3 class="font-['Outfit'] font-bold text-xl text-violet-400" id="teamModalTitle">Historial</h3>
-                <button onclick="closeTeamResultsModal()" class="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                <button onclick="closeTeamResultsModal()"
+                    class="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
                 </button>
             </div>
             <div class="p-6 overflow-y-auto">
@@ -263,4 +327,5 @@
     <!-- Scripts -->
     <script src="js/tabla.js"></script>
 </body>
+
 </html>
