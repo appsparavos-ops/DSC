@@ -95,19 +95,29 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         auth.onAuthStateChanged(user => {
-            document.body.classList.remove('uninitialized');
             if (user) {
+                // Si hay usuario, removemos el estado de carga y mostramos el contenido
+                document.body.classList.remove('uninitialized');
                 loginContainer.classList.add('hidden');
                 mainContainer.classList.remove('hidden');
                 checkRole(user.uid);
                 loadSeasons();
             } else {
+                // Si no hay usuario, evaluamos si intentamos login silencioso o mostramos el modal
                 if (!isFromIndex) {
+                    // Intento de login silencioso para acceso directo (cuenta pública)
                     auth.signInWithEmailAndPassword('tablas@dsc.com', '12345678').catch(err => {
+                        // Si falla el login silencioso, mostramos el formulario de login manual
+                        document.body.classList.remove('uninitialized');
                         mainContainer.classList.add('hidden');
                         loginContainer.classList.remove('hidden');
+                        console.error("Error en login silencioso:", err);
                     });
+                    // Importante: NO removemos 'uninitialized' aquí. 
+                    // Esperamos al próximo disparo de onAuthStateChanged (éxito) o al catch (error).
                 } else {
+                    // Si venimos del index pero no hay sesión, mostramos el modal de login
+                    document.body.classList.remove('uninitialized');
                     mainContainer.classList.add('hidden');
                     loginContainer.classList.remove('hidden');
                 }
