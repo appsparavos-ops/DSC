@@ -60,6 +60,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
+    window.closePendingModal = () => {
+        const modal = document.getElementById('pendingMatchesModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+    };
+
     // --- INICIALIZACIÓN ---
     function init() {
         const referrer = document.referrer;
@@ -244,10 +252,14 @@ document.addEventListener('DOMContentLoaded', function () {
             if (fixtureView) fixtureView.classList.add('hidden');
             const notice = document.getElementById('acumuladaNotice');
             if (notice) notice.classList.remove('hidden');
+            const btnGeneral = document.getElementById('pendingBtnGeneral');
+            if (btnGeneral) btnGeneral.classList.remove('hidden');
         } else {
             if (fixtureView) fixtureView.classList.remove('hidden');
             const notice = document.getElementById('acumuladaNotice');
             if (notice) notice.classList.add('hidden');
+            const btnGeneral = document.getElementById('pendingBtnGeneral');
+            if (btnGeneral) btnGeneral.classList.add('hidden');
             const results = allResults[category] || {};
             const fixtureEntries = Object.entries(sharedFixture);
             if (fixtureGrid) {
@@ -356,10 +368,86 @@ document.addEventListener('DOMContentLoaded', function () {
         if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
     };
 
-    // --- JORNADA MODAL ---
-    window.openJornadaModal = (jornada, specificMatchId = null) => {
-        if (!categorySelect || !modalMatchTitle || !jornadaResultsContainer || !resultModal) return;
+    window.showPendingMatches = () => {
+        const container = document.getElementById('pendingMatchesContainer');
+        const modal = document.getElementById('pendingMatchesModal');
+        if (!container || !modal) return;
+
         const category = categorySelect.value;
+        const categoriesToCheck = (category === 'ACUMULADA') ? ['U11', 'U12', 'U14', 'U16', 'U18', 'U20'] : [category];
+        
+        let pendingMatchesHtml = '';
+        let foundAny = false;
+
+        categoriesToCheck.forEach(cat => {
+            const results = allResults[cat] || {};
+            const fixtureEntries = Object.entries(sharedFixture);
+            
+            // Agrupar por jornada
+            const grouped = {};
+            fixtureEntries.forEach(([id, f]) => {
+                const j = f.jornada || 1;
+                if (!grouped[j]) grouped[j] = [];
+                grouped[j].push({ id, ...f });
+            });
+
+            const sortedJornadas = Object.keys(grouped).sort((a, b) => a - b);
+            
+            sortedJornadas.forEach(j => {
+                const matches = grouped[j];
+                const playedMatches = matches.filter(m => results[m.id] && results[m.id].status === 'played');
+                const pendingInJornada = matches.filter(m => !results[m.id] || results[m.id].status !== 'played');
+
+                // Si se jugó algo pero no todo
+                if (playedMatches.length > 0 && pendingInJornada.length > 0) {
+                    foundAny = true;
+                    pendingMatchesHtml += `
+                        <div class="mb-4">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="bg-amber-500/20 text-amber-500 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Jornada ${j}</span>
+                                <span class="text-slate-500 text-[10px] font-bold uppercase">${cat}</span>
+                                <div class="h-px bg-slate-800 flex-grow"></div>
+                            </div>
+                            <div class="space-y-2">
+                                ${pendingInJornada.map(m => `
+                                    <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 flex justify-between items-center group hover:border-amber-500/30 transition-colors">
+                                        <div class="flex flex-col">
+                                            <span class="text-xs font-bold text-white">${m.home} vs ${m.away}</span>
+                                        </div>
+                                        <button onclick="openJornadaModal(${j}, null, '${cat}')" class="text-[10px] font-bold text-amber-500 hover:text-amber-400 uppercase tracking-wider bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20 transition-all">Ver Jornada</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        });
+
+        if (!foundAny) {
+            container.innerHTML = `
+                <div class="text-center py-12">
+                    <div class="bg-slate-800/50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-700">
+                        <svg class="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                    <p class="text-slate-400 font-medium">No hay jornadas disputadas parcialmente.</p>
+                    <p class="text-slate-600 text-xs mt-1">Todas las jornadas iniciadas están completas.</p>
+                </div>`;
+        } else {
+            container.innerHTML = pendingMatchesHtml;
+        }
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    };
+
+    // --- JORNADA MODAL ---
+    window.openJornadaModal = (jornada, specificMatchId = null, overrideCategory = null) => {
+        if (!categorySelect || !modalMatchTitle || !jornadaResultsContainer || !resultModal) return;
+        const category = overrideCategory || categorySelect.value;
+        jornadaResultsContainer.dataset.category = category; // Guardar categoría actual
         modalMatchTitle.textContent = `Jornada ${jornada} - ${category}`;
         const matchesOfJornada = Object.entries(sharedFixture).filter(([id, f]) => (f.jornada || 1) == jornada).filter(([id, f]) => !specificMatchId || id === specificMatchId);
         const results = allResults[category] || {};
@@ -424,6 +512,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function setupListeners() {
         if (seasonSelect) seasonSelect.addEventListener('change', () => { currentSeason = seasonSelect.value; connectToSeason(currentSeason); });
         if (categorySelect) categorySelect.addEventListener('change', () => updateUI());
+
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) logoutBtn.addEventListener('click', () => auth.signOut());
         if (loginForm) loginForm.addEventListener('submit', (e) => { e.preventDefault(); const email = loginEmail.value; const pass = loginPass.value; auth.signInWithEmailAndPassword(email, pass).catch(() => { loginError.textContent = "Error."; loginError.classList.remove('hidden'); }); });
@@ -516,7 +605,8 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         if (saveJornadaResultsBtn) saveJornadaResultsBtn.addEventListener('click', () => {
-            const cat = categorySelect.value; const updates = {};
+            const cat = jornadaResultsContainer.dataset.category || categorySelect.value;
+            const updates = {};
             document.querySelectorAll('.match-result-row').forEach(row => {
                 const mid = row.dataset.matchId; const isP = row.querySelector('.is-played').checked;
                 if (isP) {
