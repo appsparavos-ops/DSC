@@ -104,7 +104,7 @@
                         <option value="U20">U20 (FIBA)</option>
                     </select>
                 </div>
-                <div id="adminPanelBtn" class="hidden w-full md:w-72 flex items-end">
+                <div id="adminPanelBtn" class="hidden w-full md:w-auto flex items-end">
                     <button onclick="toggleAdminPanel()"
                         class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-violet-900/20 flex items-center justify-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -112,7 +112,7 @@
                                 d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
                             </path>
                         </svg>
-                        Panel Admin
+                        Admin
                     </button>
                 </div>
             </div>
@@ -146,6 +146,18 @@
             </div>
         </section>
 
+        <!-- Botón Pendientes para Tabla General (Acumulada) -->
+        <div id="pendingBtnGeneral" class="hidden flex justify-center">
+            <button onclick="showPendingMatches()"
+                class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-8 rounded-2xl transition-all shadow-lg shadow-amber-900/20 flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Ver Partidos Pendientes
+            </button>
+        </div>
+
         <!-- Vista de Fixture (Solo si no es acumulada) -->
         <section id="fixtureView" class="hidden">
             <div class="flex items-center gap-4 mb-6">
@@ -154,6 +166,18 @@
             </div>
             <div id="fixtureGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <!-- JS insertará cards aquí -->
+            </div>
+
+            <!-- Botón Pendientes para Categoría -->
+            <div id="pendingBtnCategory" class="mt-8 flex justify-center">
+                <button onclick="showPendingMatches()"
+                    class="bg-amber-600/20 hover:bg-amber-600/30 text-amber-500 border border-amber-500/30 font-bold py-3 px-8 rounded-2xl transition-all flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Partidos Pendientes
+                </button>
             </div>
         </section>
 
@@ -324,7 +348,34 @@
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- Modal Partidos Pendientes -->
+    <div id="pendingMatchesModal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[130] hidden items-center justify-center p-4">
+        <div
+            class="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="p-6 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
+                <h3 class="font-['Outfit'] font-bold text-xl text-amber-500 flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Partidos Pendientes
+                </h3>
+                <button onclick="closePendingModal()"
+                    class="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto">
+                <div id="pendingMatchesContainer" class="space-y-4">
+                    <!-- Filas de partidos pendientes generadas por JS -->
+                </div>
+            </div>
+        </div>
+    </div>
     <script src="js/tabla.js"></script>
 </body>
 
