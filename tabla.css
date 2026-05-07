@@ -92,3 +92,31 @@ input[type="number"]::-webkit-outer-spin-button {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
 }
+
+/* Tab Navigation */
+.comp-tab.active {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 4px 15px -3px rgba(139, 92, 246, 0.4);
+}
+
+.comp-tab:not(.active):hover {
+    color: #cbd5e1;
+}
+
+/* Admin Modal Enhancements */
+#adminBranchBadge {
+    background: rgba(139, 92, 246, 0.1);
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+#adminModal textarea::placeholder {
+    opacity: 0.3;
+}
+
+#adminModal .group:hover .w-16 {
+    background: rgba(139, 92, 246, 0.1);
+    border-color: rgba(139, 92, 246, 0.3);
+}

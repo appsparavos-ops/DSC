@@ -88,6 +88,15 @@
         </nav>
 
         <main class="container mx-auto px-4 py-8">
+            <!-- Pestañas de Competencia -->
+            <div class="flex justify-center mb-10">
+                <div class="inline-flex p-1 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-x-auto max-w-full">
+                    <button class="comp-tab px-4 sm:px-8 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all active whitespace-nowrap" data-comp="MASC">Masculino</button>
+                    <button class="comp-tab px-4 sm:px-8 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all text-slate-500 whitespace-nowrap" data-comp="FEM">Femenino</button>
+                    <button class="comp-tab px-4 sm:px-8 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all text-slate-500 whitespace-nowrap" data-comp="LFB">Liga Femenina</button>
+                </div>
+            </div>
+
             <!-- Selectores y Filtros -->
             <div class="flex justify-center gap-2 mb-8">
                 <div
@@ -103,13 +112,7 @@
                     <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Categoría</label>
                     <select id="categorySelect"
                         class="w-full bg-slate-800 border-none rounded-xl px-2 py-2 sm:px-4 sm:py-3 text-white text-xs sm:text-base focus:ring-2 focus:ring-violet-500 outline-none">
-                        <option value="ACUMULADA">TABLA ACUMULADA</option>
-                        <option value="U11">U11 (Presentación)</option>
-                        <option value="U12">U12 (Presentación)</option>
-                        <option value="U14">U14 (Presentación)</option>
-                        <option value="U16">U16 (FIBA)</option>
-                        <option value="U18">U18 (FIBA)</option>
-                        <option value="U20">U20 (FIBA)</option>
+                        <!-- Se puebla dinámicamente desde JS -->
                     </select>
                 </div>
 
@@ -194,9 +197,15 @@
     <div id="adminModal"
         class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
         <div
-            class="bg-slate-900 border border-slate-800 w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+            class="bg-slate-900 border border-slate-800 w-full max-w-xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl">
             <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800/30">
-                <h3 class="font-['Outfit'] font-bold text-xl">Configuración de Temporada</h3>
+                <div class="flex flex-col">
+                    <h3 id="adminModalTitle" class="font-['Outfit'] font-bold text-xl text-white">Configuración de Temporada</h3>
+                    <div id="adminBranchBadge" class="inline-flex items-center gap-1.5 mt-1">
+                        <span class="w-2 h-2 rounded-full bg-violet-500 animate-pulse"></span>
+                        <span id="currentBranchName" class="text-[10px] font-bold text-violet-400 uppercase tracking-widest">Cargando...</span>
+                    </div>
+                </div>
                 <button onclick="toggleAdminPanel()"
                     class="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -206,91 +215,69 @@
                 </button>
             </div>
 
-            <div class="p-6 overflow-y-auto flex-grow space-y-8">
-                <!-- Configuración de Equipos -->
-                <div>
-                    <h4 class="text-xs font-bold text-violet-400 uppercase tracking-widest mb-4">Equipos de la Temporada
-                        (7 Rivales + DSC)</h4>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" id="teamInputsContainer">
-                        <!-- Inputs generados por JS -->
-                    </div>
-                </div>
-
-                <div class="h-px bg-slate-800"></div>
-
-                <!-- Gestión de Fixture -->
-                <div>
-                    <div class="flex justify-between items-center mb-4">
-                        <h4 class="text-xs font-bold text-violet-400 uppercase tracking-widest">Gestión de Fixture</h4>
-                        <button id="addManualMatchBtn"
-                            class="text-[10px] bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-full border border-slate-700 transition-colors">+
-                            Agregar Partido Manual</button>
-                    </div>
-                    <div id="adminFixtureList" class="space-y-2 max-h-64 overflow-y-auto pr-2">
-                        <!-- Lista de partidos para edición rápida -->
-                    </div>
-                </div>
-
-                <div class="h-px bg-slate-800"></div>
-
+            <div class="p-8 overflow-y-auto flex-grow space-y-8">
                 <!-- Carga Masiva (CSV) -->
                 <div id="importMassiveContainer">
-                    <h4 class="text-xs font-bold text-violet-400 uppercase tracking-widest mb-2">Carga Masiva (CSV)</h4>
-                    <p class="text-[10px] text-slate-500 mb-4 italic">Formato:
-                        Jornada;Local;Visitante[;ScoreLoc;ScoreVis;NP_Loc;NP_Vis]</p>
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 rounded-xl bg-violet-600/20 flex items-center justify-center">
+                            <svg class="w-6 h-6 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a2 2 0 00-2-2H5a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2zm0 0h2a2 2 0 002-2v-2a2 2 0 00-2-2H9m12 13V10a2 2 0 00-2-2h-2a2 2 0 00-2 2v3m4 0h2a2 2 0 002-2v-2a2 2 0 00-2-2h-2m-4-3V4a2 2 0 00-2-2h-2a2 2 0 00-2 2v3m4 0H9"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold text-white">Importar Fixture y Calendario</h4>
+                            <p class="text-[10px] text-slate-500 uppercase font-black tracking-tighter">Formato: Jornada;Local;Visitante;[PuntosLoc;PuntosVis;NPLoc;NPVis]</p>
+                        </div>
+                    </div>
 
-                    <div class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-6">
                         <!-- Selector de Archivo -->
-                        <div class="flex items-center gap-3">
+                        <div class="relative group">
                             <input type="file" id="csvFileInput" accept=".csv, .txt" class="hidden">
-                            <button onclick="document.getElementById('csvFileInput').click()"
-                                class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-[10px] font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
-                                <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
-                                    </path>
-                                </svg>
-                                Seleccionar Archivo CSV
-                            </button>
-                            <span id="fileNameDisplay"
-                                class="text-[10px] text-slate-500 italic truncate max-w-[150px]">Ningún
-                                archivo...</span>
+                            <div onclick="document.getElementById('csvFileInput').click()"
+                                class="w-full bg-slate-800/50 hover:bg-slate-800 border-2 border-dashed border-slate-700 hover:border-violet-500/50 p-8 rounded-3xl transition-all flex flex-col items-center justify-center gap-4 cursor-pointer group">
+                                <div class="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <svg class="w-8 h-8 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <span id="fileNameDisplay" class="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">Seleccionar Archivo CSV</span>
+                                    <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-black">Click para buscar en tu dispositivo</p>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-4">
                             <div class="h-px bg-slate-800 flex-grow"></div>
-                            <span class="text-[8px] text-slate-600 uppercase font-bold">o pega el contenido
-                                debajo</span>
+                            <span class="text-[9px] text-slate-600 uppercase font-black tracking-widest">O pega el contenido debajo</span>
                             <div class="h-px bg-slate-800 flex-grow"></div>
                         </div>
 
-                        <textarea id="massiveFixtureInput" rows="3" placeholder="1;DEFENSOR SPORTING;RIVAL A;70;60;0;0"
-                            class="w-full bg-slate-800 border-none rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-violet-500 outline-none"></textarea>
+                        <textarea id="massiveFixtureInput" rows="4" 
+                            placeholder="Ejemplo: 1;DEFENSOR SPORTING;RIVAL A;70;60;0;0"
+                            class="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs font-mono text-slate-400 focus:ring-2 focus:ring-violet-500 outline-none transition-all placeholder:text-slate-700"></textarea>
 
                         <button id="importMassiveBtn"
-                            class="w-full bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold py-3 rounded-xl transition-all shadow-lg shadow-violet-900/20">
-                            Procesar e Importar Datos
+                            class="w-full bg-violet-600 hover:bg-violet-700 text-white font-black text-sm py-4 rounded-2xl transition-all shadow-xl shadow-violet-900/20 flex items-center justify-center gap-3 active:scale-[0.98]">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                            PROCESAR E IMPORTAR FIXTURE
                         </button>
                     </div>
-                    <p class="text-[8px] text-slate-600 mt-2">* NP_Loc/NP_Vis: 1 para No Presentación, 0 para Normal.
-                    </p>
-                </div>
-
-                <div class="h-px bg-slate-800"></div>
-
-                <!-- Acciones -->
-                <div class="flex flex-wrap gap-4">
-                    <button id="saveTeamsBtn"
-                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-6 rounded-lg transition-colors flex items-center gap-2">
-                        Guardar Equipos
-                    </button>
-                    <button id="generateFixtureBtn"
-                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors flex items-center gap-2">
-                        Generar/Reiniciar Fixture
-                    </button>
-                    <p class="text-[10px] text-slate-500 w-full mt-2 italic">* Generar el fixture borrará todos los
-                        resultados actuales de la temporada seleccionada.</p>
+                    
+                    <div class="mt-6 p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20">
+                        <div class="flex gap-3">
+                            <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            </svg>
+                            <p class="text-[10px] text-amber-200/70 leading-relaxed font-medium">
+                                <span class="text-amber-500 font-black uppercase block mb-1">Importante</span>
+                                La importación reemplazará el calendario actual de la rama seleccionada. Los equipos se registrarán automáticamente.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
