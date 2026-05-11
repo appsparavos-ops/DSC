@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
     }
+    // Forzar persistencia de sesión para que se limpie al cerrar la pestaña
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
     // --- CONFIGURACIÓN Y ESTADO ---
     let database = firebase.database();
@@ -93,6 +95,32 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
+    // Navegación segura que cierra sesión si es cuenta automática
+    function safeNavigate(url, shouldClose = false) {
+        const user = auth.currentUser;
+        if (user && user.email === 'tablas@dsc.com') {
+            auth.signOut().finally(() => {
+                if (shouldClose) {
+                    window.close();
+                    setTimeout(() => { alert("Por favor, cierra esta pestaña."); }, 500);
+                } else {
+                    window.location.href = url;
+                }
+            });
+        } else {
+            if (shouldClose) {
+                window.close();
+                setTimeout(() => { alert("Por favor, cierra esta pestaña."); }, 500);
+            } else {
+                window.location.href = url;
+            }
+        }
+    }
+
+    window.handleLogoClick = () => {
+        safeNavigate('index.html');
+    };
+
     window.closeResultModal = () => {
         if (resultModal) {
             resultModal.classList.add('hidden');
@@ -128,15 +156,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (backBtnText) backBtnText.textContent = "Regresar al Panel";
                 backBtn.onclick = (e) => {
                     e.preventDefault();
-                    window.location.href = 'index.html';
+                    safeNavigate('index.html');
                 };
                 if (logoutBtn) logoutBtn.classList.add('hidden');
             } else {
                 if (backBtnText) backBtnText.textContent = "Cerrar Ventana";
                 backBtn.onclick = (e) => {
                     e.preventDefault();
-                    window.close();
-                    setTimeout(() => { alert("Por favor, cierra esta pestaña."); }, 500);
+                    safeNavigate(null, true);
                 };
                 if (logoutBtn) logoutBtn.classList.remove('hidden');
             }
@@ -171,6 +198,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         });
+
+        // Cerrar sesión automática al cerrar/salir de la página
+        window.addEventListener('beforeunload', () => {
+            const user = auth.currentUser;
+            if (user && user.email === 'tablas@dsc.com') {
+                auth.signOut();
+            }
+        });
+
         setupListeners();
     }
 
