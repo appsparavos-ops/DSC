@@ -14,11 +14,11 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentCategory = 'ACUMULADA';
     let currentCompetition = 'MASC'; // MASC, FEM, LFB
     let currentStage = '1'; // 1, 2, 3 (Play Offs)
-    let teamsList = []; 
-    let sharedFixture = {}; 
-    let allResults = {}; 
+    let teamsList = [];
+    let sharedFixture = {};
+    let allResults = {};
     let allStagesData = {}; // Para guardar datos de todas las etapas de la temporada actual
-    let currentDataRef = null; 
+    let currentDataRef = null;
 
     const COMPETITIONS = {
         MASC: {
@@ -36,10 +36,10 @@ document.addEventListener('DOMContentLoaded', function () {
         FEM: {
             path: 'tablas_posiciones_fem',
             categories: [
-                { id: 'U12', name: 'U12 (Presentación)' },
-                { id: 'U14', name: 'U14 (FIBA)' },
-                { id: 'U16', name: 'U16 (FIBA)' },
-                { id: 'U19', name: 'U19 (FIBA)' }
+                { id: 'U12', name: 'U12 F (Presentación)' },
+                { id: 'U14', name: 'U14 F (FIBA)' },
+                { id: 'U16', name: 'U16 F (FIBA)' },
+                { id: 'U19', name: 'U19 F (FIBA)' }
             ]
         },
         LFB: {
@@ -82,14 +82,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (adminModal.classList.contains('hidden')) {
             const adminModalTitle = document.getElementById('adminModalTitle');
             const currentBranchName = document.getElementById('currentBranchName');
-            
+
             if (adminModalTitle) {
                 const compTab = document.querySelector(`.comp-tab[data-comp="${currentCompetition}"]`);
                 const compName = compTab ? compTab.textContent : currentCompetition;
                 adminModalTitle.textContent = `IMPORTAR CALENDARIO`;
                 if (currentBranchName) currentBranchName.textContent = compName.toUpperCase();
             }
-            
+
             adminModal.classList.remove('hidden');
             adminModal.classList.add('flex');
         } else {
@@ -249,7 +249,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function connectToSeason(season) {
         if (!season) return;
-        
+
         // Detener listener previo si existe
         if (currentDataRef) {
             currentDataRef.off();
@@ -257,11 +257,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const branch = COMPETITIONS[currentCompetition].path;
         currentDataRef = database.ref(`${branch}/${season}`);
-        
+
         currentDataRef.on('value', snap => {
             const data = snap.val() || {};
             allStagesData = data; // Guardamos todo para cálculos de arrastre
-            
+
             // Determinar qué datos usar para la etapa actual
             let stageKey = `etapa${currentStage}`;
             let stageData = data[stageKey];
@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', function () {
             teamsList = stageData.equipos ? Object.values(stageData.equipos) : (data.equipos ? Object.values(data.equipos) : ["DEFENSOR SPORTING"]);
             sharedFixture = stageData.fixture || {};
             allResults = {};
-            
+
             const categories = COMPETITIONS[currentCompetition].categories
                 .filter(c => c.id !== 'ACUMULADA')
                 .map(c => c.id);
@@ -292,15 +292,15 @@ document.addEventListener('DOMContentLoaded', function () {
     function calculateStandingsForData(stageData, teams, category) {
         let standings = {};
         teams.forEach(name => { standings[name] = { name, pj: 0, g: 0, p: 0, pts: 0 }; });
-        
-        const categoriesToProcess = (category === 'ACUMULADA') 
-            ? COMPETITIONS[currentCompetition].categories.filter(c => c.id !== 'ACUMULADA').map(c => c.id) 
+
+        const categoriesToProcess = (category === 'ACUMULADA')
+            ? COMPETITIONS[currentCompetition].categories.filter(c => c.id !== 'ACUMULADA').map(c => c.id)
             : [category];
 
         categoriesToProcess.forEach(cat => {
             const results = (stageData[cat] && stageData[cat].resultados) ? stageData[cat].resultados : {};
             const fixture = stageData.fixture || {};
-            
+
             let isFibaLogic = false;
             if (currentCompetition === 'MASC') {
                 isFibaLogic = (category === 'ACUMULADA') ? ['U16', 'U18', 'U20'].includes(cat) : ['U12', 'U14', 'U16', 'U18', 'U20'].includes(cat);
@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const h = fix.home; const a = fix.away;
                 if (!standings[h]) standings[h] = { name: h, pj: 0, g: 0, p: 0, pts: 0 };
                 if (!standings[a]) standings[a] = { name: a, pj: 0, g: 0, p: 0, pts: 0 };
-                
+
                 if (isFibaLogic) {
                     standings[h].pj++; standings[a].pj++;
                     if (res.homeNoShow) { standings[h].pts += 0; standings[a].pts += 2; standings[a].g++; standings[h].p++; }
@@ -353,7 +353,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (currentStage === '2') {
             let stage1Data = allStagesData.etapa1;
             if (!stage1Data || !stage1Data.fixture) stage1Data = allStagesData; // Fallback
-            
+
             const stage1Standings = calculateStandingsForData(stage1Data, teamsList, category);
             const config = stageData.config || { carryOver: 0 };
             const factor = parseFloat(config.carryOver) || 0;
@@ -375,7 +375,29 @@ document.addEventListener('DOMContentLoaded', function () {
         const category = categorySelect.value;
         const isStage3 = currentStage === '3';
         const tableView = document.getElementById('tableView');
-        
+        const fixtureView = document.getElementById('fixtureView');
+        const notice = document.getElementById('acumuladaNotice');
+
+        // Determinar si la etapa actual tiene datos
+        let stageKey = `etapa${currentStage}`;
+        let stageData = allStagesData[stageKey];
+        if (currentStage === '1' && (!stageData || !stageData.fixture)) stageData = allStagesData;
+        const hasFixture = !!(stageData && stageData.fixture);
+
+        // Si la etapa no existe (excepto Etapa 1 que tiene fallback), mostrar aviso y ocultar todo
+        if (!hasFixture && currentStage !== '1') {
+            if (tableView) tableView.classList.add('hidden');
+            if (fixtureView) fixtureView.classList.add('hidden');
+            if (fixtureGrid) fixtureGrid.innerHTML = '';
+            if (notice) {
+                notice.innerHTML = `<div class="py-12"><p class="text-slate-400 font-medium">La ${currentStage === '3' ? 'etapa de Play Offs' : `Etapa ${currentStage}`} aún no ha sido cargada.</p></div>`;
+                notice.classList.remove('hidden');
+            }
+            const btnGeneral = document.getElementById('pendingBtnGeneral');
+            if (btnGeneral) btnGeneral.classList.add('hidden');
+            return;
+        }
+
         if (isStage3) {
             if (tableView) tableView.classList.add('hidden');
         } else {
@@ -383,7 +405,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const standings = calculateTable(category);
-        
+
         let stageName = currentStage === '3' ? 'Play Offs' : `Etapa ${currentStage}`;
         if (tableTitle) {
             if (category === 'ACUMULADA') {
@@ -657,13 +679,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
                 tab.classList.add('active');
                 tab.classList.remove('text-slate-500');
-                
+
                 currentCompetition = tab.dataset.comp;
                 // Limpiar datos actuales
                 teamsList = [];
                 sharedFixture = {};
                 allResults = {};
-                
+
                 updateCategorySelect(); // Primero actualizamos las categorías
                 updateUI(); // Luego refrescamos la interfaz con la nueva categoría por defecto
                 loadSeasons(); // Y finalmente conectamos a los datos
@@ -673,7 +695,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (seasonSelect) seasonSelect.addEventListener('change', () => { currentSeason = seasonSelect.value; connectToSeason(currentSeason); });
         if (stageSelect) stageSelect.addEventListener('change', () => { currentStage = stageSelect.value; connectToSeason(currentSeason); });
         if (categorySelect) categorySelect.addEventListener('change', () => updateUI());
-        
+
         const importStageSelect = document.getElementById('importStageSelect');
         const carryOverContainer = document.getElementById('carryOverContainer');
         if (importStageSelect && carryOverContainer) {
@@ -716,23 +738,23 @@ document.addEventListener('DOMContentLoaded', function () {
         if (importMassiveBtn) importMassiveBtn.addEventListener('click', () => {
             let input = document.getElementById('massiveFixtureInput').value.trim();
             if (selectedFileContent) input = selectedFileContent.trim();
-            
+
             if (!input) {
                 alert('Por favor, selecciona un archivo CSV o pega los datos en el cuadro de texto.');
                 return;
             }
 
             const branch = COMPETITIONS[currentCompetition].path;
-            const cat = categorySelect.value; 
+            const cat = categorySelect.value;
             const isAcum = cat === 'ACUMULADA';
             const targetStage = document.getElementById('importStageSelect').value;
             const stageNode = `${branch}/${currentSeason}/etapa${targetStage}`;
-            
+
             if (!confirm(`¿Importar fixture para la Etapa ${targetStage}? Se borrarán los datos actuales de esta etapa.`)) return;
-            
-            const lines = input.split('\n'); 
-            const updates = {}; 
-            const newFix = {}; 
+
+            const lines = input.split('\n');
+            const updates = {};
+            const newFix = {};
             const uniqueTeams = new Set();
             let mCount = 1;
 
@@ -743,12 +765,12 @@ document.addEventListener('DOMContentLoaded', function () {
             lines.forEach((line, idx) => {
                 const parts = line.split(/[;,]/);
                 if (parts.length >= 3) {
-                    const j = parseInt(parts[0]); 
+                    const j = parseInt(parts[0]);
                     if (idx === 0 && isNaN(j)) return; // Saltar cabecera
-                    
-                    const h = parts[1].trim().toUpperCase(); 
+
+                    const h = parts[1].trim().toUpperCase();
                     const a = parts[2].trim().toUpperCase();
-                    
+
                     if (h && a) {
                         newFix[mCount] = { jornada: j, home: h, away: a };
                         uniqueTeams.add(h);
@@ -758,38 +780,38 @@ document.addEventListener('DOMContentLoaded', function () {
                             allBranchCategories.forEach((c, i) => {
                                 const rawH = parts[3 + i * 2];
                                 const rawA = parts[4 + i * 2];
-                                
+
                                 if (rawH !== undefined && rawA !== undefined && rawH.trim() !== "" && rawA.trim() !== "") {
                                     const resNode = `${branch}/${currentSeason}/${c}/resultados`;
                                     if (!updates[resNode]) updates[resNode] = {}; // Inicializar objeto si no existe
-                                    
-                                    const sH = parseInt(rawH) || 0; 
+
+                                    const sH = parseInt(rawH) || 0;
                                     const sA = parseInt(rawA) || 0;
-                                    updates[resNode][mCount] = { 
-                                        scoreHome: c === 'U11' ? 0 : sH, 
-                                        scoreAway: c === 'U11' ? 0 : sA, 
-                                        status: 'played', 
-                                        homeNoShow: (sH === 0 && sA === 20), 
-                                        awayNoShow: (sH === 20 && sA === 0) 
+                                    updates[resNode][mCount] = {
+                                        scoreHome: c === 'U11' ? 0 : sH,
+                                        scoreAway: c === 'U11' ? 0 : sA,
+                                        status: 'played',
+                                        homeNoShow: (sH === 0 && sA === 20),
+                                        awayNoShow: (sH === 20 && sA === 0)
                                     };
                                 }
                             });
                         } else if (parts.length >= 5) {
                             const rawH = parts[3];
                             const rawA = parts[4];
-                            
+
                             if (rawH !== undefined && rawA !== undefined && rawH.trim() !== "" && rawA.trim() !== "") {
                                 const resNode = `${branch}/${currentSeason}/${cat}/resultados`;
                                 if (!updates[resNode]) updates[resNode] = {};
-                                
-                                const sH = parseInt(rawH) || 0; 
+
+                                const sH = parseInt(rawH) || 0;
                                 const sA = parseInt(rawA) || 0;
-                                updates[resNode][mCount] = { 
-                                    scoreHome: (cat === 'U11') ? 0 : sH, 
-                                    scoreAway: (cat === 'U11') ? 0 : sA, 
-                                    status: 'played', 
-                                    homeNoShow: (sH === 0 && sA === 20), 
-                                    awayNoShow: (sH === 20 && sA === 0) 
+                                updates[resNode][mCount] = {
+                                    scoreHome: (cat === 'U11') ? 0 : sH,
+                                    scoreAway: (cat === 'U11') ? 0 : sA,
+                                    status: 'played',
+                                    homeNoShow: (sH === 0 && sA === 20),
+                                    awayNoShow: (sH === 20 && sA === 0)
                                 };
                             }
                         }
@@ -800,7 +822,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // 3. Preparar equipos y fixture final
             updates[`${stageNode}/fixture`] = newFix;
-            
+
             const teamsObj = {};
             const sortedTeams = Array.from(uniqueTeams).sort();
             const dscIndex = sortedTeams.indexOf("DEFENSOR SPORTING");
@@ -818,19 +840,19 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             // 4. Ejecutar actualización atómica en Firebase
-            database.ref().update(updates).then(() => { 
-                alert('Importación finalizada.'); 
+            database.ref().update(updates).then(() => {
+                alert('Importación finalizada.');
                 selectedFileContent = "";
                 if (csvFileInput) csvFileInput.value = "";
                 if (fileNameDisplay) fileNameDisplay.textContent = "Seleccionar Archivo CSV";
-                
+
                 // Cambiar la vista a la etapa importada
                 if (stageSelect) {
                     stageSelect.value = targetStage;
                     currentStage = targetStage;
                 }
-                
-                toggleAdminPanel(); 
+
+                toggleAdminPanel();
             });
         });
 
@@ -849,9 +871,9 @@ document.addEventListener('DOMContentLoaded', function () {
             document.querySelectorAll('.match-result-row').forEach(row => {
                 const mid = row.dataset.matchId; const isP = row.querySelector('.is-played').checked;
                 if (isP) {
-                    const sH = parseInt(row.querySelector('.score-home').value) || 0; 
+                    const sH = parseInt(row.querySelector('.score-home').value) || 0;
                     const sA = parseInt(row.querySelector('.score-away').value) || 0;
-                    
+
                     let nsH = row.querySelector('.no-show-home').checked;
                     let nsA = row.querySelector('.no-show-away').checked;
 
@@ -859,12 +881,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (sH === 20 && sA === 0) nsA = true;
                     if (sH === 0 && sA === 20) nsH = true;
 
-                    const res = { 
-                        scoreHome: sH, 
-                        scoreAway: sA, 
-                        status: 'played', 
-                        homeNoShow: nsH, 
-                        awayNoShow: nsA 
+                    const res = {
+                        scoreHome: sH,
+                        scoreAway: sA,
+                        status: 'played',
+                        homeNoShow: nsH,
+                        awayNoShow: nsA
                     };
                     updates[`${targetPath}/${cat}/resultados/${mid}`] = res;
                 } else { updates[`${targetPath}/${cat}/resultados/${mid}`] = null; }
