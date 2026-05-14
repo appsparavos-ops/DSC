@@ -108,6 +108,16 @@
                     </select>
                 </div>
                 <div
+                    class="flex-1 md:flex-none md:w-48 bg-slate-900 border border-slate-800 p-2 sm:p-3 rounded-2xl shadow-xl">
+                    <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Etapa</label>
+                    <select id="stageSelect"
+                        class="w-full bg-slate-800 border-none rounded-xl px-2 py-2 sm:px-4 sm:py-3 text-white text-xs sm:text-base focus:ring-2 focus:ring-violet-500 outline-none">
+                        <option value="1">Etapa 1</option>
+                        <option value="2">Etapa 2</option>
+                        <option value="3">Play Offs</option>
+                    </select>
+                </div>
+                <div
                     class="flex-1 md:flex-none md:w-72 bg-slate-900 border border-slate-800 p-2 sm:p-3 rounded-2xl shadow-xl">
                     <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Categoría</label>
                     <select id="categorySelect"
@@ -227,6 +237,26 @@
                         <div>
                             <h4 class="text-sm font-bold text-white">Importar Fixture y Calendario</h4>
                             <p class="text-[10px] text-slate-500 uppercase font-black tracking-tighter">Formato: Jornada;Local;Visitante;[PuntosLoc;PuntosVis;NPLoc;NPVis]</p>
+                        </div>
+                    </div>
+
+                    <!-- Configuración de Etapa e Importación -->
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-slate-800/50 p-3 rounded-2xl border border-slate-700">
+                            <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Etapa a Importar</label>
+                            <select id="importStageSelect" class="w-full bg-slate-900 border-none rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-violet-500 outline-none">
+                                <option value="1">Etapa 1</option>
+                                <option value="2">Etapa 2</option>
+                                <option value="3">Play Offs</option>
+                            </select>
+                        </div>
+                        <div id="carryOverContainer" class="bg-slate-800/50 p-3 rounded-2xl border border-slate-700 hidden">
+                            <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Arrastre de Puntos (de Etapa 1)</label>
+                            <select id="carryOverSelect" class="w-full bg-slate-900 border-none rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-violet-500 outline-none">
+                                <option value="0">0% (Sin arrastre)</option>
+                                <option value="0.5">50% (La mitad)</option>
+                                <option value="1">100% (Todos)</option>
+                            </select>
                         </div>
                     </div>
 
