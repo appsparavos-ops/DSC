@@ -416,8 +416,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         const showGP = category !== 'ACUMULADA';
         const colG = document.getElementById('colG'); const colP = document.getElementById('colP');
-        if (colG) colG.style.display = showGP ? 'table-cell' : 'none';
-        if (colP) colP.style.display = showGP ? 'table-cell' : 'none';
+        if (colG) colG.className = `px-6 py-4 font-semibold text-center ${showGP ? 'hidden md:table-cell' : 'hidden'}`;
+        if (colP) colP.className = `px-6 py-4 font-semibold text-center ${showGP ? 'hidden md:table-cell' : 'hidden'}`;
 
         if (tableBody) {
             tableBody.innerHTML = standings.map((team, index) => `
@@ -425,8 +425,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     <td class="px-6 py-4 font-mono text-sm"><span class="pos-${index + 1}">${index + 1}</span></td>
                     <td class="px-6 py-4 font-bold text-white cursor-pointer hover:text-violet-400 transition-colors" onclick="showTeamResults('${team.name}')">${team.name}</td>
                     <td class="px-6 py-4 text-center">${team.pj}</td>
-                    <td class="px-6 py-4 text-center" style="display: ${showGP ? 'table-cell' : 'none'}">${team.g}</td>
-                    <td class="px-6 py-4 text-center" style="display: ${showGP ? 'table-cell' : 'none'}">${team.p}</td>
+                    <td class="px-6 py-4 text-center ${showGP ? 'hidden md:table-cell' : 'hidden'}">${team.g}</td>
+                    <td class="px-6 py-4 text-center ${showGP ? 'hidden md:table-cell' : 'hidden'}">${team.p}</td>
                     <td class="px-6 py-4 text-center font-black text-violet-400 text-lg">${team.pts}</td>
                 </tr>
             `).join('');
