@@ -24,22 +24,22 @@ document.addEventListener('DOMContentLoaded', function () {
         MASC: {
             path: 'tablas_posiciones',
             categories: [
-                { id: 'ACUMULADA', name: 'TABLA ACUMULADA' },
-                { id: 'U11', name: 'U11 (Presentación)' },
-                { id: 'U12', name: 'U12 (Presentación)' },
-                { id: 'U14', name: 'U14 (Presentación)' },
-                { id: 'U16', name: 'U16 (FIBA)' },
-                { id: 'U18', name: 'U18 (FIBA)' },
-                { id: 'U20', name: 'U20 (FIBA)' }
+                { id: 'ACUMULADA', name: 'T. GENERAL' },
+                { id: 'U11', name: 'U11 M' },
+                { id: 'U12', name: 'U12 M' },
+                { id: 'U14', name: 'U14 M' },
+                { id: 'U16', name: 'U16 M' },
+                { id: 'U18', name: 'U18 M' },
+                { id: 'U20', name: 'U20 M' }
             ]
         },
         FEM: {
             path: 'tablas_posiciones_fem',
             categories: [
-                { id: 'U12', name: 'U12 F (Presentación)' },
-                { id: 'U14', name: 'U14 F (FIBA)' },
-                { id: 'U16', name: 'U16 F (FIBA)' },
-                { id: 'U19', name: 'U19 F (FIBA)' }
+                { id: 'U12', name: 'U12 F' },
+                { id: 'U14', name: 'U14 F' },
+                { id: 'U16', name: 'U16 F' },
+                { id: 'U19', name: 'U19 F' }
             ]
         },
         LFB: {
