@@ -277,6 +277,22 @@ if (bookmarkletCode) {
     bookmarkletCode.value = bookmarkletSource;
 }
 
+function isSameFilial(teamA, teamB) {
+    const tA = (teamA || "").trim().toUpperCase();
+    const tB = (teamB || "").trim().toUpperCase();
+    
+    if (tA === tB) return true;
+    
+    const norm = (t) => t === 'DSC' ? 'DEFENSOR SPORTING' : t;
+    const nA = norm(tA);
+    const nB = norm(tB);
+    
+    if (nA === nB) return true;
+    
+    const filialGroup = ["DEFENSOR SPORTING", "FUSIONADO"];
+    return filialGroup.includes(nA) && filialGroup.includes(nB);
+}
+
 // Auth check
 auth.onAuthStateChanged(user => {
     if (user) {
@@ -545,13 +561,7 @@ function runMassiveComparison() {
             });
 
             const fbPlayersAuth = allPlayers.filter(p => {
-                const pEq = (p.EQUIPO || "").trim().toUpperCase();
-                const pEqAuth = (p.equipoAutorizado || "").trim().toUpperCase();
-                const targetEq = team.trim().toUpperCase();
-
-                const matchesTeam = (pEq === targetEq || (pEq === 'DEFENSOR SPORTING' && targetEq === 'DSC') || (pEq === 'DSC' && targetEq === 'DEFENSOR SPORTING')) ||
-                                   (pEqAuth === targetEq || (pEqAuth === 'DEFENSOR SPORTING' && targetEq === 'DSC') || (pEqAuth === 'DSC' && targetEq === 'DEFENSOR SPORTING'));
-                
+                const matchesTeam = isSameFilial(p.EQUIPO, team) || isSameFilial(p.equipoAutorizado, team);
                 const isAuthorized = (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category));
                 return matchesTeam && isAuthorized && p.CATEGORIA !== category;
             });
@@ -571,7 +581,7 @@ function runMassiveComparison() {
             const allFubbPlayers = [...catFubbPlayersOwn, ...catFubbPlayersAuth];
 
             allFubbPlayers.forEach(fubbP => {
-                const fbP = allPlayers.find(p => String(p.DNI) === String(fubbP.dni) && (p.EQUIPO === team || p.equipoAutorizado === team));
+                const fbP = allPlayers.find(p => String(p.DNI) === String(fubbP.dni) && (isSameFilial(p.EQUIPO, team) || isSameFilial(p.equipoAutorizado, team)));
                 if (fbP && fubbP.numero) {
                     const fbNum = (fbP.Numeros && fbP.Numeros[category]) || fbP.Numero || "";
                     if (String(fbNum) !== String(fubbP.numero)) {
@@ -647,13 +657,7 @@ function runComparison(team, category) {
     });
 
     const fbPlayersAuth = allPlayers.filter(p => {
-        const pEq = (p.EQUIPO || "").trim().toUpperCase();
-        const pEqAuth = (p.equipoAutorizado || "").trim().toUpperCase();
-        const targetEq = team.trim().toUpperCase();
-
-        const matchesTeam = (pEq === targetEq || (pEq === 'DEFENSOR SPORTING' && targetEq === 'DSC') || (pEq === 'DSC' && targetEq === 'DEFENSOR SPORTING')) ||
-                           (pEqAuth === targetEq || (pEqAuth === 'DEFENSOR SPORTING' && targetEq === 'DSC') || (pEqAuth === 'DSC' && targetEq === 'DEFENSOR SPORTING'));
-        
+        const matchesTeam = isSameFilial(p.EQUIPO, team) || isSameFilial(p.equipoAutorizado, team);
         const isAuthorized = (p.categoriasAutorizadas && p.categoriasAutorizadas.includes(category));
         return matchesTeam && isAuthorized && p.CATEGORIA !== category;
     });
@@ -670,7 +674,7 @@ function runComparison(team, category) {
     // Detección de discrepancias en Números
     let mNumbers = [];
     fubbPlayers.forEach(fubbP => {
-        const fbP = allPlayers.find(p => String(p.DNI) === String(fubbP.dni) && (p.EQUIPO === team || p.equipoAutorizado === team));
+        const fbP = allPlayers.find(p => String(p.DNI) === String(fubbP.dni) && (isSameFilial(p.EQUIPO, team) || isSameFilial(p.equipoAutorizado, team)));
         if (fbP && fubbP.numero) {
             const fbNum = (fbP.Numeros && fbP.Numeros[category]) || fbP.Numero || "";
             if (String(fbNum) !== String(fubbP.numero)) {
