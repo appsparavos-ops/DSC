@@ -540,19 +540,88 @@ document.addEventListener('DOMContentLoaded', function () {
 
         container.innerHTML = myMatches.map(([id, f]) => {
             const r = results[id];
-            if (!r || r.status !== 'played') return '';
-            const isHome = f.home === teamName; const rival = isHome ? f.away : f.home;
-            const myScore = isHome ? r.scoreHome : r.scoreAway; const rivalScore = isHome ? r.scoreAway : r.scoreHome;
-            const myNS = isHome ? r.homeNoShow : r.awayNoShow; const rivalNS = isHome ? r.awayNoShow : r.homeNoShow;
+            const isHome = f.home === teamName;
+            const rival = isHome ? f.away : f.home;
 
-            let resultClass = 'bg-slate-800/40 text-slate-400 border-slate-700/50'; let label = 'EMPATE';
-            if (myNS) { resultClass = 'bg-red-500/10 text-red-500 border-red-500/20'; label = 'PERDIDO (NP)'; }
-            else if (rivalNS) { resultClass = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'; label = 'GANADO (NP)'; }
-            else if (myScore > rivalScore) { resultClass = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'; label = 'GANADO'; }
-            else if (myScore < rivalScore) { resultClass = 'bg-red-500/10 text-red-500 border-red-500/20'; label = 'PERDIDO'; }
+            if (!r || r.status !== 'played') {
+                // Partido pendiente
+                const hasFecha = r && r.fechaPendiente;
+                let isPast = false;
+                if (hasFecha) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const scheduledDate = new Date(r.fechaPendiente + 'T00:00:00');
+                    isPast = scheduledDate < today;
+                }
 
-            return `<div class="p-4 rounded-2xl border ${resultClass} flex justify-between items-center"><div class="flex flex-col"><span class="text-[8px] uppercase font-bold opacity-60">Jornada ${f.jornada || 1}</span><span class="text-sm font-bold">${rival}</span></div><div class="flex items-center gap-3"><span class="text-lg font-black">${isHome ? r.scoreHome : r.scoreAway} - ${isHome ? r.scoreAway : r.scoreHome}</span><span class="text-[10px] font-black uppercase px-2 py-1 rounded-md bg-white/5">${label}</span></div></div>`;
-        }).join('') || '<p class="text-center text-slate-500 py-8">No hay partidos jugados aún.</p>';
+                let label = 'PENDIENTE';
+                let dateText = 'Sin fijar';
+                let labelBadgeClass = 'bg-slate-850 text-slate-400 border border-slate-700';
+
+                if (hasFecha) {
+                    if (isPast) {
+                        dateText = 'Verificar';
+                        labelBadgeClass = 'bg-red-500/10 text-red-400 border border-red-500/25 animate-pulse';
+                    } else {
+                        dateText = r.fechaPendiente;
+                        labelBadgeClass = 'bg-amber-500/10 text-amber-500 border border-amber-500/25';
+                    }
+                } else {
+                    labelBadgeClass = 'bg-slate-800/40 text-slate-500 border border-slate-750/30';
+                    dateText = 'Sin fijar';
+                }
+
+                return `
+                    <div class="p-4 rounded-2xl border border-dashed border-slate-800 bg-slate-900/30 flex justify-between items-center group hover:border-slate-700 transition-colors">
+                        <div class="flex flex-col">
+                            <span class="text-[8px] uppercase font-bold opacity-60">Jornada ${f.jornada || 1}</span>
+                            <span class="text-sm font-bold text-slate-300">${rival}</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-[9px] text-slate-500 font-bold uppercase tracking-wider hidden sm:inline">${isHome ? 'Local' : 'Visitante'}</span>
+                            <span class="text-[10px] font-black uppercase px-2 py-1 rounded-md ${labelBadgeClass}">
+                                ${label}: ${dateText}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Partido jugado
+            const myScore = isHome ? r.scoreHome : r.scoreAway;
+            const rivalScore = isHome ? r.scoreAway : r.scoreHome;
+            const myNS = isHome ? r.homeNoShow : r.awayNoShow;
+            const rivalNS = isHome ? r.awayNoShow : r.homeNoShow;
+
+            let resultClass = 'bg-slate-800/40 text-slate-400 border-slate-700/50';
+            let label = 'EMPATE';
+            if (myNS) {
+                resultClass = 'bg-red-500/10 text-red-500 border-red-500/20';
+                label = 'PERDIDO (NP)';
+            } else if (rivalNS) {
+                resultClass = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+                label = 'GANADO (NP)';
+            } else if (myScore > rivalScore) {
+                resultClass = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+                label = 'GANADO';
+            } else if (myScore < rivalScore) {
+                resultClass = 'bg-red-500/10 text-red-500 border-red-500/20';
+                label = 'PERDIDO';
+            }
+
+            return `
+                <div class="p-4 rounded-2xl border ${resultClass} flex justify-between items-center hover:scale-[1.01] transition-transform">
+                    <div class="flex flex-col">
+                        <span class="text-[8px] uppercase font-bold opacity-60">Jornada ${f.jornada || 1}</span>
+                        <span class="text-sm font-bold text-white">${rival}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg font-black text-white">${myScore} - ${rivalScore}</span>
+                        <span class="text-[10px] font-black uppercase px-2 py-1 rounded-md bg-white/5">${label}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
         modal.classList.remove('hidden'); modal.classList.add('flex');
     };
 
