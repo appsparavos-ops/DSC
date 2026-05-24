@@ -139,6 +139,42 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
+    window.savePendingMatchDate = (matchId, cat, inputId) => {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const dateVal = input.value;
+
+        const branch = COMPETITIONS[currentCompetition].path;
+        let targetPath = `${branch}/${currentSeason}/etapa${currentStage}`;
+        // Fallback para Etapa 1
+        if (currentStage === '1' && (!allStagesData.etapa1 || !allStagesData.etapa1.fixture)) {
+            targetPath = `${branch}/${currentSeason}`;
+        }
+
+        const ref = database.ref(`${targetPath}/${cat}/resultados/${matchId}`);
+        if (dateVal) {
+            ref.update({
+                status: 'pending',
+                fechaPendiente: dateVal
+            }).then(() => {
+                alert('Fecha guardada correctamente.');
+                // showPendingMatches se llama para reflejar el cambio en el modal abierto
+                showPendingMatches();
+            }).catch(err => {
+                console.error("Error al guardar la fecha:", err);
+                alert('Error al guardar la fecha.');
+            });
+        } else {
+            ref.child('fechaPendiente').remove().then(() => {
+                alert('Fecha programada eliminada.');
+                showPendingMatches();
+            }).catch(err => {
+                console.error("Error al eliminar la fecha:", err);
+                alert('Error al eliminar la fecha.');
+            });
+        }
+    };
+
     // --- INICIALIZACIÓN ---
     function init() {
         const referrer = document.referrer;
@@ -566,14 +602,89 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <div class="h-px bg-slate-800 flex-grow"></div>
                             </div>
                             <div class="space-y-2">
-                                ${pendingInJornada.map(m => `
-                                    <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 flex justify-between items-center group hover:border-amber-500/30 transition-colors">
-                                        <div class="flex flex-col">
-                                            <span class="text-xs font-bold text-white">${m.home} vs ${m.away}</span>
+                                ${pendingInJornada.map(m => {
+                                    const matchRes = results[m.id] || {};
+                                    const currentFecha = matchRes.fechaPendiente || '';
+                                    
+                                    // Determinar si la fecha es pasada
+                                    let isPast = false;
+                                    if (currentFecha) {
+                                        const today = new Date();
+                                        today.setHours(0, 0, 0, 0);
+                                        const scheduledDate = new Date(currentFecha + 'T00:00:00');
+                                        isPast = scheduledDate < today;
+                                    }
+
+                                    let dateControlHtml = '';
+                                    if (currentUserRole === 'admin') {
+                                        const inputBorderClass = isPast ? 'border-red-500/50 focus:ring-red-500' : 'border-slate-700 focus:ring-violet-500';
+                                        const alertBadgeHtml = isPast ? `
+                                            <span class="text-[8px] font-black text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded-md uppercase animate-pulse">
+                                                Verificar
+                                            </span>
+                                        ` : '';
+                                        
+                                        const statusLabelHtml = !currentFecha ? `
+                                            <span class="text-[8px] font-bold text-slate-500 bg-slate-500/5 px-1.5 py-0.5 rounded-md uppercase">
+                                                Sin Fijar
+                                            </span>
+                                        ` : '';
+
+                                        dateControlHtml = `
+                                            <div class="flex flex-col gap-1 items-end">
+                                                <div class="flex items-center gap-1.5">
+                                                    ${statusLabelHtml}
+                                                    ${alertBadgeHtml}
+                                                </div>
+                                                <div class="flex items-center gap-2 mt-1 sm:mt-0">
+                                                    <input type="date" id="date-pending-${m.id}-${cat}" value="${currentFecha}" 
+                                                        class="bg-slate-900 border ${inputBorderClass} rounded-xl px-2 py-1 text-[11px] text-white outline-none">
+                                                    <button onclick="savePendingMatchDate('${m.id}', '${cat}', 'date-pending-${m.id}-${cat}')" 
+                                                        class="text-[9px] font-bold bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-1.5 rounded-lg transition-all uppercase tracking-wider shrink-0 shadow-md">
+                                                        Guardar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `;
+                                    } else {
+                                        if (currentFecha) {
+                                            if (isPast) {
+                                                dateControlHtml = `
+                                                    <span class="text-[9px] font-bold text-red-400 bg-red-500/10 border border-red-500/25 px-2.5 py-1 rounded-lg shrink-0 mt-2 sm:mt-0 uppercase tracking-wider animate-pulse flex items-center gap-1">
+                                                        ⚠️ Verificar
+                                                    </span>
+                                                `;
+                                            } else {
+                                                dateControlHtml = `
+                                                    <span class="text-[9px] font-bold text-amber-500 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-lg shrink-0 mt-2 sm:mt-0 uppercase tracking-wider">
+                                                        📅 Juega: ${currentFecha}
+                                                    </span>
+                                                `;
+                                            }
+                                        } else {
+                                            dateControlHtml = `
+                                                <span class="text-[9px] text-slate-500 bg-slate-800/20 border border-slate-700/30 px-2.5 py-1 rounded-lg shrink-0 mt-2 sm:mt-0 uppercase tracking-widest font-medium">
+                                                    Sin Fijar
+                                                </span>
+                                            `;
+                                        }
+                                    }
+
+                                    return `
+                                        <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 group hover:border-amber-500/30 transition-colors">
+                                            <div class="flex flex-col">
+                                                <span class="text-xs font-bold text-white">${m.home} vs ${m.away}</span>
+                                            </div>
+                                            <div class="flex flex-wrap items-center gap-3 justify-end">
+                                                ${dateControlHtml}
+                                                <button onclick="openJornadaModal(${j}, null, '${cat}')" 
+                                                    class="text-[10px] font-bold text-amber-500 hover:text-amber-400 uppercase tracking-wider bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20 transition-all shrink-0">
+                                                    Ver Jornada
+                                                </button>
+                                            </div>
                                         </div>
-                                        <button onclick="openJornadaModal(${j}, null, '${cat}')" class="text-[10px] font-bold text-amber-500 hover:text-amber-400 uppercase tracking-wider bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20 transition-all">Ver Jornada</button>
-                                    </div>
-                                `).join('')}
+                                    `;
+                                }).join('')}
                             </div>
                         </div>
                     `;
@@ -747,6 +858,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const branch = COMPETITIONS[currentCompetition].path;
             const cat = categorySelect.value;
             const isAcum = cat === 'ACUMULADA';
+            const allBranchCategories = COMPETITIONS[currentCompetition].categories
+                .filter(c => c.id !== 'ACUMULADA')
+                .map(c => c.id);
             const targetStage = document.getElementById('importStageSelect').value;
             const stageNode = `${branch}/${currentSeason}/etapa${targetStage}`;
 
