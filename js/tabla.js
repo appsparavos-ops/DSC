@@ -713,6 +713,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- JORNADA MODAL ---
     window.openJornadaModal = (jornada, specificMatchId = null, overrideCategory = null) => {
+        closePendingModal();
         if (!categorySelect || !modalMatchTitle || !jornadaResultsContainer || !resultModal) return;
         const category = overrideCategory || categorySelect.value;
         jornadaResultsContainer.dataset.category = category; // Guardar categoría actual
