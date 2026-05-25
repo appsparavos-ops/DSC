@@ -101,6 +101,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
 
+            // Renderizar UI de Sanciones
+            renderSancionesUI();
+
             adminModal.classList.remove('hidden');
             adminModal.classList.add('flex');
         } else {
@@ -151,6 +154,139 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(err => {
                 console.error("Error al guardar la configuración FIBA:", err);
                 alert('Error al guardar la configuración de reglamento.');
+            });
+    };
+
+    // --- SANCIONES ---
+    // Helper: suma todos los puntos de sanción de un equipo en una categoría
+    function getSancionTotal(cat, teamName) {
+        const sanciones = allStagesData.sanciones || {};
+        const teamSanc = (sanciones[cat] && sanciones[cat][teamName]) ? sanciones[cat][teamName] : {};
+        if (typeof teamSanc === 'number') return teamSanc; // Compatibilidad con formato antiguo
+        let total = 0;
+        Object.values(teamSanc).forEach(entry => {
+            total += parseFloat(entry.pts) || 0;
+        });
+        return total;
+    }
+
+    function renderSancionesUI() {
+        const teamSel = document.getElementById('sancionTeamSelect');
+        const catSel = document.getElementById('sancionCategorySelect');
+        const listContainer = document.getElementById('activeSancionesList');
+        if (!teamSel || !catSel || !listContainer) return;
+
+        // Poblar equipos
+        const teams = teamsList.length > 0 ? teamsList : [];
+        teamSel.innerHTML = teams.map(t => `<option value="${t}">${t}</option>`).join('');
+
+        // Poblar categorías (todas las de la competencia actual, sin ACUMULADA)
+        const cats = COMPETITIONS[currentCompetition].categories.filter(c => c.id !== 'ACUMULADA');
+        catSel.innerHTML = cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+        // Mostrar sanciones activas (cada entrada individual)
+        const sanciones = allStagesData.sanciones || {};
+        let rows = [];
+        cats.forEach(catObj => {
+            const catSanc = sanciones[catObj.id] || {};
+            Object.entries(catSanc).forEach(([teamName, teamData]) => {
+                if (typeof teamData === 'number') {
+                    // Compatibilidad formato antiguo (número directo)
+                    if (teamData > 0) {
+                        rows.push({ cat: catObj.id, catName: catObj.name, team: teamName, pts: teamData, key: null });
+                    }
+                } else if (typeof teamData === 'object') {
+                    // Nuevo formato: entradas individuales con push keys
+                    Object.entries(teamData).forEach(([key, entry]) => {
+                        const pts = parseFloat(entry.pts) || 0;
+                        if (pts > 0) {
+                            rows.push({ cat: catObj.id, catName: catObj.name, team: teamName, pts, key, fecha: entry.fecha || '' });
+                        }
+                    });
+                }
+            });
+        });
+
+        if (rows.length === 0) {
+            listContainer.innerHTML = `<p class="text-[10px] text-slate-600 italic text-center py-3">Sin sanciones activas.</p>`;
+        } else {
+            listContainer.innerHTML = rows.map(r => {
+                const fechaLabel = r.fecha ? `<span class="text-[8px] text-slate-600 ml-1">${r.fecha}</span>` : '';
+                const btnArgs = r.key 
+                    ? `removeSancion('${r.cat}', '${r.team.replace(/'/g, "\\\\'")}', '${r.key}')` 
+                    : `removeSancionLegacy('${r.cat}', '${r.team.replace(/'/g, "\\\\'")}')` ;
+                return `
+                <div class="flex justify-between items-center bg-red-500/5 border border-red-500/15 rounded-xl px-3 py-2">
+                    <div class="flex flex-col">
+                        <span class="text-[10px] font-bold text-red-400">${r.team}${fechaLabel}</span>
+                        <span class="text-[9px] text-slate-500 uppercase font-semibold">${r.catName}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-black text-red-400">-${r.pts} Pts</span>
+                        <button onclick="${btnArgs}" 
+                            class="text-[9px] text-slate-500 hover:text-red-400 bg-slate-800 hover:bg-red-500/10 border border-slate-700 hover:border-red-500/30 px-2 py-1 rounded-lg transition-all font-bold uppercase tracking-wide">
+                            Borrar
+                        </button>
+                    </div>
+                </div>
+            `}).join('');
+        }
+    }
+
+    window.applySancion = () => {
+        const teamSel = document.getElementById('sancionTeamSelect');
+        const catSel = document.getElementById('sancionCategorySelect');
+        const ptsInput = document.getElementById('sancionPointsInput');
+        if (!teamSel || !catSel || !ptsInput) return;
+
+        const team = teamSel.value;
+        const cat = catSel.value;
+        const puntos = parseFloat(ptsInput.value);
+
+        if (!team || !cat) { alert('Selecciona equipo y categoría.'); return; }
+        if (isNaN(puntos) || puntos <= 0) { alert('Ingresa una cantidad de puntos válida (mayor a 0).'); return; }
+
+        const branch = COMPETITIONS[currentCompetition].path;
+        const ref = database.ref(`${branch}/${currentSeason}/sanciones/${cat}/${team}`);
+
+        // Crear nueva entrada individual (push key)
+        const today = new Date().toISOString().split('T')[0];
+        ref.push({ pts: puntos, fecha: today }).then(() => {
+            ptsInput.value = '';
+            renderSancionesUI();
+            alert(`✅ Quita aplicada: -${puntos} Pts a ${team} en ${cat}.`);
+        }).catch(err => {
+            console.error('Error al aplicar sanción:', err);
+            alert('Error al aplicar la sanción.');
+        });
+    };
+
+    window.removeSancion = (cat, team, key) => {
+        if (!confirm(`¿Eliminar esta sanción de ${team} en ${cat}?`)) return;
+        const branch = COMPETITIONS[currentCompetition].path;
+        database.ref(`${branch}/${currentSeason}/sanciones/${cat}/${team}/${key}`).remove()
+            .then(() => {
+                renderSancionesUI();
+                alert(`Sanción eliminada.`);
+            })
+            .catch(err => {
+                console.error('Error al eliminar sanción:', err);
+                alert('Error al eliminar la sanción.');
+            });
+    };
+
+    // Compatibilidad: borrar sanción en formato antiguo (número directo)
+    window.removeSancionLegacy = (cat, team) => {
+        if (!confirm(`¿Eliminar TODAS las sanciones de ${team} en ${cat}?`)) return;
+        const branch = COMPETITIONS[currentCompetition].path;
+        database.ref(`${branch}/${currentSeason}/sanciones/${cat}/${team}`).remove()
+            .then(() => {
+                renderSancionesUI();
+                alert(`Sanciones de ${team} en ${cat} eliminadas.`);
+            })
+            .catch(err => {
+                console.error('Error al eliminar sanción:', err);
+                alert('Error al eliminar la sanción.');
             });
     };
 
@@ -440,18 +576,14 @@ document.addEventListener('DOMContentLoaded', function () {
         Object.keys(standings).forEach(teamName => {
             let quitaTotal = 0;
             if (category === 'ACUMULADA' || isAcumContext) {
-                // En el acumulativo general (Solo Masculino), se suman todas las quitas de todas las categorías masculinas
+                // En el acumulativo general, se suman todas las quitas de todas las categorías
                 const categoriesToProcess = COMPETITIONS[currentCompetition].categories.filter(c => c.id !== 'ACUMULADA').map(c => c.id);
                 categoriesToProcess.forEach(cat => {
-                    if (sanciones[cat] && sanciones[cat][teamName]) {
-                        quitaTotal += parseFloat(sanciones[cat][teamName]) || 0;
-                    }
+                    quitaTotal += getSancionTotal(cat, teamName);
                 });
             } else {
                 // En una categoría individual, se resta únicamente la quita de esa categoría
-                if (sanciones[category] && sanciones[category][teamName]) {
-                    quitaTotal = parseFloat(sanciones[category][teamName]) || 0;
-                }
+                quitaTotal = getSancionTotal(category, teamName);
             }
             
             standings[teamName].ptsSancion = quitaTotal; // Almacenar para uso en UI
@@ -707,17 +839,41 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const ptsFinales = totalEtapaActual + ptsArrastre;
 
-            // 5. Totalizador del equipo
+            // 5. Sanciones acumuladas del equipo en la tabla general
+            const sanciones = allStagesData.sanciones || {};
+            let sancionTotal = 0;
+            const categoriasComp = COMPETITIONS[currentCompetition].categories.filter(c => c.id !== 'ACUMULADA').map(c => c.id);
+            categoriasComp.forEach(cat => {
+                sancionTotal += getSancionTotal(cat, teamName);
+            });
+
+            if (sancionTotal > 0) {
+                html += `
+                    <div class="p-4 rounded-2xl border border-dashed border-red-500/30 bg-red-500/5 flex justify-between items-center mt-2 hover:scale-[1.01] transition-all duration-200">
+                        <div class="flex flex-col">
+                            <span class="text-sm font-bold text-red-400">Sanciones Aplicadas</span>
+                            <span class="text-[10px] text-slate-500 font-bold uppercase mt-0.5 tracking-wide">Quita de puntos acumulativa</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-base font-black text-red-400">-${sancionTotal} Pts</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const ptsFinal = ptsFinales - sancionTotal;
+
+            // 6. Totalizador del equipo
             html += `
                 <div class="h-px bg-slate-800 my-4"></div>
                 <div class="p-4 rounded-2xl bg-violet-950/20 border border-violet-800/30 flex justify-between items-center shadow-lg shadow-violet-950/10 hover:scale-[1.01] transition-all duration-200">
                     <div class="flex flex-col">
                         <span class="text-sm font-bold text-white">Total Acumulado</span>
                         <span class="text-[10px] text-violet-400 font-bold uppercase mt-0.5 tracking-wide">
-                            ${totalEtapaActual} Etapa ${currentStage} ${ptsArrastre > 0 ? `+ ${ptsArrastre.toFixed(1)} Arrastre` : ''}
+                            ${totalEtapaActual} Etapa ${currentStage} ${ptsArrastre > 0 ? `+ ${ptsArrastre.toFixed(1)} Arrastre` : ''}${sancionTotal > 0 ? ` - ${sancionTotal} Sanción` : ''}
                         </span>
                     </div>
-                    <span class="text-xl font-black text-violet-400">${ptsFinales.toFixed(1)} Pts</span>
+                    <span class="text-xl font-black text-violet-400">${ptsFinal.toFixed(1)} Pts</span>
                 </div>
             </div>
             `;
