@@ -226,6 +226,86 @@
             </div>
 
             <div class="p-8 overflow-y-auto flex-grow space-y-8">
+                <!-- Configuración de Reglas de Puntuación (Solo Masculino) -->
+                <div id="fibaConfigContainer" class="hidden border-b border-slate-800 pb-8 mb-8">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 rounded-xl bg-violet-600/20 flex items-center justify-center">
+                            <svg class="w-6 h-6 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold text-white">Reglamento de Tabla General (Masculino)</h4>
+                            <p class="text-[10px] text-slate-500 uppercase font-black tracking-tighter">Define qué categorías suman bajo reglamento FIBA en la general</p>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50 space-y-4">
+                        <p class="text-[11px] text-slate-400 leading-relaxed font-medium">
+                            Las categorías seleccionadas puntúan con reglamento **FIBA** (2 Pts por victoria, 1 Pt por derrota). Las no seleccionadas solo otorgan el **punto de presentación** (1 Pt por disputar el encuentro).
+                        </p>
+                        
+                        <div id="fibaCheckboxes" class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                            <!-- JS insertará los checkboxes aquí -->
+                        </div>
+
+                        <button id="saveFibaConfigBtn" onclick="saveFibaConfig()"
+                            class="w-full mt-4 bg-violet-600 hover:bg-violet-700 text-white font-black text-[11px] py-3 rounded-xl transition-all shadow-lg shadow-violet-900/10 flex items-center justify-center gap-2 active:scale-[0.98]">
+                            GUARDAR CONFIGURACIÓN DE REGLAMENTO
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sanciones y Quita de Puntos (Todas las Categorías y Divisionales) -->
+                <div id="sancionesContainer" class="border-b border-slate-800 pb-8 mb-8">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 rounded-xl bg-red-600/20 flex items-center justify-center">
+                            <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-bold text-white">Sanciones y Quita de Puntos</h4>
+                            <p class="text-[10px] text-slate-500 uppercase font-black tracking-tighter">Aplica quita de puntos por categoría a los equipos</p>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50 space-y-4">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                                <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Equipo</label>
+                                <select id="sancionTeamSelect" class="w-full bg-slate-850 border-none rounded-lg px-2 py-1.5 text-xs text-white focus:ring-1 focus:ring-red-500 outline-none">
+                                    <!-- Dinámico -->
+                                </select>
+                            </div>
+                            <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                                <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Categoría</label>
+                                <select id="sancionCategorySelect" class="w-full bg-slate-850 border-none rounded-lg px-2 py-1.5 text-xs text-white focus:ring-1 focus:ring-red-500 outline-none">
+                                    <!-- Dinámico -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                            <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Puntos a Quitar (Se sumarán a los anteriores)</label>
+                            <input type="number" id="sancionPointsInput" min="0.5" step="0.5" placeholder="Ej. 1 o 2" class="w-full bg-slate-850 border-none rounded-lg px-3 py-1.5 text-xs text-white focus:ring-1 focus:ring-red-500 outline-none">
+                        </div>
+
+                        <button id="applySancionBtn" onclick="applySancion()"
+                            class="w-full bg-red-600 hover:bg-red-700 text-white font-black text-[11px] py-3 rounded-xl transition-all shadow-lg shadow-red-900/10 flex items-center justify-center gap-2 active:scale-[0.98]">
+                            APLICAR QUITA DE PUNTOS
+                        </button>
+
+                        <!-- Tabla de Sanciones Aplicadas -->
+                        <div class="pt-4 border-t border-slate-800">
+                            <span class="text-[9px] font-semibold text-slate-400 uppercase tracking-widest block mb-2">Sanciones Activas en esta Temporada</span>
+                            <div id="activeSancionesList" class="max-h-[150px] overflow-y-auto space-y-2 pr-1">
+                                <!-- Dinámico -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Carga Masiva (CSV) -->
                 <div id="importMassiveContainer">
                     <div class="flex items-center gap-3 mb-6">

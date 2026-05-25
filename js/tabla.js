@@ -90,12 +90,68 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (currentBranchName) currentBranchName.textContent = compName.toUpperCase();
             }
 
+            // Control de visibilidad del configurador FIBA (Solo Masculino)
+            const fibaContainer = document.getElementById('fibaConfigContainer');
+            if (fibaContainer) {
+                if (currentCompetition === 'MASC') {
+                    fibaContainer.classList.remove('hidden');
+                    renderFibaConfigCheckboxes();
+                } else {
+                    fibaContainer.classList.add('hidden');
+                }
+            }
+
             adminModal.classList.remove('hidden');
             adminModal.classList.add('flex');
         } else {
             adminModal.classList.add('hidden');
             adminModal.classList.remove('flex');
         }
+    };
+
+    function renderFibaConfigCheckboxes() {
+        const container = document.getElementById('fibaCheckboxes');
+        if (!container) return;
+
+        const categories = COMPETITIONS.MASC.categories.filter(c => c.id !== 'ACUMULADA');
+        
+        let fibaCategories = { U16: true, U18: true, U20: true }; // Valores por defecto
+        if (allStagesData.config && allStagesData.config.fibaCategories) {
+            fibaCategories = allStagesData.config.fibaCategories;
+        }
+
+        container.innerHTML = categories.map(cat => {
+            const isChecked = fibaCategories[cat.id] === true;
+            return `
+                <label class="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700/50 cursor-pointer select-none transition-all">
+                    <input type="checkbox" id="fiba-chk-${cat.id}" ${isChecked ? 'checked' : ''} 
+                        class="w-4 h-4 rounded text-violet-600 bg-slate-850 border-slate-700 focus:ring-violet-500 focus:ring-2 focus:ring-offset-slate-900">
+                    <span class="text-xs font-bold text-slate-200">${cat.name}</span>
+                </label>
+            `;
+        }).join('');
+    }
+
+    window.saveFibaConfig = () => {
+        const branch = COMPETITIONS.MASC.path;
+        const categories = COMPETITIONS.MASC.categories.filter(c => c.id !== 'ACUMULADA');
+        const fibaCategories = {};
+
+        categories.forEach(cat => {
+            const chk = document.getElementById(`fiba-chk-${cat.id}`);
+            if (chk) {
+                fibaCategories[cat.id] = chk.checked;
+            }
+        });
+
+        database.ref(`${branch}/${currentSeason}/config/fibaCategories`).set(fibaCategories)
+            .then(() => {
+                alert('Configuración de reglamento guardada correctamente.');
+            })
+            .catch(err => {
+                console.error("Error al guardar la configuración FIBA:", err);
+                alert('Error al guardar la configuración de reglamento.');
+            });
     };
 
     // Navegación segura que cierra sesión si es cuenta automática
@@ -325,7 +381,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- CÁLCULOS ---
-    function calculateStandingsForData(stageData, teams, category) {
+    function calculateStandingsForData(stageData, teams, category, isAcumContext = false) {
         let standings = {};
         teams.forEach(name => { standings[name] = { name, pj: 0, g: 0, p: 0, pts: 0 }; });
 
@@ -339,7 +395,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             let isFibaLogic = false;
             if (currentCompetition === 'MASC') {
-                isFibaLogic = (category === 'ACUMULADA') ? ['U16', 'U18', 'U20'].includes(cat) : ['U12', 'U14', 'U16', 'U18', 'U20'].includes(cat);
+                let fibaConfig = ['U16', 'U18', 'U20']; // Fallback por defecto
+                if (allStagesData.config && allStagesData.config.fibaCategories) {
+                    fibaConfig = Object.keys(allStagesData.config.fibaCategories).filter(k => allStagesData.config.fibaCategories[k]);
+                }
+                isFibaLogic = (category === 'ACUMULADA' || isAcumContext) ? fibaConfig.includes(cat) : ['U12', 'U14', 'U16', 'U18', 'U20'].includes(cat);
             } else if (currentCompetition === 'FEM') {
                 isFibaLogic = ['U14', 'U16', 'U19'].includes(cat);
             } else if (currentCompetition === 'LFB') {
@@ -373,6 +433,31 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             });
         });
+
+        // --- APLICACIÓN DE SANCIONES ---
+        const sanciones = allStagesData.sanciones || {};
+        
+        Object.keys(standings).forEach(teamName => {
+            let quitaTotal = 0;
+            if (category === 'ACUMULADA' || isAcumContext) {
+                // En el acumulativo general (Solo Masculino), se suman todas las quitas de todas las categorías masculinas
+                const categoriesToProcess = COMPETITIONS[currentCompetition].categories.filter(c => c.id !== 'ACUMULADA').map(c => c.id);
+                categoriesToProcess.forEach(cat => {
+                    if (sanciones[cat] && sanciones[cat][teamName]) {
+                        quitaTotal += parseFloat(sanciones[cat][teamName]) || 0;
+                    }
+                });
+            } else {
+                // En una categoría individual, se resta únicamente la quita de esa categoría
+                if (sanciones[category] && sanciones[category][teamName]) {
+                    quitaTotal = parseFloat(sanciones[category][teamName]) || 0;
+                }
+            }
+            
+            standings[teamName].ptsSancion = quitaTotal; // Almacenar para uso en UI
+            standings[teamName].pts -= quitaTotal; // Restar sanción
+        });
+
         return standings;
     }
 
@@ -463,7 +548,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     <td class="px-6 py-4 text-center">${team.pj}</td>
                     <td class="px-6 py-4 text-center ${showGP ? 'hidden md:table-cell' : 'hidden'}">${team.g}</td>
                     <td class="px-6 py-4 text-center ${showGP ? 'hidden md:table-cell' : 'hidden'}">${team.p}</td>
-                    <td class="px-6 py-4 text-center font-black text-violet-400 text-lg">${team.pts}</td>
+                    <td class="px-6 py-4 text-center font-black text-violet-400 text-lg">
+                        ${team.pts.toFixed(1).replace('.0', '')}
+                        ${team.ptsSancion > 0 ? `<span class="block text-[10px] text-red-400 font-bold tracking-tight">-${team.ptsSancion} Pts</span>` : ''}
+                    </td>
                 </tr>
             `).join('');
         }
@@ -529,6 +617,117 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.showTeamResults = (teamName) => {
         const category = categorySelect.value;
+        
+        if (category === 'ACUMULADA') {
+            const title = document.getElementById('teamModalTitle');
+            const container = document.getElementById('teamResultsContainer');
+            const modal = document.getElementById('teamResultsModal');
+            if (!modal || !container) return;
+
+            title.textContent = `Desglose: ${teamName}`;
+
+            // 1. Obtener la data de la etapa actual
+            let stageKey = `etapa${currentStage}`;
+            let stageData = allStagesData[stageKey];
+            if (currentStage === '1' && (!stageData || !stageData.fixture)) stageData = allStagesData;
+            if (!stageData) stageData = {};
+
+            // 2. Obtener categorías de la competencia actual
+            const categories = COMPETITIONS[currentCompetition].categories.filter(c => c.id !== 'ACUMULADA');
+
+            let totalEtapaActual = 0;
+            let html = '<div class="space-y-4">';
+
+            // Encabezado informativo
+            html += `
+                <div class="p-4 rounded-2xl bg-slate-800/20 border border-slate-800/30 text-center">
+                    <span class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Desglose de puntos en Etapa ${currentStage === '3' ? 'Play Offs' : currentStage}</span>
+                </div>
+            `;
+
+            // 3. Procesar y calcular puntos por cada categoría individual
+            categories.forEach(catObj => {
+                const catStandings = calculateStandingsForData(stageData, teamsList, catObj.id, true);
+                const teamCatData = catStandings[teamName] || { pj: 0, g: 0, p: 0, pts: 0 };
+                
+                totalEtapaActual += teamCatData.pts;
+                const showGP = catObj.id !== 'U11'; // Evitar mostrar ganados/perdidos en U11 si no aplica
+
+                html += `
+                    <div class="p-4 rounded-2xl border border-slate-800 bg-slate-900/30 flex justify-between items-center hover:scale-[1.01] transition-all duration-200">
+                        <div class="flex flex-col">
+                            <span class="text-sm font-bold text-white">${catObj.name}</span>
+                            <span class="text-[10px] text-slate-500 font-bold uppercase mt-0.5 tracking-wide">
+                                ${teamCatData.pj} PJ ${showGP ? `• ${teamCatData.g} G • ${teamCatData.p} P` : ''}
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-base font-black text-violet-400">${teamCatData.pts} Pts</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // 4. Procesar arrastre si es Etapa 2
+            let ptsArrastre = 0;
+            let s1Total = 0;
+            let factor = 0;
+
+            if (currentStage === '2') {
+                let stage1Data = allStagesData.etapa1;
+                if (!stage1Data || !stage1Data.fixture) stage1Data = allStagesData;
+
+                const stage1Standings = calculateStandingsForData(stage1Data, teamsList, 'ACUMULADA');
+                const s1 = stage1Standings[teamName];
+                
+                const config = stageData.config || { carryOver: 0 };
+                factor = parseFloat(config.carryOver) || 0;
+
+                if (s1) {
+                    s1Total = s1.pts;
+                    ptsArrastre = s1.pts * factor;
+                }
+
+                if (ptsArrastre > 0 || factor > 0) {
+                    html += `
+                        <div class="p-4 rounded-2xl border border-dashed border-amber-500/20 bg-amber-500/5 flex justify-between items-center mt-2 hover:scale-[1.01] transition-all duration-200">
+                            <div class="flex flex-col">
+                                <span class="text-sm font-bold text-amber-500">Arrastre de Etapa 1</span>
+                                <span class="text-[10px] text-slate-500 font-bold uppercase mt-0.5 tracking-wide">
+                                    ${s1Total} Pts base × ${factor * 100}% Arrastre
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="text-base font-black text-amber-500">+${ptsArrastre.toFixed(1)} Pts</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            const ptsFinales = totalEtapaActual + ptsArrastre;
+
+            // 5. Totalizador del equipo
+            html += `
+                <div class="h-px bg-slate-800 my-4"></div>
+                <div class="p-4 rounded-2xl bg-violet-950/20 border border-violet-800/30 flex justify-between items-center shadow-lg shadow-violet-950/10 hover:scale-[1.01] transition-all duration-200">
+                    <div class="flex flex-col">
+                        <span class="text-sm font-bold text-white">Total Acumulado</span>
+                        <span class="text-[10px] text-violet-400 font-bold uppercase mt-0.5 tracking-wide">
+                            ${totalEtapaActual} Etapa ${currentStage} ${ptsArrastre > 0 ? `+ ${ptsArrastre.toFixed(1)} Arrastre` : ''}
+                        </span>
+                    </div>
+                    <span class="text-xl font-black text-violet-400">${ptsFinales.toFixed(1)} Pts</span>
+                </div>
+            </div>
+            `;
+
+            container.innerHTML = html;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            return;
+        }
+
         const results = allResults[category] || {};
         const title = document.getElementById('teamModalTitle');
         const container = document.getElementById('teamResultsContainer');
