@@ -221,7 +221,7 @@ const _bmkFn = async function () {
                         var c = tr.querySelectorAll('td');
                         if (c.length < 5) return;
 
-                        var rol = c[4].innerText.trim().toUpperCase();
+                        var rol = c[4].innerText.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                         if (rol.indexOf('DIRECTOR') !== -1 || rol.indexOf('TECNICO') !== -1 || rol.indexOf('ENTRENADOR') !== -1 || rol.indexOf('PREPARADOR') !== -1 || rol.indexOf('DELEGADO') !== -1 || rol.indexOf('MEDICO') !== -1 || rol.indexOf('AYUDANTE') !== -1 || rol.indexOf('UTILERO') !== -1 || rol.indexOf('ESTADISTICO') !== -1) return;
 
                         var dni = c[2].innerText.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -569,27 +569,20 @@ function runMassiveComparison() {
             fbPlayersAuth.filter(p => !fubbDnisAuth.has(String(p.DNI))).forEach(p => { mFubbAuth.push({ ...p, view_categoria: category, view_equipo: team }); });
 
             // Detección de discrepancias en Números (Dorsales)
-            const allFbPlayers = [...fbPlayersOwn, ...fbPlayersAuth];
             const allFubbPlayers = [...catFubbPlayersOwn, ...catFubbPlayersAuth];
+            const allFbPlayers = [...fbPlayersOwn, ...fbPlayersAuth];
 
             allFubbPlayers.forEach(fubbP => {
-                const fbP = allPlayers.find(p => {
-                    if (String(p.DNI) !== String(fubbP.dni)) return false;
-                    const pEq = (p.EQUIPO || "").trim().toUpperCase();
-                    const pEqAuth = (p.equipoAutorizado || "").trim().toUpperCase();
-                    const targetEq = team.trim().toUpperCase();
-                    const norm = (t) => t === 'DSC' ? 'DEFENSOR SPORTING' : t;
-                    
-                    return pEqAuth ? (norm(pEqAuth) === norm(targetEq)) : (norm(pEq) === norm(targetEq));
-                });
-                if (fbP && fubbP.numero) {
-                    const fbNum = (fbP.Numeros && fbP.Numeros[category]) || fbP.Numero || "";
-                    if (String(fbNum) !== String(fubbP.numero)) {
+                const fbP = allFbPlayers.find(p => String(p.DNI) === String(fubbP.dni));
+                const fubbNum = normalizeNumberValue(fubbP.numero);
+                if (fbP && fubbNum) {
+                    const fbNum = getPlayerNumberForCategory(fbP, category);
+                    if (fbNum !== fubbNum) {
                         mNumbers.push({
                             dni: fubbP.dni,
                             nombre: fubbP.nombre,
                             fbNum: fbNum,
-                            fubbNum: fubbP.numero,
+                            fubbNum: fubbNum,
                             categoria: category,
                             equipo: team,
                             dbKey: fbP.dbKey,
@@ -613,7 +606,7 @@ function parseSmartText(text) {
     lines.forEach(line => {
         if (!line.trim()) return;
 
-        const lineUpper = line.toUpperCase();
+        const lineUpper = line.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         if (lineUpper.indexOf('DIRECTOR') !== -1 || lineUpper.indexOf('TECNICO') !== -1 || lineUpper.indexOf('ENTRENADOR') !== -1 || lineUpper.indexOf('PREPARADOR') !== -1 || lineUpper.indexOf('DELEGADO') !== -1 || lineUpper.indexOf('MEDICO') !== -1 || lineUpper.indexOf('AYUDANTE') !== -1 || lineUpper.indexOf('UTILERO') !== -1 || lineUpper.indexOf('ESTADISTICO') !== -1) return;
 
         const numMatch = line.match(numRegex);
@@ -681,24 +674,18 @@ function runComparison(team, category) {
 
     // Detección de discrepancias en Números
     let mNumbers = [];
+    const allFbPlayers = [...fbPlayersOwn, ...fbPlayersAuth];
     fubbPlayers.forEach(fubbP => {
-        const fbP = allPlayers.find(p => {
-            if (String(p.DNI) !== String(fubbP.dni)) return false;
-            const pEq = (p.EQUIPO || "").trim().toUpperCase();
-            const pEqAuth = (p.equipoAutorizado || "").trim().toUpperCase();
-            const targetEq = team.trim().toUpperCase();
-            const norm = (t) => t === 'DSC' ? 'DEFENSOR SPORTING' : t;
-            
-            return pEqAuth ? (norm(pEqAuth) === norm(targetEq)) : (norm(pEq) === norm(targetEq));
-        });
-        if (fbP && fubbP.numero) {
-            const fbNum = (fbP.Numeros && fbP.Numeros[category]) || fbP.Numero || "";
-            if (String(fbNum) !== String(fubbP.numero)) {
+        const fbP = allFbPlayers.find(p => String(p.DNI) === String(fubbP.dni));
+        const fubbNum = normalizeNumberValue(fubbP.numero);
+        if (fbP && fubbNum) {
+            const fbNum = getPlayerNumberForCategory(fbP, category);
+            if (fbNum !== fubbNum) {
                 mNumbers.push({
                     dni: fubbP.dni,
                     nombre: fubbP.nombre,
                     fbNum: fbNum,
-                    fubbNum: fubbP.numero,
+                    fubbNum: fubbNum,
                     categoria: category,
                     equipo: team,
                     dbKey: fbP.dbKey,
@@ -840,6 +827,30 @@ function formatDni(dni) {
     return String(dni);
 }
 
+function normalizeNumberValue(value) {
+    if (value === undefined || value === null) return "";
+    return String(value).trim();
+}
+
+function getPlayerNumberForCategory(player, category) {
+    if (!player) return "";
+    const categoryNumber = player.Numeros && player.Numeros[category];
+    return normalizeNumberValue(categoryNumber !== undefined ? categoryNumber : player.Numero);
+}
+
+function getPersonNode(tipo) {
+    const raw = String(tipo || '').toLowerCase();
+    return raw.includes('entrenador') ? 'entrenadores' : 'jugadores';
+}
+
+function addNumberUpdates(updates, { season, pushId, dni, tipo, numero, numeros }) {
+    const dbNode = getPersonNode(tipo);
+    updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}/Numero`] = numero;
+    updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}/Numeros`] = numeros;
+    updates[`/registrosPorTemporada/${season}/${pushId}/Numero`] = numero;
+    updates[`/registrosPorTemporada/${season}/${pushId}/Numeros`] = numeros;
+}
+
 async function authorizePlayer(fubbPlayer, overrideCategory = null, overrideTeam = null, asAuth = true) {
     const season = seasonSelect.value;
     let team = overrideTeam || teamSelect.value || (fubbPlayer ? fubbPlayer.equipo : null) || (fubbPlayer ? fubbPlayer.view_equipo : null);
@@ -967,13 +978,17 @@ async function updatePlayerNumber(pushId, dni, nuevoNumero, categoria, tipo = 'j
         const newNumeros = { ...(data.Numeros || {}) };
         newNumeros[categoria] = nuevoNumero;
 
-        const updates = {
-            Numero: nuevoNumero,
-            Numeros: newNumeros
-        };
+        const updates = {};
+        addNumberUpdates(updates, {
+            season,
+            pushId,
+            dni,
+            tipo,
+            numero: nuevoNumero,
+            numeros: newNumeros
+        });
 
-        await database.ref(`/registrosPorTemporada/${season}/${pushId}`).update(updates);
-        await database.ref(`/${tipo}/${dni}/temporadas/${season}/${pushId}`).update(updates);
+        await database.ref().update(updates);
 
         showToast("Número actualizado", "success");
         await loadPlayersForSeason(season);
@@ -1011,10 +1026,14 @@ async function syncAllNumbers() {
             const newNumeros = { ...(currentData.Numeros || {}) };
             newNumeros[rec.categoria] = rec.fubbNum;
 
-            updates[`/registrosPorTemporada/${season}/${rec.dbKey}/Numero`] = rec.fubbNum;
-            updates[`/registrosPorTemporada/${season}/${rec.dbKey}/Numeros`] = newNumeros;
-            updates[`/${rec._tipo || 'jugadores'}/${rec.dni}/temporadas/${season}/${rec.dbKey}/Numero`] = rec.fubbNum;
-            updates[`/${rec._tipo || 'jugadores'}/${rec.dni}/temporadas/${season}/${rec.dbKey}/Numeros`] = newNumeros;
+            addNumberUpdates(updates, {
+                season,
+                pushId: rec.dbKey,
+                dni: rec.dni,
+                tipo: rec._tipo,
+                numero: rec.fubbNum,
+                numeros: newNumeros
+            });
         }
 
         await database.ref().update(updates);

@@ -21,6 +21,25 @@ export function parseDate(dateStr) {
     return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
 }
 
+export function normalizeText(value) {
+    return String(value || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+export function isTechnicalStaffType(value) {
+    const normalized = normalizeText(value);
+    return normalized === 'ENTRENADOR/A' ||
+        normalized === 'ENT. AYUDANTE' ||
+        normalized.includes('DIRECTOR') ||
+        normalized.includes('TECNICO') ||
+        normalized.includes('ENTRENADOR') ||
+        normalized.includes('PREPARADOR') ||
+        normalized.includes('DELEGADO') ||
+        normalized.includes('MEDICO') ||
+        normalized.includes('AYUDANTE') ||
+        normalized.includes('UTILERO') ||
+        normalized.includes('ESTADISTICO');
+}
+
 export function parseCSV(csvText, currentAction) {
     const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
     if (lines.length < 2) throw new Error('El archivo CSV está vacío o no tiene datos.');
@@ -45,8 +64,10 @@ export function parseCSV(csvText, currentAction) {
         if (rowObject[' NOMBRE'] && !rowObject.NOMBRE) rowObject.NOMBRE = rowObject[' NOMBRE'];
         if (rowObject.FECHA_LIC && !rowObject.FECHA_ALTA) rowObject.FECHA_ALTA = rowObject.FECHA_LIC;
         
-        // Normalizar TIPO (ENT. AYUDANTE -> ENTRENADOR/A)
-        if (rowObject.TIPO && rowObject.TIPO.trim().toUpperCase() === 'ENT. AYUDANTE') {
+        const tipoLicencia = rowObject.TIPO || rowObject['TIPO LICENCIA'] || rowObject['Tipo licencia'] || rowObject['TIPO DE LICENCIA'] || '';
+
+        // Normalizar cuerpo técnico (incluye DIRECTOR TÉCNICO y ASISTENTE TÉCNICO)
+        if (isTechnicalStaffType(tipoLicencia)) {
             rowObject.TIPO = 'ENTRENADOR/A';
         }
 
@@ -77,7 +98,7 @@ export function filterLatestRecords(data) {
         const categoria = row.CATEGORIA ? row.CATEGORIA.trim() : '';
         if (!dni) return;
 
-        const isCoach = row.TIPO && row.TIPO.trim().toUpperCase() === 'ENTRENADOR/A';
+        const isCoach = row.TIPO && isTechnicalStaffType(row.TIPO);
         const key = isCoach ? `${dni}|${categoria}|${row.FECHA_ALTA || ''}` : `${dni}|${categoria}`;
         const existingRecord = latestRecordsMap.get(key);
 

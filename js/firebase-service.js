@@ -1,7 +1,7 @@
 /**
  * Servicio de Firebase para Auth y Database.
  */
-import { getTimestampKey, deduceGender } from './utils.js';
+import { getTimestampKey, deduceGender, isTechnicalStaffType } from './utils.js';
 
 // Inicializar Firebase si aún no se ha hecho
 if (!firebase.apps.length) {
@@ -71,7 +71,7 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
     const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'TEMPORADA', 'Numero', 'Numeros', 'categoriasAutorizadas'];
 
     data.forEach(row => {
-        const isCoach = row.TIPO.trim().toUpperCase() === 'ENTRENADOR/A';
+        const isCoach = isTechnicalStaffType(row.TIPO);
         const rootNode = isCoach ? 'entrenadores' : 'jugadores';
         const dni = row.DNI.trim();
         const temporada = manualSeason;
@@ -101,7 +101,7 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
             });
 
             const match = existingRecords[dni].find(r => {
-                const isCoachMatch = r._tipo === 'entrenadores' || (r.TIPO && r.TIPO.trim().toUpperCase() === 'ENTRENADOR/A');
+                const isCoachMatch = r._tipo === 'entrenadores' || (r.TIPO && isTechnicalStaffType(r.TIPO));
                 if (isCoach && isCoachMatch) {
                     // Para entrenadores, deben coincidir categoría Y fecha (ALTA o LICencia)
                     const rowFecha = row.FECHA_ALTA || '';
@@ -181,7 +181,7 @@ export async function uploadSeasonData(data, manualSeason, progressCallback) {
         // Solo actualizar si no está ya marcado como SIN INSCRIBIR
         if (record['ESTADO LICENCIA'] !== 'SIN INSCRIBIR') {
             const dni = record._dni || record.DNI;
-            const type = record._tipo || (record.TIPO?.trim().toUpperCase() === 'ENTRENADOR/A' ? 'entrenadores' : 'jugadores');
+            const type = record._tipo || (isTechnicalStaffType(record.TIPO) ? 'entrenadores' : 'jugadores');
 
             allUpdates[`/${type}/${dni}/temporadas/${manualSeason}/${pushId}/ESTADO LICENCIA`] = 'SIN INSCRIBIR';
             allUpdates[`/registrosPorTemporada/${manualSeason}/${pushId}/ESTADO LICENCIA`] = 'SIN INSCRIBIR';
