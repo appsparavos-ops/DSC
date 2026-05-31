@@ -524,39 +524,45 @@ function renderPlayers() {
             }
         }
 
-        const pase = allGlobalPases[dni];
-        let paseIsExpired = false;
+        const pasesValue = allGlobalPases[dni];
         let isCurrentlyCedido = false;
         let isPasePendiente = false;
 
-        if (pase && !isCoach) {
-            const pStatus = classifyPaseLogic(pase, matchDate);
-            const tipoPase = (pase['TIPO PASE'] || '').toUpperCase().trim();
-            const clubOrigen = (pase['CLUB ORIGEN'] || '').toUpperCase().trim();
-            const clubDestino = (pase['CLUB DESTINO'] || '').toUpperCase().trim();
+        if (pasesValue && !isCoach) {
+            const pasesArray = pasesValue['FECHA FEDERACION ACEPTA']
+                ? [pasesValue]
+                : Object.values(pasesValue);
 
-            if (pStatus === 'vencido') paseIsExpired = true;
-            if (pStatus === 'pendiente') isPasePendiente = true;
+            pasesArray.forEach(pase => {
+                const pStatus = classifyPaseLogic(pase, matchDate);
+                const tipoPase = (pase['TIPO PASE'] || '').toUpperCase().trim();
+                const clubOrigen = (pase['CLUB ORIGEN'] || '').toUpperCase().trim();
+                const clubDestino = (pase['CLUB DESTINO'] || '').toUpperCase().trim();
+                const isTemporal = tipoPase.includes('TEMPORAL') || tipoPase.includes('PRESTAMO') || tipoPase.includes('PRÉSTAMO');
 
-            if (clubOrigen.includes('DEFENSOR') && !clubDestino.includes('DEFENSOR') &&
-                tipoPase.includes('TEMPORAL') && (pStatus === 'vigente' || pStatus === 'aVencer')) {
-                isCurrentlyCedido = true;
-            }
+                if (pStatus === 'pendiente' && clubDestino.includes('DEFENSOR')) {
+                    isPasePendiente = true;
+                }
+
+                if (clubOrigen.includes('DEFENSOR') && !clubDestino.includes('DEFENSOR') &&
+                    isTemporal && (pStatus === 'vigente' || pStatus === 'aVencer')) {
+                    isCurrentlyCedido = true;
+                }
+            });
         }
 
         const needsFM = !isCoach;
-        const isDisabled = (needsFM && isExpired) || isFUBBInvalid || isSancionado || paseIsExpired || isCurrentlyCedido || isPasePendiente;
+        const isDisabled = (needsFM && isExpired) || isFUBBInvalid || isSancionado || isCurrentlyCedido || isPasePendiente;
 
         let disabledText = (needsFM && isExpired) ? 'FICHA MEDICA' : 'FUBB (No Hab.)';
-        if (paseIsExpired) disabledText = 'PASE VENCIDO';
-        else if (isCurrentlyCedido) disabledText = 'PRESTADO A OTRO';
+        if (isCurrentlyCedido) disabledText = 'PRESTADO A OTRO';
         else if (isPasePendiente) disabledText = 'PASE PENDIENTE';
         else if (isSancionado) {
             const unit = (sanction && sanction.tipoSancion === 'tiempo') ? ' días' : ' fechas';
             disabledText = `Sanción (${fechasRestantes}${unit})`;
         }
 
-        p._disabilityData = { isDisabled, disabledText, isExpired, expDate, isFUBBInvalid, estadoLicencia, isSancionado, paseIsExpired, isCurrentlyCedido, isPasePendiente, fechasRestantes };
+        p._disabilityData = { isDisabled, disabledText, isExpired, expDate, isFUBBInvalid, estadoLicencia, isSancionado, isCurrentlyCedido, isPasePendiente, fechasRestantes };
     });
 
     // --- FILTRADO FINAL DE VISIBILIDAD (Ocultar bajas, vencidos y cedidos) ---
@@ -565,7 +571,6 @@ function renderPlayers() {
 
         const d = p._disabilityData;
         if (d.estadoLicencia === 'BAJA') return false;
-        if (d.paseIsExpired) return false;
         if (d.isCurrentlyCedido) return false;
 
         return true;
@@ -775,7 +780,7 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
     const rosterEntry = (rosterData[node] && rosterData[node][dni]) || { seleccionado: false, numero: "" };
     const numeroAMostrar = coachRole || rosterEntry.numero || p.NUMERO_TEMPORADA || "";
 
-    const { isDisabled = false, disabledText = '', isExpired = false, expDate = null, isFUBBInvalid = false, estadoLicencia = '', isSancionado = false, paseIsExpired = false, isCurrentlyCedido = false, fechasRestantes = 0 } = p._disabilityData || {};
+    const { isDisabled = false, disabledText = '', isExpired = false, expDate = null, isFUBBInvalid = false, estadoLicencia = '', isSancionado = false, isCurrentlyCedido = false, fechasRestantes = 0 } = p._disabilityData || {};
 
     const matchDateStr = dateSelect.value;
     const matchDateParts = matchDateStr.split('-');
