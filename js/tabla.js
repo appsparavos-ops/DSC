@@ -76,6 +76,27 @@ document.addEventListener('DOMContentLoaded', function () {
     const loginPass = document.getElementById('login-password');
     const loginError = document.getElementById('login-error');
 
+    function isValidStage(stage) {
+        return ['1', '2', '3'].includes(String(stage));
+    }
+
+    function saveCurrentStagePreference() {
+        if (!currentSeason || !isValidStage(currentStage)) return Promise.resolve();
+        const branch = COMPETITIONS[currentCompetition].path;
+        return database.ref(`${branch}/${currentSeason}/config/lastStage`).set(currentStage)
+            .catch(err => {
+                console.error('No se pudo guardar la última etapa seleccionada:', err);
+            });
+    }
+
+    function applySavedStagePreference(data) {
+        const savedStage = data && data.config && isValidStage(data.config.lastStage)
+            ? data.config.lastStage
+            : '1';
+        currentStage = savedStage;
+        if (stageSelect) stageSelect.value = savedStage;
+    }
+
     // --- EXPOSICIÓN GLOBAL ---
     window.toggleAdminPanel = () => {
         if (!adminModal) return;
@@ -489,6 +510,7 @@ document.addEventListener('DOMContentLoaded', function () {
         currentDataRef.on('value', snap => {
             const data = snap.val() || {};
             allStagesData = data; // Guardamos todo para cálculos de arrastre
+            applySavedStagePreference(data);
 
             // Determinar qué datos usar para la etapa actual
             let stageKey = `etapa${currentStage}`;
@@ -1229,7 +1251,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         if (seasonSelect) seasonSelect.addEventListener('change', () => { currentSeason = seasonSelect.value; connectToSeason(currentSeason); });
-        if (stageSelect) stageSelect.addEventListener('change', () => { currentStage = stageSelect.value; connectToSeason(currentSeason); });
+        if (stageSelect) stageSelect.addEventListener('change', () => {
+            currentStage = stageSelect.value;
+            saveCurrentStagePreference().then(() => connectToSeason(currentSeason));
+        });
         if (categorySelect) categorySelect.addEventListener('change', () => updateUI());
 
         const importStageSelect = document.getElementById('importStageSelect');
@@ -1297,10 +1322,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const uniqueTeams = new Set();
             let mCount = 1;
 
-            // 1. Limpiar datos de la etapa seleccionada
-            updates[stageNode] = null;
-
-            // 2. Procesar líneas del CSV
+            // 1. Procesar líneas del CSV
             lines.forEach((line, idx) => {
                 const parts = line.split(/[;,]/);
                 if (parts.length >= 3) {
@@ -1321,7 +1343,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 const rawA = parts[4 + i * 2];
 
                                 if (rawH !== undefined && rawA !== undefined && rawH.trim() !== "" && rawA.trim() !== "") {
-                                    const resNode = `${branch}/${currentSeason}/${c}/resultados`;
+                                    const resNode = `${stageNode}/${c}/resultados`;
                                     if (!updates[resNode]) updates[resNode] = {}; // Inicializar objeto si no existe
 
                                     const sH = parseInt(rawH) || 0;
@@ -1340,7 +1362,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             const rawA = parts[4];
 
                             if (rawH !== undefined && rawA !== undefined && rawH.trim() !== "" && rawA.trim() !== "") {
-                                const resNode = `${branch}/${currentSeason}/${cat}/resultados`;
+                                const resNode = `${stageNode}/${cat}/resultados`;
                                 if (!updates[resNode]) updates[resNode] = {};
 
                                 const sH = parseInt(rawH) || 0;
@@ -1359,7 +1381,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             });
 
-            // 3. Preparar equipos y fixture final
+            // 2. Preparar equipos y fixture final
             updates[`${stageNode}/fixture`] = newFix;
 
             const teamsObj = {};
@@ -1377,9 +1399,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 const carryOver = document.getElementById('carryOverSelect').value;
                 updates[`${stageNode}/config/carryOver`] = carryOver;
             }
+            updates[`${branch}/${currentSeason}/config/lastStage`] = targetStage;
 
-            // 4. Ejecutar actualización atómica en Firebase
-            database.ref().update(updates).then(() => {
+            // 3. Reemplazar la etapa seleccionada y guardar los datos nuevos
+            database.ref(stageNode).remove().then(() => database.ref().update(updates)).then(() => {
                 alert('Importación finalizada.');
                 selectedFileContent = "";
                 if (csvFileInput) csvFileInput.value = "";
@@ -1392,6 +1415,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
 
                 toggleAdminPanel();
+                connectToSeason(currentSeason);
+            }).catch(err => {
+                console.error('Error al importar fixture:', err);
+                alert('Error al importar el fixture. Revisa la consola para más detalles.');
             });
         });
 
