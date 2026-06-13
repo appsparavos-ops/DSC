@@ -10,9 +10,8 @@ const AUTO_EMAIL = 'invitado@dsc.com';
 const AUTO_PASSWORD = 'invitado123';
 const AUTO_SEASON = '2026';
 
-// --- CONFIGURACIÓN TELEGRAM ---
-const TG_TOKEN = '8672587823:AAFJllG1YID-FmGaEmPEqgmKtAdAnqxY80I';
-const TG_CHAT_ID = '1837798371';
+// --- CONFIGURACIÓN EMAIL ---
+const REPORT_EMAIL = 'mariodelossantos@vera.com.uy';
 
 // --- FIREBASE ---
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
@@ -34,7 +33,7 @@ auth.onAuthStateChanged(async user => {
             await runProcess();
         } catch (err) {
             log(`ERROR CRÍTICO: ${err.message}`);
-            await notificarTelegram(`❌ Error crítico en el proceso: ${err.message}`);
+            await notificarEmail(`❌ Error crítico en el proceso: ${err.message}`);
         }
     } else {
         log('Iniciando login automático...');
@@ -52,7 +51,7 @@ async function runProcess() {
                  `📅 *Temporada:* ${AUTO_SEASON}\n` +
                  `⏰ *Hora:* ${new Date().toLocaleTimeString('es-UY', { timeZone: 'America/Montevideo' })}\n` +
                  `⏳ _Iniciando escaneo y procesamiento..._`;
-    await notificarTelegram(inicioMsg);
+    await notificarEmail(inicioMsg);
 
     // 1. CARGAR TEMPORADAS
     log('Cargando temporadas...');
@@ -150,19 +149,25 @@ async function runProcess() {
         });
     }
 
-    await notificarTelegram(resumen);
+    await notificarEmail(resumen);
     log('[FINISH] Proceso automático completado.');
 }
 
 // --- UTILIDADES ---
-async function notificarTelegram(mensaje) {
+async function notificarEmail(mensaje) {
     try {
-        await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+        await fetch(`https://formsubmit.co/ajax/${REPORT_EMAIL}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: TG_CHAT_ID, text: mensaje, parse_mode: 'Markdown' })
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ 
+                _subject: "Reporte de Fichas Médicas", 
+                mensaje: mensaje 
+            })
         });
-    } catch (e) { console.error('Error Telegram:', e); }
+    } catch (e) { console.error('Error enviando email:', e); }
 }
 
 function parseDate(dateStr) {
