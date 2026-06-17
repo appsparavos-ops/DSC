@@ -11,7 +11,7 @@ const AUTO_PASSWORD = 'invitado123';
 const AUTO_SEASON = '2026';
 
 // --- CONFIGURACIÓN EMAIL ---
-const REPORT_EMAIL = '55b65bcba84454ff63fcd2272b854d87';
+const REPORT_EMAIL = 'mariodelossantos@vera.com.uy';
 
 // --- FIREBASE ---
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
@@ -156,7 +156,8 @@ async function runProcess() {
 // --- UTILIDADES ---
 async function notificarEmail(mensaje) {
     try {
-        await fetch(`https://formsubmit.co/ajax/${REPORT_EMAIL}`, {
+        log('Intentando enviar email...');
+        const response = await fetch(`https://formsubmit.co/ajax/${REPORT_EMAIL}`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -164,10 +165,16 @@ async function notificarEmail(mensaje) {
             },
             body: JSON.stringify({ 
                 _subject: "Reporte de Fichas Médicas", 
+                _captcha: "false",
                 mensaje: mensaje 
             })
         });
-    } catch (e) { console.error('Error enviando email:', e); }
+        const data = await response.json();
+        log(`Respuesta Email: ${JSON.stringify(data)}`);
+    } catch (e) { 
+        console.error('Error enviando email:', e);
+        log(`Error enviando email: ${e.message}`);
+    }
 }
 
 function parseDate(dateStr) {
