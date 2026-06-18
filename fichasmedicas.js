@@ -11,7 +11,7 @@ const AUTO_PASSWORD = 'invitado123';
 const AUTO_SEASON = '2026';
 
 // --- CONFIGURACIÓN EMAIL ---
-const REPORT_EMAIL = '55b65bcba84454ff63fcd2272b854d87';
+const REPORT_EMAIL = 'mariodelossantos@vera.com.uy';
 
 // --- FIREBASE ---
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
