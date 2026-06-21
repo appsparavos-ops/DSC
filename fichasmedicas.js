@@ -10,8 +10,11 @@ const AUTO_EMAIL = 'invitado@dsc.com';
 const AUTO_PASSWORD = 'invitado123';
 const AUTO_SEASON = '2026';
 
-// --- CONFIGURACIÓN EMAIL ---
+// --- CONFIGURACIÓN EMAIL (EmailJS) ---
 const REPORT_EMAIL = 'mariodelossantos@vera.com.uy';
+const EMAILJS_SERVICE_ID = 'service_qjddhx4';
+const EMAILJS_TEMPLATE_ID = 'template_axit2q8';
+const EMAILJS_PUBLIC_KEY = 'lIXXcoHQrjha0lSiL';
 
 // --- FIREBASE ---
 if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
@@ -47,10 +50,10 @@ auth.onAuthStateChanged(async user => {
 
 async function runProcess() {
     // 0. NOTIFICACIÓN INICIO
-    const inicioMsg = `🚀 *Actualización de Fichas Médicas Iniciada*\n` +
-                 `📅 *Temporada:* ${AUTO_SEASON}\n` +
-                 `⏰ *Hora:* ${new Date().toLocaleTimeString('es-UY', { timeZone: 'America/Montevideo' })}\n` +
-                 `⏳ _Iniciando escaneo y procesamiento..._`;
+    const inicioMsg = `🚀 Actualización de Fichas Médicas Iniciada\n` +
+                 `📅 Temporada: ${AUTO_SEASON}\n` +
+                 `⏰ Hora: ${new Date().toLocaleTimeString('es-UY', { timeZone: 'America/Montevideo' })}\n` +
+                 `⏳ Iniciando escaneo y procesamiento...`;
     await notificarEmail(inicioMsg);
 
     // 1. CARGAR TEMPORADAS
@@ -135,17 +138,15 @@ async function runProcess() {
     }
 
     // 5. NOTIFICACIÓN FINAL
-    let resumen = `✅ *Fichas Médicas Finalizado*\n`;
-    resumen += `📅 *Temporada:* ${AUTO_SEASON}\n`;
-    resumen += `📝 *Procesados:* ${playersToScrape.length}\n`;
-    resumen += `✨ *Actualizados:* ${resultsToUpdate.length}\n`;
+    let resumen = `✅ Fichas Médicas Finalizado\n`;
+    resumen += `📅 Temporada: ${AUTO_SEASON}\n`;
+    resumen += `📝 Procesados: ${playersToScrape.length}\n`;
+    resumen += `✨ Actualizados: ${resultsToUpdate.length}\n`;
     
     if (resultsToUpdate.length > 0) {
-        resumen += `\n👥 *Jugadores Actualizados:*\n`;
+        resumen += `\n👥 Jugadores Actualizados:\n`;
         resultsToUpdate.forEach(r => {
-            // Limpieza básica de caracteres que podrían romper el Markdown de Telegram
-            const nombreLimpio = r.nombre.replace(/[_*`[\]]/g, ''); 
-            resumen += `• ${nombreLimpio}\n`;
+            resumen += `• ${r.nombre}\n`;
         });
     }
 
@@ -156,21 +157,29 @@ async function runProcess() {
 // --- UTILIDADES ---
 async function notificarEmail(mensaje) {
     try {
-        log('Intentando enviar email...');
-        const response = await fetch(`https://formsubmit.co/ajax/${REPORT_EMAIL}`, {
+        log('Intentando enviar email mediante EmailJS...');
+        const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
             method: 'POST',
             headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({ 
-                _subject: "Reporte de Fichas Médicas", 
-                _captcha: "false",
-                mensaje: mensaje 
+                service_id: EMAILJS_SERVICE_ID,
+                template_id: EMAILJS_TEMPLATE_ID,
+                user_id: EMAILJS_PUBLIC_KEY,
+                template_params: {
+                    mensaje: mensaje,
+                    destinatario: REPORT_EMAIL
+                }
             })
         });
-        const data = await response.json();
-        log(`Respuesta Email: ${JSON.stringify(data)}`);
+        
+        if (response.ok) {
+            log('Email enviado correctamente con EmailJS');
+        } else {
+            const errorText = await response.text();
+            log(`Error de EmailJS: ${errorText}`);
+        }
     } catch (e) { 
         console.error('Error enviando email:', e);
         log(`Error enviando email: ${e.message}`);
