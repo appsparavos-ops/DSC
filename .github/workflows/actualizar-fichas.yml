@@ -3,19 +3,19 @@ name: Actualizar Fichas Médicas
 on:
   schedule:
     # 9:00 AM Uruguay (12:00 UTC) - Lunes a Viernes
-    # - cron: '58 12 * * 1-5'
+    - cron: '0 12 * * 1-5'
     # 18:00 PM Uruguay (21:00 UTC) - Lunes a Viernes
-    - cron: '28 20 * * 1-5'
+    - cron: '0 21 * * 1-5'
   workflow_dispatch:
     # Permite ejecutarlo manualmente desde GitHub Actions
 
 jobs:
   actualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       # Fuerza el uso de Node 24 y oculta avisos de depreciación
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout repo
@@ -26,12 +26,27 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Instalar Playwright y Chromium
+      - name: Instalar dependencias (playwright + nodemailer)
         run: |
-          npm install playwright
+          npm install playwright nodemailer
           npx playwright install chromium --with-deps
 
       - name: Ejecutar Actualizador de Fichas Médicas
         run: node .github/scripts/run-fichas.js
         env:
-          FICHAS_URL: ${{ secrets.FICHAS_URL }}
+          FICHAS_URL:        ${{ secrets.FICHAS_URL }}
+          GMAIL_USER:        ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          REPORT_EMAIL:      ${{ secrets.REPORT_EMAIL }}
+
+      # Fallback: si el job falla ANTES de que run-fichas.js envíe el email
+      # (ej: error en la instalación de playwright), notificar igual vía curl+SendGrid-free
+      # Este step solo corre si el anterior falló.
+      - name: Notificación de fallo de pipeline (fallback)
+        if: failure()
+        run: |
+          echo "El job de GitHub Actions falló antes de que el script pudiera notificar."
+          echo "Revisar los logs en: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        # Nota: si se desea un email de fallback aquí también, se puede agregar
+        # un step con curl a la API de EmailJS o similar. El script run-fichas.js
+        # ya cubre los fallos internos del proceso.
