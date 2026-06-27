@@ -159,15 +159,49 @@ function horaUY() {
             // ── Proceso terminó exitosamente ──
             capturarLog(`[${horaUY()}] ✅ Proceso completado exitosamente.`);
 
+            // Parsear el log del DOM para extraer datos estructurados
+            const lineas = textoFinal
+                .split('\n')
+                .map(l => l.trim())
+                .filter(l => l.length > 0);
+
+            // Extraer contadores del marcador [FINISH]
+            const finishMatch = textoFinal.match(/\[FINISH\] Proceso completado\. Actualizados: (\d+) \/ Procesados: (\d+)/);
+            const totalProcesados  = finishMatch ? finishMatch[2] : '?';
+            const totalActualizados = finishMatch ? finishMatch[1] : '?';
+
+            // Extraer pares nombre → nueva fecha de cada jugador actualizado
+            const jugadoresActualizados = [];
+            for (let i = 0; i < lineas.length; i++) {
+                const matchNombre = lineas[i].match(/Scrapping \(\d+\/\d+\): (.+?)\.\.\./);
+                if (matchNombre) {
+                    const nombre = matchNombre[1];
+                    // La línea siguiente con la nueva fecha (puede no existir si no hubo cambio)
+                    if (i + 1 < lineas.length) {
+                        const matchFecha = lineas[i + 1].match(/-> Nueva fecha encontrada: ([0-9/]+)/);
+                        if (matchFecha) {
+                            jugadoresActualizados.push({ nombre, fecha: matchFecha[1] });
+                        }
+                    }
+                }
+            }
+
+            // Armar sección de jugadores actualizados
+            let seccionJugadores = '';
+            if (jugadoresActualizados.length > 0) {
+                seccionJugadores = '\n👥 Jugadores actualizados:\n' +
+                    jugadoresActualizados.map(j => `   • ${j.nombre} → FM Hasta: ${j.fecha}`).join('\n');
+            }
+
             const cuerpoExito =
                 `✅ El automatismo de Fichas Médicas DSC finalizó con éxito.\n` +
                 `\n` +
-                `⏰ Hora fin     : ${horaUY()}\n` +
-                `⏱️  Duración     : ${duracionMin} minutos\n` +
+                `⏰ Hora fin  : ${horaUY()}\n` +
+                `⏱️  Duración  : ${duracionMin} minutos\n` +
                 `\n` +
-                `━━━━━━━━━━ RESUMEN DEL PROCESO ━━━━━━━\n` +
-                `${lineasResumen}\n` +
-                `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+                `📊 Registros procesados  : ${totalProcesados}\n` +
+                `✨ Registros actualizados: ${totalActualizados}` +
+                seccionJugadores;
 
             await sendEmail('✅ Completado — Fichas Médicas DSC', cuerpoExito);
         }
