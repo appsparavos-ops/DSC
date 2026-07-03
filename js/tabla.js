@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- CONFIGURACIÓN Y ESTADO ---
     let database = firebase.database();
     let auth = firebase.auth();
-    let currentUserRole = null;
+    let currentUserRole = 'user';
     let currentSeason = '';
     let currentCategory = 'ACUMULADA';
     let currentCompetition = 'MASC'; // MASC, FEM, LFB
@@ -69,6 +69,57 @@ document.addEventListener('DOMContentLoaded', function () {
     const jornadaResultsContainer = document.getElementById('jornadaResultsContainer');
     const saveJornadaResultsBtn = document.getElementById('saveJornadaResultsBtn');
 
+    // Helper para asegurar que un modal quede como overlay en la parte superior
+    function ensureModalOnTop(modalEl, name) {
+        if (!modalEl) return;
+        try {
+            // Mostrar y forzar estilos de overlay
+            modalEl.classList.remove('hidden');
+            modalEl.classList.add('flex');
+            modalEl.style.display = 'flex';
+            modalEl.style.position = 'fixed';
+            modalEl.style.top = '0';
+            modalEl.style.left = '0';
+            modalEl.style.width = '100vw';
+            modalEl.style.height = '100vh';
+            modalEl.style.minWidth = '100vw';
+            modalEl.style.minHeight = '100vh';
+            modalEl.style.boxSizing = 'border-box';
+            modalEl.style.zIndex = 2147483647;
+            modalEl.style.pointerEvents = 'auto';
+            modalEl.style.alignItems = 'center';
+            modalEl.style.justifyContent = 'center';
+            // Reparent to body to avoid stacking-context issues
+            if (modalEl.parentNode !== document.body) {
+                document.body.appendChild(modalEl);
+            }
+        } catch (e) {
+            console.warn('ensureModalOnTop failed for', name, e);
+        }
+    }
+
+    // Helper para limpiar estilos inline aplicados por ensureModalOnTop
+    function resetModalStyles(modalEl) {
+        if (!modalEl) return;
+        try {
+            modalEl.style.display = '';
+            modalEl.style.position = '';
+            modalEl.style.top = '';
+            modalEl.style.left = '';
+            modalEl.style.width = '';
+            modalEl.style.height = '';
+            modalEl.style.minWidth = '';
+            modalEl.style.minHeight = '';
+            modalEl.style.boxSizing = '';
+            modalEl.style.zIndex = '';
+            modalEl.style.pointerEvents = '';
+            modalEl.style.alignItems = '';
+            modalEl.style.justifyContent = '';
+        } catch (e) {
+            console.warn('resetModalStyles failed', e);
+        }
+    }
+
     const loginContainer = document.getElementById('login-container');
     const mainContainer = document.getElementById('main-container');
     const loginForm = document.getElementById('login-form');
@@ -79,6 +130,8 @@ document.addEventListener('DOMContentLoaded', function () {
     function isValidStage(stage) {
         return ['1', '2', '3'].includes(String(stage));
     }
+
+    const GUEST_EMAIL = 'tablas@dsc.com';
 
     function saveCurrentStagePreference() {
         if (!currentSeason || !isValidStage(currentStage)) return Promise.resolve();
@@ -95,6 +148,20 @@ document.addEventListener('DOMContentLoaded', function () {
             : '1';
         currentStage = savedStage;
         if (stageSelect) stageSelect.value = savedStage;
+    }
+
+    function isAdminUser(user) {
+        return user && user.email && user.email.toLowerCase() !== GUEST_EMAIL;
+    }
+
+    function updateAdminUI() {
+        if (adminPanelBtn) {
+            if (currentUserRole === 'admin') {
+                adminPanelBtn.classList.remove('hidden');
+            } else {
+                adminPanelBtn.classList.add('hidden');
+            }
+        }
     }
 
 
@@ -140,9 +207,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 switchAdminTab('config');
             }
 
-            showModal(adminModal);
+            // Ocultar otros modales abiertos para que el panel admin quede en primer plano
+            const otherModals = [resultModal, document.getElementById('teamResultsModal'), document.getElementById('pendingMatchesModal')];
+            otherModals.forEach(m => { if (m) { m.classList.add('hidden'); m.classList.remove('flex'); } });
+
+            if (adminModal) {
+                adminModal.classList.remove('hidden');
+                adminModal.classList.add('flex');
+            }
         } else {
-            hideModal(adminModal);
+            if (adminModal) {
+                adminModal.classList.add('hidden');
+                adminModal.classList.remove('flex');
+                resetModalStyles(adminModal);
+            }
         }
     };
 
@@ -167,24 +245,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     };
-
-    function showModal(modal) {
-        if (!modal) return;
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        modal.style.display = 'flex';
-        modal.style.visibility = 'visible';
-        modal.style.opacity = '1';
-    }
-
-    function hideModal(modal) {
-        if (!modal) return;
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-        modal.style.display = '';
-        modal.style.visibility = '';
-        modal.style.opacity = '';
-    }
 
     function renderFibaConfigCheckboxes() {
         const container = document.getElementById('fibaCheckboxes');
@@ -239,7 +299,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
         database.ref(`${branch}/${currentSeason}/etapa2/config/carryOver`).set(carryOverVal)
             .then(() => {
-                console.log('Arrastre actualizado exitosamente a: ' + carryOverVal);
+                
                 // El listener on('value') de Firebase actualizará automáticamente la tabla.
             })
             .catch(err => {
@@ -409,14 +469,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.closeResultModal = () => {
         if (resultModal) {
-            hideModal(resultModal);
+            resultModal.classList.add('hidden');
+            resultModal.classList.remove('flex');
+            resetModalStyles(resultModal);
         }
     };
 
     window.closePendingModal = () => {
         const modal = document.getElementById('pendingMatchesModal');
         if (modal) {
-            hideModal(modal);
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            resetModalStyles(modal);
         }
     };
 
@@ -495,13 +559,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.body.classList.remove('uninitialized');
                 loginContainer.classList.add('hidden');
                 mainContainer.classList.remove('hidden');
-                checkRole(user.uid);
+                checkRole(user);
                 loadSeasons();
             } else {
                 // Si no hay usuario, evaluamos si intentamos login silencioso o mostramos el modal
                 if (!isFromIndex) {
                     // Intento de login silencioso para acceso directo (cuenta pública)
-                    auth.signInWithEmailAndPassword('tablas@dsc.com', '12345678').catch(err => {
+                    auth.signInWithEmailAndPassword(GUEST_EMAIL, '12345678').catch(err => {
                         // Si falla el login silencioso, mostramos el formulario de login manual
                         document.body.classList.remove('uninitialized');
                         mainContainer.classList.add('hidden');
@@ -530,16 +594,50 @@ document.addEventListener('DOMContentLoaded', function () {
         setupListeners();
     }
 
-    function checkRole(uid) {
-        database.ref('admins/' + uid).once('value').then(snap => {
-            if (snap.exists()) {
-                currentUserRole = 'admin';
-                if (adminPanelBtn) adminPanelBtn.classList.remove('hidden');
-            } else {
-                currentUserRole = 'user';
-                if (adminPanelBtn) adminPanelBtn.classList.add('hidden');
-            }
-            // Forzar actualización de UI para mostrar/ocultar botones de edición
+    function checkRole(user) {
+        if (!user) {
+            currentUserRole = 'user';
+            updateAdminUI();
+            updateUI();
+            return;
+        }
+
+        if (typeof user === 'string') {
+            // Legacy fallback: a UID string was passed instead of the user object.
+            database.ref('admins/' + user).once('value').then(snap => {
+                if (snap.exists()) {
+                    currentUserRole = 'admin';
+                } else {
+                    currentUserRole = 'user';
+                }
+                updateAdminUI();
+                updateUI();
+            });
+            return;
+        }
+
+        if (!user.email) {
+            currentUserRole = 'user';
+            updateAdminUI();
+            updateUI();
+            return;
+        }
+
+        if (user.email.toLowerCase() === GUEST_EMAIL) {
+            currentUserRole = 'user';
+            updateAdminUI();
+            updateUI();
+            return;
+        }
+
+        database.ref('admins/' + user.uid).once('value').then(snap => {
+            currentUserRole = snap.exists() ? 'admin' : 'user';
+            updateAdminUI();
+            updateUI();
+        }).catch(err => {
+            console.error('Error al verificar rol de usuario:', err);
+            currentUserRole = 'user';
+            updateAdminUI();
             updateUI();
         });
     }
@@ -861,13 +959,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     window.showTeamResults = (teamName) => {
+        if (!categorySelect) {
+            console.error('showTeamResults: categorySelect no disponible');
+            return;
+        }
         const category = categorySelect.value;
         
         if (category === 'ACUMULADA') {
             const title = document.getElementById('teamModalTitle');
             const container = document.getElementById('teamResultsContainer');
             const modal = document.getElementById('teamResultsModal');
-            if (!modal || !container) return;
+            if (!modal || !container) {
+                console.error('showTeamResults: teamResultsModal o teamResultsContainer no disponible', { modal, container });
+                return;
+            }
 
             title.textContent = `Desglose: ${teamName}`;
 
@@ -992,7 +1097,11 @@ document.addEventListener('DOMContentLoaded', function () {
             `;
 
             container.innerHTML = html;
-            showModal(modal);
+            // Asegurar que el panel de administración no bloquee la interacción
+            if (adminModal) { adminModal.classList.add('hidden'); adminModal.classList.remove('flex'); }
+            modal.style.zIndex = 9999;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
             return;
         }
 
@@ -1089,18 +1198,59 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             `;
         }).join('');
-        showModal(modal);
+            // Asegurar que el panel de administración no bloquee la interacción
+            if (adminModal) { adminModal.classList.add('hidden'); adminModal.classList.remove('flex'); }
+            modal.style.zIndex = 9999;
+            modal.style.pointerEvents = 'auto';
+            // Force modal on top using helper and apply fallback if needed
+            ensureModalOnTop(modal, 'teamResultsModal');
+            try {
+                const cx = Math.floor(window.innerWidth / 2);
+                const cy = Math.floor(window.innerHeight / 2);
+                const topEl = document.elementFromPoint(cx, cy);
+                if (!modal.contains(topEl) && topEl !== modal) {
+                    modal.style.position = 'fixed';
+                    modal.style.top = '0';
+                    modal.style.left = '0';
+                    modal.style.width = '100vw';
+                    modal.style.height = '100vh';
+                    modal.style.zIndex = 2147483647;
+                    modal.style.pointerEvents = 'auto';
+                }
+            } catch (e) { /* ignore */ }
+        // Ensure modal overlay; minimal fallback without logging
+        try {
+            const cx = Math.floor(window.innerWidth / 2);
+            const cy = Math.floor(window.innerHeight / 2);
+            const topEl = document.elementFromPoint(cx, cy);
+            if (!resultModal.contains(topEl) && topEl !== resultModal) {
+                resultModal.style.position = 'fixed';
+                resultModal.style.top = '0';
+                resultModal.style.left = '0';
+                resultModal.style.width = '100vw';
+                resultModal.style.height = '100vh';
+                resultModal.style.zIndex = 2147483647;
+                resultModal.style.pointerEvents = 'auto';
+            }
+        } catch (e) { /* ignore */ }
     };
 
     window.closeTeamResultsModal = () => {
         const modal = document.getElementById('teamResultsModal');
-        if (modal) { hideModal(modal); }
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            resetModalStyles(modal);
+        }
     };
 
     window.showPendingMatches = () => {
         const container = document.getElementById('pendingMatchesContainer');
         const modal = document.getElementById('pendingMatchesModal');
-        if (!container || !modal) return;
+        if (!container || !modal) {
+            console.error('showPendingMatches: pendingMatchesContainer o pendingMatchesModal no disponible', { container, modal });
+            return;
+        }
 
         const category = categorySelect.value;
         const categoriesToCheck = (category === 'ACUMULADA') ? ['U11', 'U12', 'U14', 'U16', 'U18', 'U20'] : [category];
@@ -1243,13 +1393,20 @@ document.addEventListener('DOMContentLoaded', function () {
             container.innerHTML = pendingMatchesHtml;
         }
 
-        showModal(modal);
+        // Asegurar que el panel de administración no bloquee la interacción
+        if (adminModal) { adminModal.classList.add('hidden'); adminModal.classList.remove('flex'); }
+        modal.style.zIndex = 9999;
+        modal.style.pointerEvents = 'auto';
+        ensureModalOnTop(modal, 'pendingMatchesModal');
     };
 
     // --- JORNADA MODAL ---
     window.openJornadaModal = (jornada, specificMatchId = null, overrideCategory = null) => {
         closePendingModal();
-        if (!categorySelect || !modalMatchTitle || !jornadaResultsContainer || !resultModal) return;
+        if (!categorySelect || !modalMatchTitle || !jornadaResultsContainer || !resultModal) {
+            console.error('No se encontró uno de los elementos del modal de jornada:', { categorySelect, modalMatchTitle, jornadaResultsContainer, resultModal });
+            return;
+        }
         const category = overrideCategory || categorySelect.value;
         jornadaResultsContainer.dataset.category = category; // Guardar categoría actual
         modalMatchTitle.textContent = `Jornada ${jornada} - ${category}`;
@@ -1312,7 +1469,25 @@ document.addEventListener('DOMContentLoaded', function () {
         const saveBtn = document.getElementById('saveJornadaResultsBtn');
         if (saveBtn) saveBtn.style.display = isAdmin ? 'block' : 'none';
 
-        showModal(resultModal);
+        // Asegurar que el panel de administración no bloquee la interacción
+        if (adminModal) { adminModal.classList.add('hidden'); adminModal.classList.remove('flex'); }
+        resultModal.style.zIndex = 9999;
+        resultModal.style.pointerEvents = 'auto';
+        ensureModalOnTop(resultModal, 'resultModal');
+        try {
+            const cx = Math.floor(window.innerWidth / 2);
+            const cy = Math.floor(window.innerHeight / 2);
+            const topEl = document.elementFromPoint(cx, cy);
+            if (!resultModal.contains(topEl) && topEl !== resultModal) {
+                resultModal.style.position = 'fixed';
+                resultModal.style.top = '0';
+                resultModal.style.left = '0';
+                resultModal.style.width = '100vw';
+                resultModal.style.height = '100vh';
+                resultModal.style.zIndex = 2147483647;
+                resultModal.style.pointerEvents = 'auto';
+            }
+        } catch (e) { /* ignore */ }
     };
 
     // --- LISTENERS ---
