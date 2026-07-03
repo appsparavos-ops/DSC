@@ -225,171 +225,202 @@
                 </button>
             </div>
 
-            <div class="p-8 overflow-y-auto flex-grow space-y-8">
-                <!-- Configuración de Reglas de Puntuación (Solo Masculino) -->
-                <div id="fibaConfigContainer" class="hidden border-b border-slate-800 pb-8 mb-8">
-                    <div class="flex items-center gap-3 mb-6">
-                        <div class="w-10 h-10 rounded-xl bg-violet-600/20 flex items-center justify-center">
-                            <svg class="w-6 h-6 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
-                            </svg>
-                        </div>
-                        <div>
-                            <h4 class="text-sm font-bold text-white">Reglamento de Tabla General (Masculino)</h4>
-                            <p class="text-[10px] text-slate-500 uppercase font-black tracking-tighter">Define qué categorías suman bajo reglamento FIBA en la general</p>
-                        </div>
-                    </div>
+            <!-- Tabs -->
+            <div class="flex border-b border-slate-800 bg-slate-900/50">
+                <button onclick="switchAdminTab('config')" id="tabBtn-config" class="admin-tab-btn flex-1 py-3 text-xs sm:text-sm font-bold text-violet-400 border-b-2 border-violet-500 transition-all">Configuración</button>
+                <button onclick="switchAdminTab('sanciones')" id="tabBtn-sanciones" class="admin-tab-btn flex-1 py-3 text-xs sm:text-sm font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-300 transition-all">Sanciones</button>
+                <button onclick="switchAdminTab('import')" id="tabBtn-import" class="admin-tab-btn flex-1 py-3 text-xs sm:text-sm font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-300 transition-all">Importar</button>
+            </div>
 
-                    <div class="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50 space-y-4">
-                        <p class="text-[11px] text-slate-400 leading-relaxed font-medium">
-                            Las categorías seleccionadas puntúan con reglamento **FIBA** (2 Pts por victoria, 1 Pt por derrota). Las no seleccionadas solo otorgan el **punto de presentación** (1 Pt por disputar el encuentro).
-                        </p>
-                        
-                        <div id="fibaCheckboxes" class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-                            <!-- JS insertará los checkboxes aquí -->
-                        </div>
-
-                        <button id="saveFibaConfigBtn" onclick="saveFibaConfig()"
-                            class="w-full mt-4 bg-violet-600 hover:bg-violet-700 text-white font-black text-[11px] py-3 rounded-xl transition-all shadow-lg shadow-violet-900/10 flex items-center justify-center gap-2 active:scale-[0.98]">
-                            GUARDAR CONFIGURACIÓN DE REGLAMENTO
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Sanciones y Quita de Puntos (Todas las Categorías y Divisionales) -->
-                <div id="sancionesContainer" class="border-b border-slate-800 pb-8 mb-8">
-                    <div class="flex items-center gap-3 mb-6">
-                        <div class="w-10 h-10 rounded-xl bg-red-600/20 flex items-center justify-center">
-                            <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                            </svg>
-                        </div>
-                        <div>
-                            <h4 class="text-sm font-bold text-white">Sanciones y Quita de Puntos</h4>
-                            <p class="text-[10px] text-slate-500 uppercase font-black tracking-tighter">Aplica quita de puntos por categoría a los equipos</p>
-                        </div>
-                    </div>
-
-                    <div class="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50 space-y-4">
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
-                                <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Equipo</label>
-                                <select id="sancionTeamSelect" class="w-full bg-slate-900 border-none rounded-lg px-2 py-1.5 text-xs text-white focus:ring-1 focus:ring-red-500 outline-none">
-                                    <!-- Dinámico -->
-                                </select>
+            <div class="p-8 overflow-y-auto flex-grow">
+                
+                <!-- Tab Configuración -->
+                <div id="adminTab-config" class="admin-tab-content space-y-8">
+                    <!-- Configuración de Reglas de Puntuación (Solo Masculino) -->
+                    <div id="fibaConfigContainer" class="hidden border-b border-slate-800 pb-8">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 rounded-xl bg-violet-600/20 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                                </svg>
                             </div>
-                            <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
-                                <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Categoría</label>
-                                <select id="sancionCategorySelect" class="w-full bg-slate-900 border-none rounded-lg px-2 py-1.5 text-xs text-white focus:ring-1 focus:ring-red-500 outline-none">
-                                    <!-- Dinámico -->
-                                </select>
+                            <div>
+                                <h4 class="text-sm font-bold text-white">Reglamento de Tabla General (Masculino)</h4>
+                                <p class="text-[10px] text-slate-500 uppercase font-black tracking-tighter">Define qué categorías suman bajo reglamento FIBA en la general</p>
                             </div>
                         </div>
 
-                        <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
-                            <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Puntos a Quitar (Se sumarán a los anteriores)</label>
-                            <input type="number" id="sancionPointsInput" min="0.5" step="0.5" placeholder="Ej. 1 o 2" class="w-full bg-slate-900 border-none rounded-lg px-3 py-1.5 text-xs text-white focus:ring-1 focus:ring-red-500 outline-none">
+                        <div class="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50 space-y-4">
+                            <p class="text-[11px] text-slate-400 leading-relaxed font-medium">
+                                Las categorías seleccionadas puntúan con reglamento **FIBA** (2 Pts por victoria, 1 Pt por derrota). Las no seleccionadas solo otorgan el **punto de presentación** (1 Pt por disputar el encuentro).
+                            </p>
+                            
+                            <div id="fibaCheckboxes" class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                                <!-- JS insertará los checkboxes aquí -->
+                            </div>
+
+                            <button id="saveFibaConfigBtn" onclick="saveFibaConfig()"
+                                class="w-full mt-4 bg-violet-600 hover:bg-violet-700 text-white font-black text-[11px] py-3 rounded-xl transition-all shadow-lg shadow-violet-900/10 flex items-center justify-center gap-2 active:scale-[0.98]">
+                                GUARDAR CONFIGURACIÓN DE REGLAMENTO
+                            </button>
                         </div>
-
-                        <button id="applySancionBtn" onclick="applySancion()"
-                            class="w-full bg-red-600 hover:bg-red-700 text-white font-black text-[11px] py-3 rounded-xl transition-all shadow-lg shadow-red-900/10 flex items-center justify-center gap-2 active:scale-[0.98]">
-                            APLICAR QUITA DE PUNTOS
-                        </button>
-
-                        <!-- Tabla de Sanciones Aplicadas -->
-                        <div class="pt-4 border-t border-slate-800">
-                            <span class="text-[9px] font-semibold text-slate-400 uppercase tracking-widest block mb-2">Sanciones Activas en esta Temporada</span>
-                            <div id="activeSancionesList" class="max-h-[150px] overflow-y-auto space-y-2 pr-1">
-                                <!-- Dinámico -->
+                    </div>
+                    
+                    <!-- Arrastre de Puntos (Etapa 2) -->
+                    <div id="carryOverContainer" class="pb-8">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 rounded-xl bg-violet-600/20 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-bold text-white">Arrastre de Puntos</h4>
+                                <p class="text-[10px] text-slate-500 uppercase font-black tracking-tighter">Porcentaje de arrastre de Etapa 1 a Etapa 2</p>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Carga Masiva (CSV) -->
-                <div id="importMassiveContainer">
-                    <div class="flex items-center gap-3 mb-6">
-                        <div class="w-10 h-10 rounded-xl bg-violet-600/20 flex items-center justify-center">
-                            <svg class="w-6 h-6 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a2 2 0 00-2-2H5a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2zm0 0h2a2 2 0 002-2v-2a2 2 0 00-2-2H9m12 13V10a2 2 0 00-2-2h-2a2 2 0 00-2 2v3m4 0h2a2 2 0 002-2v-2a2 2 0 00-2-2h-2m-4-3V4a2 2 0 00-2-2h-2a2 2 0 00-2 2v3m4 0H9"></path>
-                            </svg>
-                        </div>
-                        <div>
-                            <h4 class="text-sm font-bold text-white">Importar Fixture y Calendario</h4>
-                            <p class="text-[10px] text-slate-500 uppercase font-black tracking-tighter">Formato: Jornada;Local;Visitante;[PuntosLoc;PuntosVis;NPLoc;NPVis]</p>
-                        </div>
-                    </div>
-
-                    <!-- Configuración de Etapa e Importación -->
-                    <div class="grid grid-cols-2 gap-4 mb-6">
-                        <div class="bg-slate-800/50 p-3 rounded-2xl border border-slate-700">
-                            <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Etapa a Importar</label>
-                            <select id="importStageSelect" class="w-full bg-slate-900 border-none rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-violet-500 outline-none">
-                                <option value="1">Etapa 1</option>
-                                <option value="2">Etapa 2</option>
-                                <option value="3">Play Offs</option>
-                            </select>
-                        </div>
-                        <div id="carryOverContainer" class="bg-slate-800/50 p-3 rounded-2xl border border-slate-700 hidden">
-                            <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Arrastre de Puntos (de Etapa 1)</label>
-                            <select id="carryOverSelect" class="w-full bg-slate-900 border-none rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-violet-500 outline-none">
+                        <div class="bg-slate-800/30 p-4 rounded-2xl border border-slate-700/50">
+                            <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-2">Porcentaje a arrastrar</label>
+                            <select id="carryOverSelect" onchange="updateCarryOver()" class="w-full bg-slate-900 border-none rounded-xl px-4 py-3 text-white text-sm focus:ring-2 focus:ring-violet-500 outline-none">
                                 <option value="0">0% (Sin arrastre)</option>
                                 <option value="0.5">50% (La mitad)</option>
                                 <option value="1">100% (Todos)</option>
                             </select>
                         </div>
                     </div>
+                </div>
 
-                    <div class="flex flex-col gap-6">
-                        <!-- Selector de Archivo -->
-                        <div class="relative group">
-                            <input type="file" id="csvFileInput" accept=".csv, .txt" class="hidden">
-                            <div onclick="document.getElementById('csvFileInput').click()"
-                                class="w-full bg-slate-800/50 hover:bg-slate-800 border-2 border-dashed border-slate-700 hover:border-violet-500/50 p-8 rounded-3xl transition-all flex flex-col items-center justify-center gap-4 cursor-pointer group">
-                                <div class="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                    <svg class="w-8 h-8 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                                    </svg>
-                                </div>
-                                <div class="text-center">
-                                    <span id="fileNameDisplay" class="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">Seleccionar Archivo CSV</span>
-                                    <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-black">Click para buscar en tu dispositivo</p>
-                                </div>
+                <!-- Tab Sanciones -->
+                <div id="adminTab-sanciones" class="admin-tab-content space-y-8 hidden">
+                    <!-- Sanciones y Quita de Puntos -->
+                    <div id="sancionesContainer" class="pb-8">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 rounded-xl bg-red-600/20 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-bold text-white">Sanciones y Quita de Puntos</h4>
+                                <p class="text-[10px] text-slate-500 uppercase font-black tracking-tighter">Aplica quita de puntos por categoría a los equipos</p>
                             </div>
                         </div>
 
-                        <div class="flex items-center gap-4">
-                            <div class="h-px bg-slate-800 flex-grow"></div>
-                            <span class="text-[9px] text-slate-600 uppercase font-black tracking-widest">O pega el contenido debajo</span>
-                            <div class="h-px bg-slate-800 flex-grow"></div>
-                        </div>
+                        <div class="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50 space-y-4">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Equipo</label>
+                                    <select id="sancionTeamSelect" class="w-full bg-slate-900 border-none rounded-lg px-2 py-1.5 text-xs text-white focus:ring-1 focus:ring-red-500 outline-none">
+                                        <!-- Dinámico -->
+                                    </select>
+                                </div>
+                                <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Categoría</label>
+                                    <select id="sancionCategorySelect" class="w-full bg-slate-900 border-none rounded-lg px-2 py-1.5 text-xs text-white focus:ring-1 focus:ring-red-500 outline-none">
+                                        <!-- Dinámico -->
+                                    </select>
+                                </div>
+                            </div>
 
-                        <textarea id="massiveFixtureInput" rows="4" 
-                            placeholder="Ejemplo: 1;DEFENSOR SPORTING;RIVAL A;70;60;0;0"
-                            class="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs font-mono text-slate-400 focus:ring-2 focus:ring-violet-500 outline-none transition-all placeholder:text-slate-700"></textarea>
+                            <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                                <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Puntos a Quitar (Se sumarán a los anteriores)</label>
+                                <input type="number" id="sancionPointsInput" min="0.5" step="0.5" placeholder="Ej. 1 o 2" class="w-full bg-slate-900 border-none rounded-lg px-3 py-1.5 text-xs text-white focus:ring-1 focus:ring-red-500 outline-none">
+                            </div>
 
-                        <button id="importMassiveBtn"
-                            class="w-full bg-violet-600 hover:bg-violet-700 text-white font-black text-sm py-4 rounded-2xl transition-all shadow-xl shadow-violet-900/20 flex items-center justify-center gap-3 active:scale-[0.98]">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                            </svg>
-                            PROCESAR E IMPORTAR FIXTURE
-                        </button>
-                    </div>
-                    
-                    <div class="mt-6 p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20">
-                        <div class="flex gap-3">
-                            <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                            </svg>
-                            <p class="text-[10px] text-amber-200/70 leading-relaxed font-medium">
-                                <span class="text-amber-500 font-black uppercase block mb-1">Importante</span>
-                                La importación reemplazará el calendario actual de la rama seleccionada. Los equipos se registrarán automáticamente.
-                            </p>
+                            <button id="applySancionBtn" onclick="applySancion()"
+                                class="w-full bg-red-600 hover:bg-red-700 text-white font-black text-[11px] py-3 rounded-xl transition-all shadow-lg shadow-red-900/10 flex items-center justify-center gap-2 active:scale-[0.98]">
+                                APLICAR QUITA DE PUNTOS
+                            </button>
+
+                            <!-- Tabla de Sanciones Aplicadas -->
+                            <div class="pt-4 border-t border-slate-800">
+                                <span class="text-[9px] font-semibold text-slate-400 uppercase tracking-widest block mb-2">Sanciones Activas en esta Temporada</span>
+                                <div id="activeSancionesList" class="max-h-[150px] overflow-y-auto space-y-2 pr-1">
+                                    <!-- Dinámico -->
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+
+                <!-- Tab Importar -->
+                <div id="adminTab-import" class="admin-tab-content space-y-8 hidden">
+                    <!-- Carga Masiva (CSV) -->
+                    <div id="importMassiveContainer">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 rounded-xl bg-violet-600/20 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a2 2 0 00-2-2H5a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2zm0 0h2a2 2 0 002-2v-2a2 2 0 00-2-2H9m12 13V10a2 2 0 00-2-2h-2a2 2 0 00-2 2v3m4 0h2a2 2 0 002-2v-2a2 2 0 00-2-2h-2m-4-3V4a2 2 0 00-2-2h-2a2 2 0 00-2 2v3m4 0H9"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-bold text-white">Importar Fixture y Calendario</h4>
+                                <p class="text-[10px] text-slate-500 uppercase font-black tracking-tighter">Formato: Jornada;Local;Visitante;[PuntosLoc;PuntosVis;NPLoc;NPVis]</p>
+                            </div>
+                        </div>
+
+                        <!-- Configuración de Etapa e Importación -->
+                        <div class="mb-6">
+                            <div class="bg-slate-800/50 p-3 rounded-2xl border border-slate-700 md:max-w-[50%]">
+                                <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Etapa a Importar</label>
+                                <select id="importStageSelect" class="w-full bg-slate-900 border-none rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-violet-500 outline-none">
+                                    <option value="1">Etapa 1</option>
+                                    <option value="2">Etapa 2</option>
+                                    <option value="3">Play Offs</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col gap-6">
+                            <!-- Selector de Archivo -->
+                            <div class="relative group">
+                                <input type="file" id="csvFileInput" accept=".csv, .txt" class="hidden">
+                                <div onclick="document.getElementById('csvFileInput').click()"
+                                    class="w-full bg-slate-800/50 hover:bg-slate-800 border-2 border-dashed border-slate-700 hover:border-violet-500/50 p-8 rounded-3xl transition-all flex flex-col items-center justify-center gap-4 cursor-pointer group">
+                                    <div class="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <svg class="w-8 h-8 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                        </svg>
+                                    </div>
+                                    <div class="text-center">
+                                        <span id="fileNameDisplay" class="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">Seleccionar Archivo CSV</span>
+                                        <p class="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-black">Click para buscar en tu dispositivo</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-4">
+                                <div class="h-px bg-slate-800 flex-grow"></div>
+                                <span class="text-[9px] text-slate-600 uppercase font-black tracking-widest">O pega el contenido debajo</span>
+                                <div class="h-px bg-slate-800 flex-grow"></div>
+                            </div>
+
+                            <textarea id="massiveFixtureInput" rows="4" 
+                                placeholder="Ejemplo: 1;DEFENSOR SPORTING;RIVAL A;70;60;0;0"
+                                class="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs font-mono text-slate-400 focus:ring-2 focus:ring-violet-500 outline-none transition-all placeholder:text-slate-700"></textarea>
+
+                            <button id="importMassiveBtn"
+                                class="w-full bg-violet-600 hover:bg-violet-700 text-white font-black text-sm py-4 rounded-2xl transition-all shadow-xl shadow-violet-900/20 flex items-center justify-center gap-3 active:scale-[0.98]">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                                </svg>
+                                PROCESAR E IMPORTAR FIXTURE
+                            </button>
+                        </div>
+                        
+                        <div class="mt-6 p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20">
+                            <div class="flex gap-3">
+                                <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                                <p class="text-[10px] text-amber-200/70 leading-relaxed font-medium">
+                                    <span class="text-amber-500 font-black uppercase block mb-1">Importante</span>
+                                    La importación reemplazará el calendario actual de la rama seleccionada. Los equipos se registrarán automáticamente.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
         </div>
     </div>
 

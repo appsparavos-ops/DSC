@@ -125,12 +125,48 @@ document.addEventListener('DOMContentLoaded', function () {
             // Renderizar UI de Sanciones
             renderSancionesUI();
 
+            // Precargar valor de arrastre actual si existe
+            let stage2Data = allStagesData['etapa2'];
+            if (stage2Data && stage2Data.config && stage2Data.config.carryOver !== undefined) {
+                const carryOverSelect = document.getElementById('carryOverSelect');
+                if (carryOverSelect) {
+                    carryOverSelect.value = stage2Data.config.carryOver;
+                }
+            }
+
+            // Seleccionar pestaña por defecto (Configuración)
+            if (typeof switchAdminTab === 'function') {
+                switchAdminTab('config');
+            }
+
             adminModal.classList.remove('hidden');
             adminModal.classList.add('flex');
         } else {
             adminModal.classList.add('hidden');
             adminModal.classList.remove('flex');
         }
+    };
+
+    window.switchAdminTab = (tabId) => {
+        // Actualizar estilos de los botones
+        document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+            if (btn.id === `tabBtn-${tabId}`) {
+                btn.classList.add('text-violet-400', 'border-violet-500');
+                btn.classList.remove('text-slate-400', 'border-transparent');
+            } else {
+                btn.classList.remove('text-violet-400', 'border-violet-500');
+                btn.classList.add('text-slate-400', 'border-transparent');
+            }
+        });
+
+        // Mostrar/Ocultar el contenido de las pestañas
+        document.querySelectorAll('.admin-tab-content').forEach(content => {
+            if (content.id === `adminTab-${tabId}`) {
+                content.classList.remove('hidden');
+            } else {
+                content.classList.add('hidden');
+            }
+        });
     };
 
     function renderFibaConfigCheckboxes() {
@@ -175,6 +211,23 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(err => {
                 console.error("Error al guardar la configuración FIBA:", err);
                 alert('Error al guardar la configuración de reglamento.');
+            });
+    };
+
+    window.updateCarryOver = () => {
+        const carryOverSelect = document.getElementById('carryOverSelect');
+        if (!carryOverSelect) return;
+        const carryOverVal = carryOverSelect.value;
+        const branch = COMPETITIONS[currentCompetition].path;
+        
+        database.ref(`${branch}/${currentSeason}/etapa2/config/carryOver`).set(carryOverVal)
+            .then(() => {
+                console.log('Arrastre actualizado exitosamente a: ' + carryOverVal);
+                // El listener on('value') de Firebase actualizará automáticamente la tabla.
+            })
+            .catch(err => {
+                console.error('Error al actualizar el arrastre:', err);
+                alert('Error al actualizar el arrastre de puntos.');
             });
     };
 
