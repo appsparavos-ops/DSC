@@ -539,10 +539,22 @@ document.addEventListener('DOMContentLoaded', function () {
     function loadSeasons() {
         database.ref('temporadas').once('value').then(snap => {
             if (snap.exists()) {
-                const seasons = Object.keys(snap.val()).sort().reverse();
+                const data = snap.val();
+                const seasons = Object.keys(data).sort().reverse();
                 if (seasonSelect) {
                     seasonSelect.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join('');
-                    currentSeason = seasons[0];
+                    
+                    // Buscar cuál está marcada como activa en la base de datos
+                    let activeSeason = seasons[0]; // Fallback a la más reciente
+                    for (const s of seasons) {
+                        if (data[s] && data[s].activa === true) {
+                            activeSeason = s;
+                            break;
+                        }
+                    }
+                    
+                    currentSeason = activeSeason;
+                    seasonSelect.value = activeSeason;
                     connectToSeason(currentSeason);
                 }
             }
