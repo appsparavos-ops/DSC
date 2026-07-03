@@ -97,6 +97,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (stageSelect) stageSelect.value = savedStage;
     }
 
+
     // --- EXPOSICIÓN GLOBAL ---
     window.toggleAdminPanel = () => {
         if (!adminModal) return;
@@ -139,11 +140,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 switchAdminTab('config');
             }
 
-            adminModal.classList.remove('hidden');
-            adminModal.classList.add('flex');
+            showModal(adminModal);
         } else {
-            adminModal.classList.add('hidden');
-            adminModal.classList.remove('flex');
+            hideModal(adminModal);
         }
     };
 
@@ -168,6 +167,24 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     };
+
+    function showModal(modal) {
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        modal.style.display = 'flex';
+        modal.style.visibility = 'visible';
+        modal.style.opacity = '1';
+    }
+
+    function hideModal(modal) {
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        modal.style.display = '';
+        modal.style.visibility = '';
+        modal.style.opacity = '';
+    }
 
     function renderFibaConfigCheckboxes() {
         const container = document.getElementById('fibaCheckboxes');
@@ -392,16 +409,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.closeResultModal = () => {
         if (resultModal) {
-            resultModal.classList.add('hidden');
-            resultModal.classList.remove('flex');
+            hideModal(resultModal);
         }
     };
 
     window.closePendingModal = () => {
         const modal = document.getElementById('pendingMatchesModal');
         if (modal) {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
+            hideModal(modal);
         }
     };
 
@@ -544,17 +559,28 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (seasonSelect) {
                     seasonSelect.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join('');
                     
-                    // Buscar cuál está marcada como activa en la base de datos
-                    let activeSeason = seasons[0]; // Fallback a la más reciente
-                    for (const s of seasons) {
-                        if (data[s] && data[s].activa === true) {
-                            activeSeason = s;
-                            break;
+                    // 1. Intentar usar la que ya estaba seleccionada en memoria (al cambiar de pestaña)
+                    // 2. Intentar usar la última vista guardada en el navegador (localStorage)
+                    const savedSeason = localStorage.getItem('lastViewedSeason');
+                    
+                    if (currentSeason && seasons.includes(currentSeason)) {
+                        seasonSelect.value = currentSeason;
+                    } else if (savedSeason && seasons.includes(savedSeason)) {
+                        currentSeason = savedSeason;
+                        seasonSelect.value = savedSeason;
+                    } else {
+                        // 3. Fallback: Buscar cuál está marcada como activa en la base de datos
+                        let activeSeason = seasons[0]; 
+                        for (const s of seasons) {
+                            if (data[s] && data[s].activa === true) {
+                                activeSeason = s;
+                                break;
+                            }
                         }
+                        currentSeason = activeSeason;
+                        seasonSelect.value = activeSeason;
                     }
                     
-                    currentSeason = activeSeason;
-                    seasonSelect.value = activeSeason;
                     connectToSeason(currentSeason);
                 }
             }
@@ -966,8 +992,7 @@ document.addEventListener('DOMContentLoaded', function () {
             `;
 
             container.innerHTML = html;
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            showModal(modal);
             return;
         }
 
@@ -1064,12 +1089,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             `;
         }).join('');
-        modal.classList.remove('hidden'); modal.classList.add('flex');
+        showModal(modal);
     };
 
     window.closeTeamResultsModal = () => {
         const modal = document.getElementById('teamResultsModal');
-        if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+        if (modal) { hideModal(modal); }
     };
 
     window.showPendingMatches = () => {
@@ -1218,8 +1243,7 @@ document.addEventListener('DOMContentLoaded', function () {
             container.innerHTML = pendingMatchesHtml;
         }
 
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        showModal(modal);
     };
 
     // --- JORNADA MODAL ---
@@ -1288,7 +1312,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const saveBtn = document.getElementById('saveJornadaResultsBtn');
         if (saveBtn) saveBtn.style.display = isAdmin ? 'block' : 'none';
 
-        resultModal.classList.remove('hidden'); resultModal.classList.add('flex');
+        showModal(resultModal);
     };
 
     // --- LISTENERS ---
@@ -1315,7 +1339,11 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
 
-        if (seasonSelect) seasonSelect.addEventListener('change', () => { currentSeason = seasonSelect.value; connectToSeason(currentSeason); });
+        if (seasonSelect) seasonSelect.addEventListener('change', () => { 
+            currentSeason = seasonSelect.value; 
+            localStorage.setItem('lastViewedSeason', currentSeason);
+            connectToSeason(currentSeason); 
+        });
         if (stageSelect) stageSelect.addEventListener('change', () => {
             currentStage = stageSelect.value;
             saveCurrentStagePreference().then(() => connectToSeason(currentSeason));
@@ -1528,3 +1556,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     init();
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
