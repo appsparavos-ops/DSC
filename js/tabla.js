@@ -1111,6 +1111,34 @@ document.addEventListener('DOMContentLoaded', function () {
         const modal = document.getElementById('teamResultsModal');
         if (!modal || !container) return;
 
+        // Si estamos en la Tabla General (ACUMULADA), mostramos el desglose por categorías
+        const currentCat = categorySelect ? categorySelect.value : category;
+        if (currentCat === 'ACUMULADA') {
+            title.textContent = `${teamName} - Puntos por Categoría`;
+            const cats = (COMPETITIONS[currentCompetition] && COMPETITIONS[currentCompetition].categories) || [];
+            const rows = cats.filter(c => c.id !== 'ACUMULADA').map(c => {
+                const standings = calculateTable(c.id);
+                const teamRow = standings.find(s => s.name === teamName);
+                const pts = teamRow ? Number(teamRow.pts || 0) : 0;
+                const ptsArrastre = teamRow && teamRow.ptsArrastre ? Number(teamRow.ptsArrastre) : 0;
+                const ptsSancion = teamRow && teamRow.ptsSancion ? Number(teamRow.ptsSancion) : 0;
+                // Mostrar valores claros: bruto, arrastre, sanción
+                return `
+                    <div class="bg-slate-800/20 p-4 rounded-2xl border border-slate-800/30 flex items-center justify-between">
+                        <div class="text-sm font-bold">${c.name}</div>
+                        <div class="text-right">
+                            <div class="font-black text-violet-400">${(pts).toFixed(1).replace('.0','')}</div>
+                            <div class="text-[10px] text-slate-400">Arrastre: ${ptsArrastre ? ptsArrastre.toFixed(1).replace('.0','') : '0'} · Sanción: ${ptsSancion ? ('-' + ptsSancion) : '0'}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = rows || '<div class="text-slate-400">No hay datos por categoría.</div>';
+            ensureModalOnTop(modal, 'teamResultsModal');
+            return;
+        }
+
         title.textContent = `${teamName} - ${category}`;
         const myMatches = Object.entries(sharedFixture).filter(([id, f]) => f.home === teamName || f.away === teamName).sort((a, b) => (a[1].jornada || 1) - (b[1].jornada || 1));
 
