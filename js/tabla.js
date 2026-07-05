@@ -1099,7 +1099,9 @@ document.addEventListener('DOMContentLoaded', function () {
             container.innerHTML = html;
             // Asegurar que el panel de administración no bloquee la interacción
             if (adminModal) { adminModal.classList.add('hidden'); adminModal.classList.remove('flex'); }
-            modal.style.zIndex = 9999;
+            ensureModalOnTop(modal, 'teamResultsModal');
+            modal.style.zIndex = 2147483647;
+            modal.style.pointerEvents = 'auto';
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             return;
@@ -1113,7 +1115,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Si estamos en la Tabla General (ACUMULADA), mostramos el desglose por categorías
         const currentCat = categorySelect ? categorySelect.value : category;
-        if (currentCat === 'ACUMULADA') {
+        if (currentCat === 'T. GENERAL') {
             title.textContent = `${teamName} - Puntos por Categoría`;
             const cats = (COMPETITIONS[currentCompetition] && COMPETITIONS[currentCompetition].categories) || [];
             const rows = cats.filter(c => c.id !== 'ACUMULADA').map(c => {
