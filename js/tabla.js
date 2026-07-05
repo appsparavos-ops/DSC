@@ -211,6 +211,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const otherModals = [resultModal, document.getElementById('teamResultsModal'), document.getElementById('pendingMatchesModal')];
             otherModals.forEach(m => { if (m) { m.classList.add('hidden'); m.classList.remove('flex'); } });
 
+            // Inicializar selectores dinámicos de importación FUBB
+            initFubbImportSelectors();
+
             if (adminModal) {
                 adminModal.classList.remove('hidden');
                 adminModal.classList.add('flex');
@@ -1720,6 +1723,17 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
 
+        // --- SINCRONIZAR TABLAS FUBB ---
+        const syncFubbBtn = document.getElementById('syncFubbBtn');
+        if (syncFubbBtn) syncFubbBtn.addEventListener('click', () => syncFubbTables());
+
+        // --- IMPORTAR FIXTURE DESDE FUBB ---
+        const importFixtureFubbBtn = document.getElementById('importFixtureFubbBtn');
+        if (importFixtureFubbBtn) importFixtureFubbBtn.addEventListener('click', () => importFixtureFromFubb());
+
+        const importFubbFaseSelect = document.getElementById('importFubbFaseSelect');
+        if (importFubbFaseSelect) importFubbFaseSelect.addEventListener('change', () => updateFubbGruposOnFaseChange());
+
         const saveJornadaResultsBtn = document.getElementById('saveJornadaResultsBtn');
         if (saveJornadaResultsBtn) saveJornadaResultsBtn.addEventListener('click', () => {
             const branch = COMPETITIONS[currentCompetition].path;
@@ -1758,6 +1772,1147 @@ document.addEventListener('DOMContentLoaded', function () {
             database.ref().update(updates).then(() => { closeResultModal(); alert('Actualizado.'); });
         });
     }
+
+    // =========================================================================
+    // --- FUNCIÓN: SINCRONIZAR TABLAS FUBB (Scraping Frontend con Proxy CORS) ---
+    // =========================================================================
+    async function syncFubbTables() {
+        // --- Configuración ---
+        const TARGET_URL = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
+        const CLUB_NAME  = 'DEFENSOR SPORTING';
+        const FETCH_TIMEOUT_MS = 20000; // 20s por intento
+
+        // Headers de navegador para evitar bloqueos 403 por bot-detection
+        const BROWSER_HEADERS = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'es-ES,es;q=0.9',
+        };
+
+        // Proxies públicos gratuitos — SOLO los que soportan POST o GET con body
+        // La página FUBB es ASP.NET WebForms que usa __doPostBack para cambiar categoría.
+        // cors-anywhere soporta POST; los demás solo GET.
+        const PROXIES = [
+            {
+                buildUrl: (u) => `https://cors-anywhere.herokuapp.com/${u}`,
+                isJson: false,
+                extraHeaders: { 'X-Requested-With': 'XMLHttpRequest' },
+                supportsPost: true,
+            },
+            {
+                buildUrl: (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+                isJson: true,
+                jsonKey: 'contents',
+                supportsPost: false, // solo GET
+            },
+            {
+                buildUrl: (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+                isJson: false,
+                supportsPost: false,
+            },
+        ];
+
+        // Helper: fetch con timeout
+        async function fetchWithTimeout(url, options, ms) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), ms);
+            try {
+                const res = await fetch(url, { ...options, signal: controller.signal });
+                clearTimeout(timer);
+                return res;
+            } catch (e) {
+                clearTimeout(timer);
+                throw e;
+            }
+        }
+
+        // --- Helpers de UI ---
+        const btn     = document.getElementById('syncFubbBtn');
+        const btnText = document.getElementById('syncFubbBtnText');
+        const icon    = document.getElementById('syncFubbIcon');
+        const spinner = document.getElementById('syncFubbSpinner');
+
+        function setSyncing(active) {
+            if (!btn) return;
+            btn.disabled = active;
+            if (btnText) btnText.textContent = active ? 'Sincronizando...' : 'SINCRONIZAR TABLAS FUBB';
+            if (icon)    icon.classList.toggle('hidden', active);
+            if (spinner) spinner.classList.toggle('hidden', !active);
+        }
+
+        // --- Inicio ---
+        setSyncing(true);
+        console.log('[SyncFUBB] Iniciando sincronización...');
+
+        // 0. Activar cors-anywhere automáticamente.
+        // El botón "Request temporary access" en /corsdemo simplemente hace un POST
+        // desde el navegador del usuario. Lo replicamos aquí antes de cualquier petición.
+        try {
+            console.log('[SyncFUBB] Activando cors-anywhere...');
+            await fetch('https://cors-anywhere.herokuapp.com/corsdemo', {
+                method: 'POST',
+                // Sin body — el endpoint solo necesita recibir el POST para registrar el origen
+            });
+            console.log('[SyncFUBB] cors-anywhere activado correctamente.');
+        } catch (activationErr) {
+            // No es fatal: puede que ya esté activado, o que se use otro proxy
+            console.warn('[SyncFUBB] No se pudo activar cors-anywhere (puede que ya esté activo):', activationErr.message);
+        }
+
+        let htmlText = null;
+        let lastError = null;
+
+        // 1. Intentar cada proxy hasta obtener el HTML inicial (carga GET de la primera categoría)
+        for (let i = 0; i < PROXIES.length; i++) {
+            const proxy = PROXIES[i];
+            const proxyUrl = proxy.buildUrl(TARGET_URL);
+            console.log(`[SyncFUBB] Proxy ${i + 1}/${PROXIES.length}: ${proxyUrl}`);
+            try {
+                const headers = { ...BROWSER_HEADERS, ...(proxy.extraHeaders || {}) };
+                const res = await fetchWithTimeout(proxyUrl, { headers, cache: 'no-store' }, FETCH_TIMEOUT_MS);
+
+                if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+
+                if (proxy.isJson) {
+                    const json = await res.json();
+                    htmlText = json[proxy.jsonKey] || json.contents || json.body || null;
+                } else {
+                    htmlText = await res.text();
+                }
+
+                // Validar que el HTML sea del sitio real
+                if (htmlText && htmlText.length > 1000 && (htmlText.includes('gesdeportiva') || htmlText.includes('<table') || htmlText.includes('competicion'))) {
+                    console.log(`[SyncFUBB] ✅ HTML inicial válido (${htmlText.length} chars) via proxy ${i + 1}.`);
+                    break;
+                } else if (htmlText && htmlText.length > 500) {
+                    console.warn(`[SyncFUBB] HTML obtenido pero sin marcadores esperados (${htmlText.length} chars). Intentando parsear...`);
+                    break;
+                } else {
+                    throw new Error('Respuesta vacía o demasiado corta.');
+                }
+            } catch (err) {
+                lastError = err;
+                const reason = err.name === 'AbortError' ? `Timeout (${FETCH_TIMEOUT_MS / 1000}s)` : err.message;
+                console.warn(`[SyncFUBB] Proxy ${i + 1} falló: ${reason}`);
+                htmlText = null;
+            }
+        }
+
+        if (!htmlText) {
+            setSyncing(false);
+            alert(
+                '❌ No se pudo obtener los datos de la FUBB.\n\n' +
+                'Todos los proxies públicos fallaron. Esto puede ocurrir por:\n' +
+                '• El sitio FUBB está caído o cambió su URL.\n' +
+                '• Los proxies tienen límite de peticiones alcanzado.\n\n' +
+                `Último error: ${lastError ? lastError.message : 'Desconocido'}`
+            );
+            return;
+        }
+
+        // 2. Parsear el HTML inicial para extraer los campos ASP.NET y las categorías disponibles
+        const parser = new DOMParser();
+        let initialDoc;
+        try {
+            initialDoc = parser.parseFromString(htmlText, 'text/html');
+        } catch (parseErr) {
+            setSyncing(false);
+            alert('❌ Error al procesar el HTML recibido: ' + parseErr.message);
+            return;
+        }
+
+        // Leer campos ocultos ASP.NET (necesarios para POST)
+        const getHiddenVal = (doc, id) => (doc.getElementById(id) || {}).value || '';
+        let viewState          = getHiddenVal(initialDoc, '__VIEWSTATE');
+        let viewStateGenerator = getHiddenVal(initialDoc, '__VIEWSTATEGENERATOR');
+        let eventValidation    = getHiddenVal(initialDoc, '__EVENTVALIDATION');
+
+        console.log('[SyncFUBB] ViewState obtenido:', viewState.length > 0 ? `${viewState.length} chars` : 'VACÍO');
+
+        // Leer las categorías del select #DDLCategorias
+        const catSelect = initialDoc.getElementById('DDLCategorias');
+        const availableOptions = catSelect
+            ? Array.from(catSelect.querySelectorAll('option')).map(o => ({
+                value: o.value,
+                text: (o.textContent || '').trim().toUpperCase(),
+                selected: o.hasAttribute('selected') || o.selected,
+              }))
+            : [];
+
+        console.log('[SyncFUBB] Categorías disponibles:', availableOptions.map(o => o.text));
+
+        if (availableOptions.length === 0) {
+            setSyncing(false);
+            alert('❌ No se encontraron categorías en la página FUBB.\nEl sitio puede haber cambiado su estructura.');
+            return;
+        }
+
+        // 3. Mapa: fragmento del texto del select → { cat Firebase, es femenino }
+        const OPTION_TO_FIREBASE = [
+            { match: 'U20',       cat: 'U20', fem: false },
+            { match: 'U19',       cat: 'U19', fem: true  },
+            { match: 'U18',       cat: 'U18', fem: false },
+            { match: 'U16 FEM',   cat: 'U16', fem: true  },
+            { match: 'U16 MASC',  cat: 'U16', fem: false },
+            { match: 'U16',       cat: 'U16', fem: false },
+            { match: 'U14 MASC',  cat: 'U14', fem: false },
+            { match: 'U14 FEM',   cat: 'U14', fem: true  },
+            { match: 'U14',       cat: 'U14', fem: false },
+            { match: 'U12 FEM',   cat: 'U12', fem: true  },
+            { match: 'U12 MIXT',  cat: 'U12', fem: false },
+            { match: 'U12',       cat: 'U12', fem: false },
+            { match: 'U11',       cat: 'U11', fem: false },
+            { match: 'LFB',       cat: 'LFB', fem: true  },
+            { match: 'LDA',       cat: 'LDA', fem: false },
+        ];
+
+        // Encontrar el proxy que soporta POST (cors-anywhere)
+        const postProxy = PROXIES.find(p => p.supportsPost);
+        if (!postProxy) {
+            setSyncing(false);
+            alert('❌ No hay proxy disponible que soporte POST.\nVisita https://cors-anywhere.herokuapp.com/corsdemo y luego reintenta.');
+            return;
+        }
+
+        // Helper: obtener el HTML de una categoría vía POST ASP.NET
+        async function fetchCategory(catValue, isFirstLoad, currentHtml) {
+            if (isFirstLoad && currentHtml) {
+                console.log('[SyncFUBB] Reutilizando HTML inicial para la 1ª categoría.');
+                return currentHtml;
+            }
+
+            const proxyUrl = postProxy.buildUrl(TARGET_URL);
+            const headers = {
+                ...BROWSER_HEADERS,
+                ...(postProxy.extraHeaders || {}),
+                'Content-Type': 'application/x-www-form-urlencoded',
+            };
+
+            const bodyParams = new URLSearchParams({
+                '__EVENTTARGET':        'DDLCategorias',
+                '__EVENTARGUMENT':      '',
+                '__LASTFOCUS':          '',
+                '__VIEWSTATE':          viewState,
+                '__VIEWSTATEGENERATOR': viewStateGenerator,
+                '__EVENTVALIDATION':    eventValidation,
+                'DDLCompeticiones':     '141',
+                'DDLCategorias':        catValue,
+                'DDLFases':             '',
+                'DDLGrupos':            '',
+            });
+
+            const res = await fetchWithTimeout(proxyUrl, {
+                method: 'POST',
+                headers,
+                body: bodyParams.toString(),
+                cache: 'no-store',
+            }, FETCH_TIMEOUT_MS);
+
+            if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+            const text = await res.text();
+            if (!text || text.length < 500) throw new Error('Respuesta vacía del POST');
+            return text;
+        }
+
+        // Helper: parsear la tabla de clasificación del div#PClasificacion
+        function parseClasificacion(html, catLabel) {
+            let doc;
+            try { doc = parser.parseFromString(html, 'text/html'); }
+            catch (e) { return null; }
+
+            // Actualizar ViewState para el próximo POST
+            const newVS = getHiddenVal(doc, '__VIEWSTATE');
+            if (newVS) {
+                viewState          = newVS;
+                viewStateGenerator = getHiddenVal(doc, '__VIEWSTATEGENERATOR');
+                eventValidation    = getHiddenVal(doc, '__EVENTVALIDATION');
+            }
+
+            // La clasificación está en <div id="PClasificacion">
+            const pClasif = doc.getElementById('PClasificacion');
+            if (!pClasif) {
+                console.warn(`[SyncFUBB] [${catLabel}] No se encontró #PClasificacion.`);
+                return null;
+            }
+
+            const table = pClasif.querySelector('table');
+            if (!table) {
+                console.warn(`[SyncFUBB] [${catLabel}] No hay <table> en #PClasificacion.`);
+                return null;
+            }
+
+            // Encabezados reales del HTML de FUBB:
+            // "N°" | (logo) | "Nombre" | "P.J" | "P.G" | "P.P" | "P.F" | "P.C" | "Puntos" | "Últimos partidos" | "Racha"
+            const headerRow = table.querySelector('thead tr');
+            const headerCells = headerRow
+                ? Array.from(headerRow.querySelectorAll('th,td'))
+                      .map(c => (c.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase())
+                : [];
+
+            console.log(`[SyncFUBB] [${catLabel}] Headers:`, headerCells);
+
+            const findCol = (...names) => {
+                for (const name of names) {
+                    const idx = headerCells.findIndex(h => h.includes(name));
+                    if (idx >= 0) return idx;
+                }
+                return -1;
+            };
+
+            const colPOS  = findCol('N°', 'N.', '#', 'POS');
+            const colTEAM = findCol('NOMBRE', 'EQUIPO', 'CLUB', 'TEAM');
+            const colPJ   = findCol('P.J', 'PJ', 'JJ');
+            const colPG   = findCol('P.G', 'PG', 'VICTORIA', 'GANA');
+            const colPP   = findCol('P.P', 'PP', 'PERDI', 'DERROTA');
+            const colPF   = findCol('P.F', 'PF');
+            const colPC   = findCol('P.C', 'PC');
+            const colPTS  = findCol('PUNTOS', 'PTS', 'PT');
+
+            console.log(`[SyncFUBB] [${catLabel}] Cols → POS:${colPOS} TEAM:${colTEAM} PJ:${colPJ} PG:${colPG} PP:${colPP} PTS:${colPTS}`);
+
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            const standings = {};
+
+            rows.forEach((tr, rowIdx) => {
+                const cells = Array.from(tr.querySelectorAll('td'))
+                    .map(c => (c.textContent || '').replace(/\s+/g, ' ').trim());
+
+                if (cells.length < 3) return;
+
+                let teamName = '';
+                if (colTEAM >= 0 && cells[colTEAM]) {
+                    teamName = cells[colTEAM].toUpperCase().trim();
+                } else {
+                    const longest = cells.reduce((a, b) => a.length >= b.length ? a : b, '');
+                    teamName = longest.toUpperCase().trim();
+                }
+
+                if (!teamName || teamName.length < 2) return;
+
+                const getNum = (idx, fallback = 0) => {
+                    if (idx < 0 || !cells[idx]) return fallback;
+                    return parseInt(cells[idx]) || fallback;
+                };
+
+                standings[teamName] = {
+                    pos: colPOS >= 0 ? getNum(colPOS, rowIdx + 1) : rowIdx + 1,
+                    pj:  getNum(colPJ),
+                    g:   getNum(colPG),
+                    p:   getNum(colPP),
+                    pf:  getNum(colPF),
+                    pc:  getNum(colPC),
+                    pts: getNum(colPTS),
+                };
+            });
+
+            console.log(`[SyncFUBB] [${catLabel}] Equipos parseados: ${Object.keys(standings).length}`);
+            return Object.keys(standings).length > 0 ? standings : null;
+        }
+
+        // Helper para normalizar nombres de equipos
+        function normalizeTeamName(name) {
+            if (!name) return '';
+            return name
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "") // Eliminar acentos
+                .replace(/[^A-Za-z0-9]/g, ' ')   // Reemplazar caracteres no alfanuméricos por espacio
+                .replace(/\s+/g, ' ')            // Colapsar espacios múltiples
+                .trim()
+                .toUpperCase();
+        }
+
+        // Helper: parsear resultados de partidos de la pestaña #calendario
+        function parsePartidosYResultados(html, catLabel, currentFixture) {
+            let doc;
+            try { doc = parser.parseFromString(html, 'text/html'); }
+            catch (e) { return null; }
+
+            const divCalendario = doc.getElementById('calendario');
+            if (!divCalendario) {
+                console.warn(`[SyncFUBB] [${catLabel}] No se encontró el div#calendario.`);
+                return null;
+            }
+
+            // Cada bloque de jornada tiene un h4 y una tabla. responsive
+            const headings = Array.from(divCalendario.querySelectorAll('h4'));
+            const tables = Array.from(divCalendario.querySelectorAll('table'));
+
+            const resultsUpdates = {};
+            let parsedCount = 0;
+
+            headings.forEach((heading, idx) => {
+                const headingText = (heading.textContent || '').trim();
+                // Buscar número de jornada, ej: "Jornada 1 - 22/03/2026" o "Jornada 1"
+                const matchJornada = headingText.match(/Jornada\s+(\d+)/i);
+                if (!matchJornada) return;
+
+                const jornadaNum = parseInt(matchJornada[1]);
+                const table = tables[idx];
+                if (!table) return;
+
+                const rows = Array.from(table.querySelectorAll('tbody tr'));
+                rows.forEach(tr => {
+                    const cells = Array.from(tr.querySelectorAll('td'));
+                    if (cells.length < 5) return; // Mínimo columnas de Local, Pts L, Pts V, Visitante, Fecha
+
+                    // Local | Pts L | Pts V | Visitante | Fecha
+                    // Las celdas de puntos suelen tener clase puntos_locales y puntos_visitantes
+                    const homeTeamRaw = (cells[0].textContent || '').trim();
+                    const awayTeamRaw = (cells[3].textContent || '').trim();
+
+                    const ptsHomeRaw = (cells[1].textContent || '').trim();
+                    const ptsAwayRaw = (cells[2].textContent || '').trim();
+
+                    if (!homeTeamRaw || !awayTeamRaw) return;
+
+                    // Si no hay puntos registrados, omitir partido (aún no jugado)
+                    if (ptsHomeRaw === '' || ptsAwayRaw === '') return;
+
+                    const scoreHome = parseInt(ptsHomeRaw);
+                    const scoreAway = parseInt(ptsAwayRaw);
+
+                    if (isNaN(scoreHome) || isNaN(scoreAway)) return; // Partido sin jugar o suspendido
+
+                    const normHomeScraped = normalizeTeamName(homeTeamRaw);
+                    const normAwayScraped = normalizeTeamName(awayTeamRaw);
+
+                    // Buscar este partido en el fixture base de Firebase
+                    const matchedFixtureEntry = Object.entries(currentFixture).find(([matchId, f]) => {
+                        const isSameJornada = (f.jornada || 1) === jornadaNum;
+                        if (!isSameJornada) return false;
+
+                        const normHomeFixture = normalizeTeamName(f.home);
+                        const normAwayFixture = normalizeTeamName(f.away);
+
+                        // Comparación flexible
+                        return (normHomeFixture.includes(normHomeScraped) || normHomeScraped.includes(normHomeFixture)) &&
+                               (normAwayFixture.includes(normAwayScraped) || normAwayScraped.includes(normAwayFixture));
+                    });
+
+                    if (matchedFixtureEntry) {
+                        const [matchId] = matchedFixtureEntry;
+                        resultsUpdates[matchId] = {
+                            scoreHome: scoreHome,
+                            scoreAway: scoreAway,
+                            status: 'played',
+                            homeNoShow: (scoreHome === 0 && scoreAway === 20),
+                            awayNoShow: (scoreHome === 20 && scoreAway === 0)
+                        };
+                        parsedCount++;
+                    } else {
+                        console.warn(`[SyncFUBB] [${catLabel}] No se encontró partido en fixture para: Jornada ${jornadaNum} - ${homeTeamRaw} vs ${awayTeamRaw}`);
+                    }
+                });
+            });
+
+            console.log(`[SyncFUBB] [${catLabel}] Resultados mapeados correctamente: ${parsedCount}`);
+            return parsedCount > 0 ? resultsUpdates : null;
+        }
+
+        // 4. Iterar por cada categoría y recopilar datos
+
+        const updates = {};
+        let tablesProcessed = 0;
+        let tablesSkipped   = 0;
+
+        const branch = COMPETITIONS[currentCompetition].path;
+
+        for (let i = 0; i < availableOptions.length; i++) {
+            const opt = availableOptions[i];
+            console.log(`[SyncFUBB] --- Categoría ${i + 1}/${availableOptions.length}: "${opt.text}" ---`);
+
+            // Mapear a categoría Firebase
+            let firebaseCat = null;
+            let isFemenino  = false;
+            for (const entry of OPTION_TO_FIREBASE) {
+                if (opt.text.includes(entry.match)) {
+                    firebaseCat = entry.cat;
+                    isFemenino  = entry.fem;
+                    break;
+                }
+            }
+
+            if (!firebaseCat) {
+                console.warn(`[SyncFUBB] No se pudo mapear "${opt.text}". Omitiendo.`);
+                tablesSkipped++;
+                continue;
+            }
+
+            // Obtener HTML de esta categoría
+            let catHtml = null;
+            try {
+                catHtml = await fetchCategory(opt.value, opt.selected, htmlText);
+            } catch (err) {
+                console.warn(`[SyncFUBB] Error al obtener "${opt.text}": ${err.message}`);
+                tablesSkipped++;
+                continue;
+            }
+
+            // Parsear clasificación
+            const standings = parseClasificacion(catHtml, opt.text);
+            if (!standings) {
+                tablesSkipped++;
+                continue;
+            }
+
+            const dscKey = Object.keys(standings).find(k => k.includes(CLUB_NAME));
+            if (dscKey) {
+                console.log(`[SyncFUBB] ✅ [${opt.text}] DSC: pos=${standings[dscKey].pos} pts=${standings[dscKey].pts}`);
+            } else {
+                console.warn(`[SyncFUBB] [${opt.text}] ${CLUB_NAME} no está en esta clasificación.`);
+            }
+
+            const targetBranch = isFemenino ? COMPETITIONS.FEM.path : COMPETITIONS.MASC.path;
+            let stageNode = `${targetBranch}/${currentSeason}/etapa${currentStage}`;
+            if (currentStage === '1' && (!allStagesData.etapa1 || !allStagesData.etapa1.fixture)) {
+                stageNode = `${targetBranch}/${currentSeason}`;
+            }
+
+            const syncPath = `${stageNode}/fubb_sync/${firebaseCat}`;
+            updates[syncPath] = {
+                ultimaActualizacion: new Date().toISOString(),
+                fuente: TARGET_URL,
+                categoria: opt.text,
+                standings: standings,
+            };
+
+            // Sincronizar resultados de partidos en la estructura del fixture actual
+            const partidosResultados = parsePartidosYResultados(catHtml, opt.text, sharedFixture);
+            if (partidosResultados) {
+                Object.entries(partidosResultados).forEach(([matchId, res]) => {
+                    updates[`${stageNode}/${firebaseCat}/resultados/${matchId}`] = res;
+                });
+                console.log(`[SyncFUBB] [${opt.text}] Añadidos ${Object.keys(partidosResultados).length} resultados de partidos para Firebase.`);
+            }
+
+            tablesProcessed++;
+
+            // Pausa entre peticiones para no saturar el proxy
+            if (i < availableOptions.length - 1) {
+                await new Promise(r => setTimeout(r, 1500));
+            }
+        }
+
+        // 5. Guardar en Firebase
+        if (tablesProcessed === 0) {
+            setSyncing(false);
+            alert(
+                `⚠️ Se procesaron las categorías pero no se pudieron obtener datos.\n` +
+                `Categorías omitidas: ${tablesSkipped}\n\n` +
+                'Posibles causas:\n' +
+                '• cors-anywhere.herokuapp.com puede estar saturado. Reintenta en unos minutos.\n' +
+                '• El sitio FUBB puede haber cambiado su estructura HTML.\n' +
+                'Revisa la consola del navegador para más detalles.'
+            );
+            return;
+        }
+
+        try {
+            await database.ref().update(updates);
+            setSyncing(false);
+            alert(
+                `✅ Sincronización completada.\n\n` +
+                `• Categorías procesadas: ${tablesProcessed}\n` +
+                `• Categorías omitidas: ${tablesSkipped}\n` +
+                `• Temporada: ${currentSeason} / Etapa ${currentStage}\n\n` +
+                `Los datos quedan en la ruta fubb_sync/{categoría} de Firebase.`
+            );
+            console.log('[SyncFUBB] Updates guardados en Firebase:', updates);
+        } catch (fbErr) {
+            setSyncing(false);
+            console.error('[SyncFUBB] Error al guardar en Firebase:', fbErr);
+            alert('❌ Se obtuvieron los datos pero falló al guardarlos en Firebase.\n\nError: ' + fbErr.message);
+        }
+    }
+
+    // =========================================================================
+    // --- FUNCIÓN: IMPORTAR FIXTURE COMPLETO DESDE FUBB ---
+    // =========================================================================
+    async function importFixtureFromFubb() {
+        const TARGET_URL = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
+        const FETCH_TIMEOUT_MS = 20000;
+
+        const btn = document.getElementById('importFixtureFubbBtn');
+        const btnText = document.getElementById('importFixtureBtnText');
+        const icon = document.getElementById('importFixtureIcon');
+        const spinner = document.getElementById('importFixtureSpinner');
+
+        function setImporting(active) {
+            if (!btn) return;
+            btn.disabled = active;
+            if (btnText) btnText.textContent = active ? 'Importando fixture...' : 'IMPORTAR FIXTURE DESDE FUBB';
+            if (icon) icon.classList.toggle('hidden', active);
+            if (spinner) spinner.classList.toggle('hidden', !active);
+        }
+
+        const targetStage = document.getElementById('importStageSelect').value;
+        const confirmMsg = `¿Importar el fixture desde FUBB para la Etapa ${targetStage}?\n\n` +
+                           `Esto reemplazará el fixture y los equipos actuales de la competencia seleccionada (${currentCompetition}).`;
+        if (!confirm(confirmMsg)) return;
+
+        setImporting(true);
+        console.log('[ImportFixtureFUBB] Iniciando importación...');
+
+        // 1. Activar cors-anywhere automáticamente
+        try {
+            await fetch('https://cors-anywhere.herokuapp.com/corsdemo', { method: 'POST' });
+        } catch (e) {
+            console.warn('[ImportFixtureFUBB] No se pudo activar cors-anywhere automáticamente:', e.message);
+        }
+
+        // Obtener el proxy que soporta POST (cors-anywhere)
+        const postProxy = PROXIES.find(p => p.supportsPost);
+        if (!postProxy) {
+            setImporting(false);
+            alert('❌ No hay proxy disponible que soporte POST (cors-anywhere es requerido).');
+            return;
+        }
+
+        // 2. Obtener el HTML inicial (GET) para extraer ViewState
+        let htmlText = null;
+        let lastError = null;
+        const proxyUrl = postProxy.buildUrl(TARGET_URL);
+
+        try {
+            const headers = { ...BROWSER_HEADERS, ...(postProxy.extraHeaders || {}) };
+            const res = await fetchWithTimeout(proxyUrl, { headers, cache: 'no-store' }, FETCH_TIMEOUT_MS);
+            if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+            htmlText = await res.text();
+        } catch (err) {
+            lastError = err;
+        }
+
+        if (!htmlText || htmlText.length < 1000) {
+            setImporting(false);
+            alert(`❌ Error al obtener la página inicial de FUBB.\nError: ${lastError ? lastError.message : 'Respuesta inválida'}`);
+            return;
+        }
+
+        const parser = new DOMParser();
+        const initialDoc = parser.parseFromString(htmlText, 'text/html');
+
+        const getHiddenVal = (doc, id) => (doc.getElementById(id) || {}).value || '';
+        const viewState          = getHiddenVal(initialDoc, '__VIEWSTATE');
+        const viewStateGenerator = getHiddenVal(initialDoc, '__VIEWSTATEGENERATOR');
+        const eventValidation    = getHiddenVal(initialDoc, '__EVENTVALIDATION');
+
+        // 3. Determinar los parámetros del POST según la competencia
+        let compValue = '141'; // Competencia: FORMATIVAS
+        let catValue = '350';  // Categoría: U20 Masculino (por defecto)
+
+        if (currentCompetition === 'FEM') {
+            catValue = '351';  // U19 Femenina
+        } else if (currentCompetition === 'LFB') {
+            compValue = '149'; // Competencia: LFB
+            catValue = '';     // Sin categoría (LFB tiene una sola por defecto)
+        }
+
+        // 4. Hacer POST para traer el fixture de la categoría seleccionada
+        let fixtureHtml = null;
+        try {
+            const headers = {
+                ...BROWSER_HEADERS,
+                ...(postProxy.extraHeaders || {}),
+                'Content-Type': 'application/x-www-form-urlencoded',
+            };
+
+            const bodyParams = new URLSearchParams({
+                '__EVENTTARGET':        'DDLCategorias',
+                '__EVENTARGUMENT':      '',
+                '__LASTFOCUS':          '',
+                '__VIEWSTATE':          viewState,
+                '__VIEWSTATEGENERATOR': viewStateGenerator,
+                '__EVENTVALIDATION':    eventValidation,
+                'DDLCompeticiones':     compValue,
+                'DDLCategorias':        catValue,
+                'DDLFases':             '',
+                'DDLGrupos':            '',
+            });
+
+            const res = await fetchWithTimeout(proxyUrl, {
+                method: 'POST',
+                headers,
+                body: bodyParams.toString(),
+                cache: 'no-store',
+            }, FETCH_TIMEOUT_MS);
+
+            if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+            fixtureHtml = await res.text();
+        } catch (postErr) {
+            lastError = postErr;
+        }
+
+        if (!fixtureHtml || fixtureHtml.length < 1000) {
+            setImporting(false);
+            alert(`❌ Error al obtener el fixture de FUBB.\nError: ${lastError ? lastError.message : 'Respuesta vacía'}`);
+            return;
+        }
+
+        // 5. Parsear el Calendario para obtener partidos y equipos
+        const doc = parser.parseFromString(fixtureHtml, 'text/html');
+        const divCalendario = doc.getElementById('calendario');
+
+        if (!divCalendario) {
+            setImporting(false);
+            alert('❌ No se encontró la sección de calendario (#calendario) en el HTML de la FUBB.');
+            return;
+        }
+
+        const headings = Array.from(divCalendario.querySelectorAll('h4'));
+        const tables = Array.from(divCalendario.querySelectorAll('table'));
+
+        const newFixture = {};
+        const uniqueTeams = new Set();
+        const resultsByCat = {}; // { cat: { matchId: { scoreHome, scoreAway, ... } } }
+
+        // Categorías que deben recibir resultados si ya se jugaron partidos
+        const currentBranchCategories = COMPETITIONS[currentCompetition].categories
+            .filter(c => c.id !== 'ACUMULADA')
+            .map(c => c.id);
+
+        let matchCount = 1;
+
+        headings.forEach((heading, idx) => {
+            const headingText = (heading.textContent || '').trim();
+            const matchJornada = headingText.match(/Jornada\s+(\d+)/i);
+            if (!matchJornada) return;
+
+            const jornadaNum = parseInt(matchJornada[1]);
+            const table = tables[idx];
+            if (!table) return;
+
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            rows.forEach(tr => {
+                const cells = Array.from(tr.querySelectorAll('td'));
+                if (cells.length < 5) return;
+
+                const homeTeam = (cells[0].textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+                const awayTeam = (cells[3].textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+
+                const ptsHomeRaw = (cells[1].textContent || '').trim();
+                const ptsAwayRaw = (cells[2].textContent || '').trim();
+
+                if (!homeTeam || !awayTeam) return;
+
+                // Agregar partido al fixture base
+                newFixture[matchCount] = {
+                    jornada: jornadaNum,
+                    home: homeTeam,
+                    away: awayTeam
+                };
+
+                uniqueTeams.add(homeTeam);
+                uniqueTeams.add(awayTeam);
+
+                // Si el partido ya tiene resultado en el calendario FUBB de esta categoría
+                if (ptsHomeRaw !== '' && ptsAwayRaw !== '') {
+                    const scoreHome = parseInt(ptsHomeRaw);
+                    const scoreAway = parseInt(ptsAwayRaw);
+
+                    if (!isNaN(scoreHome) && !isNaN(scoreAway)) {
+                        // Como todas las categorías masculinas / femeninas tienen el mismo fixture,
+                        // asumimos que el resultado que scrapeamos de la categoría U20/U19 aplica como
+                        // el resultado inicial en Firebase para todas las categorías (a menos que prefieras que inicie vacío).
+                        // Para evitar inconsistencias de resultados cruzados en categorías de edades distintas,
+                        // es mejor inicializar los resultados como jugados SÓLO en la categoría que scrapeamos
+                        // (o en todas si el usuario así lo prefiere, pero por sanidad de datos inicializaremos vacíos los resultados
+                        // y dejaremos que 'Sincronizar Tablas FUBB' traiga los resultados reales de cada categoría).
+                        // Decisión: No guardaremos resultados iniciales aquí para evitar mezclar puntajes de U20 en U11.
+                        // El fixture se importará en limpio, y luego el usuario puede hacer "Sincronizar"
+                        // para traer los resultados reales correspondientes a cada categoría individual.
+                    }
+                }
+
+                matchCount++;
+            });
+        });
+
+        if (Object.keys(newFixture).length === 0) {
+            setImporting(false);
+            alert('❌ No se encontraron partidos en el calendario de la FUBB.');
+            return;
+        }
+
+        // 6. Formatear lista de equipos únicos respetando el orden de aparición de FUBB
+        const sortedTeams = Array.from(uniqueTeams);
+
+        const teamsObj = {};
+        sortedTeams.forEach((t, i) => { teamsObj[i] = t; });
+
+        // 7. Preparar updates de Firebase
+        const branch = COMPETITIONS[currentCompetition].path;
+        let stageNode = `${branch}/${currentSeason}/etapa${targetStage}`;
+        if (targetStage === '1') {
+            // Si la etapa 1 no está bajo nodo etapa1, usamos la raíz
+            if (!allStagesData.etapa1 || !allStagesData.etapa1.fixture) {
+                stageNode = `${branch}/${currentSeason}`;
+            }
+        }
+
+        // 7. Preparar updates de Firebase
+        const branch = COMPETITIONS[currentCompetition].path;
+        let stageNode = `${branch}/${currentSeason}/etapa${targetStage}`;
+        if (targetStage === '1') {
+            // Si la etapa 1 no está bajo nodo etapa1, usamos la raíz
+            if (!allStagesData.etapa1 || !allStagesData.etapa1.fixture) {
+                stageNode = `${branch}/${currentSeason}`;
+            }
+        }
+
+        const updates = {};
+        updates[`${stageNode}/fixture`] = newFixture;
+        updates[`${stageNode}/equipos`] = teamsObj;
+
+        // Limpiar o inicializar resultados de cada categoría de esta etapa para que no queden obsoletos del fixture anterior
+        currentBranchCategories.forEach(cat => {
+            updates[`${stageNode}/${cat}/resultados`] = null;
+        });
+
+        // Configurar etapa actual en config
+        updates[`${branch}/${currentSeason}/config/lastStage`] = targetStage;
+
+        // 8. Escribir a Firebase
+        try {
+            // Remover etapa existente para asegurar que el fixture antiguo se borre completamente
+            await database.ref(stageNode).remove();
+            await database.ref().update(updates);
+
+            setImporting(false);
+            toggleAdminPanel();
+
+            // Cambiar selectores a la etapa importada
+            if (stageSelect) {
+                stageSelect.value = targetStage;
+                currentStage = targetStage;
+            }
+
+            connectToSeason(currentSeason);
+            alert(`✅ Fixture y equipos importados correctamente desde la FUBB para la Etapa ${targetStage}.\nSe detectaron ${Object.keys(newFixture).length} partidos y ${sortedTeams.length} equipos.`);
+        } catch (fbErr) {
+            setImporting(false);
+            console.error('[ImportFixtureFUBB] Error al guardar en Firebase:', fbErr);
+            alert('❌ Error al guardar el fixture en Firebase: ' + fbErr.message);
+        }
+    }
+
+    // --- CARGAR DINÁMICAMENTE FASES Y GRUPOS DE LA FUBB ---
+    let fubbCachedViewState = '';
+    let fubbCachedVSG = '';
+    let fubbCachedEventVal = '';
+
+    async function initFubbImportSelectors() {
+        const faseSel = document.getElementById('importFubbFaseSelect');
+        const grupoSel = document.getElementById('importFubbGrupoSelect');
+        if (!faseSel || !grupoSel) return;
+
+        faseSel.innerHTML = '<option value="">Cargando fases...</option>';
+        grupoSel.innerHTML = '<option value="">Cargando grupos...</option>';
+
+        const TARGET_URL = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
+        const postProxy = PROXIES.find(p => p.supportsPost);
+        if (!postProxy) return;
+
+        try {
+            const proxyUrl = postProxy.buildUrl(TARGET_URL);
+            const headers = { ...BROWSER_HEADERS, ...(postProxy.extraHeaders || {}) };
+            const res = await fetchWithTimeout(proxyUrl, { headers, cache: 'no-store' }, 15000);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const html = await res.text();
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            const getHiddenVal = (d, id) => (d.getElementById(id) || {}).value || '';
+            fubbCachedViewState = getHiddenVal(doc, '__VIEWSTATE');
+            fubbCachedVSG = getHiddenVal(doc, '__VIEWSTATEGENERATOR');
+            fubbCachedEventVal = getHiddenVal(doc, '__EVENTVALIDATION');
+
+            // Determinar categoría por defecto según competencia
+            let compValue = '141';
+            let catValue = '350'; // U20
+            if (currentCompetition === 'FEM') catValue = '351'; // U19
+            else if (currentCompetition === 'LFB') { compValue = '149'; catValue = ''; }
+
+            // Hacer POST para obtener las fases reales de la categoría
+            const postRes = await fetchWithTimeout(proxyUrl, {
+                method: 'POST',
+                headers: {
+                    ...headers,
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    '__EVENTTARGET': 'DDLCategorias',
+                    '__EVENTARGUMENT': '',
+                    '__VIEWSTATE': fubbCachedViewState,
+                    '__VIEWSTATEGENERATOR': fubbCachedVSG,
+                    '__EVENTVALIDATION': fubbCachedEventVal,
+                    'DDLCompeticiones': compValue,
+                    'DDLCategorias': catValue,
+                    'DDLFases': '',
+                    'DDLGrupos': '',
+                }).toString(),
+                cache: 'no-store'
+            }, 15000);
+
+            if (!postRes.ok) throw new Error('POST HTTP ' + postRes.status);
+            const postHtml = await postRes.text();
+            const postDoc = parser.parseFromString(postHtml, 'text/html');
+
+            fubbCachedViewState = getHiddenVal(postDoc, '__VIEWSTATE');
+            fubbCachedVSG = getHiddenVal(postDoc, '__VIEWSTATEGENERATOR');
+            fubbCachedEventVal = getHiddenVal(postDoc, '__EVENTVALIDATION');
+
+            // Leer selectores de Fases
+            const fFases = postDoc.getElementById('DDLFases');
+            if (fFases) {
+                faseSel.innerHTML = Array.from(fFases.querySelectorAll('option')).map(o => 
+                    `<option value="${o.value}" ${o.selected ? 'selected' : ''}>${o.textContent.trim()}</option>`
+                ).join('');
+            } else {
+                faseSel.innerHTML = '<option value="">Sin Fases</option>';
+            }
+
+            // Leer selectores de Grupos
+            const fGrupos = postDoc.getElementById('DDLGrupos');
+            if (fGrupos) {
+                grupoSel.innerHTML = Array.from(fGrupos.querySelectorAll('option')).map(o => 
+                    `<option value="${o.value}" ${o.selected ? 'selected' : ''}>${o.textContent.trim()}</option>`
+                ).join('');
+            } else {
+                grupoSel.innerHTML = '<option value="">Sin Grupos</option>';
+            }
+
+        } catch (e) {
+            console.error('[SyncFUBB] Error cargando selectores iniciales:', e);
+            faseSel.innerHTML = '<option value="">Error al cargar fases</option>';
+            grupoSel.innerHTML = '<option value="">Error al cargar grupos</option>';
+        }
+    }
+
+    // Escuchar el cambio en Fase FUBB para actualizar Grupos
+    async function updateFubbGruposOnFaseChange() {
+        const faseSel = document.getElementById('importFubbFaseSelect');
+        const grupoSel = document.getElementById('importFubbGrupoSelect');
+        if (!faseSel || !grupoSel || !faseSel.value) return;
+
+        grupoSel.innerHTML = '<option value="">Cargando grupos...</option>';
+
+        const TARGET_URL = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
+        const postProxy = PROXIES.find(p => p.supportsPost);
+        if (!postProxy) return;
+
+        try {
+            const proxyUrl = postProxy.buildUrl(TARGET_URL);
+            const headers = { 
+                ...BROWSER_HEADERS, 
+                ...(postProxy.extraHeaders || {}),
+                'Content-Type': 'application/x-www-form-urlencoded',
+            };
+
+            let compValue = '141';
+            let catValue = '350';
+            if (currentCompetition === 'FEM') catValue = '351';
+            else if (currentCompetition === 'LFB') { compValue = '149'; catValue = ''; }
+
+            const res = await fetchWithTimeout(proxyUrl, {
+                method: 'POST',
+                headers,
+                body: new URLSearchParams({
+                    '__EVENTTARGET': 'DDLFases',
+                    '__EVENTARGUMENT': '',
+                    '__VIEWSTATE': fubbCachedViewState,
+                    '__VIEWSTATEGENERATOR': fubbCachedVSG,
+                    '__EVENTVALIDATION': fubbCachedEventVal,
+                    'DDLCompeticiones': compValue,
+                    'DDLCategorias': catValue,
+                    'DDLFases': faseSel.value,
+                    'DDLGrupos': '',
+                }).toString(),
+                cache: 'no-store'
+            }, 15000);
+
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const html = await res.text();
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            const getHiddenVal = (d, id) => (d.getElementById(id) || {}).value || '';
+            fubbCachedViewState = getHiddenVal(doc, '__VIEWSTATE');
+            fubbCachedVSG = getHiddenVal(doc, '__VIEWSTATEGENERATOR');
+            fubbCachedEventVal = getHiddenVal(doc, '__EVENTVALIDATION');
+
+            const fGrupos = doc.getElementById('DDLGrupos');
+            if (fGrupos) {
+                grupoSel.innerHTML = Array.from(fGrupos.querySelectorAll('option')).map(o => 
+                    `<option value="${o.value}" ${o.selected ? 'selected' : ''}>${o.textContent.trim()}</option>`
+                ).join('');
+            } else {
+                grupoSel.innerHTML = '<option value="">Sin Grupos</option>';
+            }
+        } catch (e) {
+            console.error('[SyncFUBB] Error al actualizar grupos:', e);
+            grupoSel.innerHTML = '<option value="">Error al cargar grupos</option>';
+        }
+    }
+
+    // =========================================================================
+    // --- FUNCIÓN: IMPORTAR FIXTURE COMPLETO DESDE FUBB ---
+    // =========================================================================
+    async function importFixtureFromFubb() {
+        const TARGET_URL = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
+        const FETCH_TIMEOUT_MS = 20000;
+
+        const btn = document.getElementById('importFixtureFubbBtn');
+        const btnText = document.getElementById('importFixtureBtnText');
+        const icon = document.getElementById('importFixtureIcon');
+        const spinner = document.getElementById('importFixtureSpinner');
+
+        function setImporting(active) {
+            if (!btn) return;
+            btn.disabled = active;
+            if (btnText) btnText.textContent = active ? 'Importando fixture...' : 'IMPORTAR FIXTURE DESDE FUBB';
+            if (icon) icon.classList.toggle('hidden', active);
+            if (spinner) spinner.classList.toggle('hidden', !active);
+        }
+
+        const targetStage = document.getElementById('importFubbStageDestSelect').value;
+        const faseSel = document.getElementById('importFubbFaseSelect');
+        const grupoSel = document.getElementById('importFubbGrupoSelect');
+
+        if (!faseSel || !faseSel.value || !grupoSel || !grupoSel.value) {
+            alert('❌ Debes seleccionar una Fase y Grupo válidos de la FUBB antes de importar.');
+            return;
+        }
+
+        const confirmMsg = `¿Importar el fixture desde FUBB para la Etapa ${targetStage}?\n\n` +
+                           `Esto reemplazará el fixture y los equipos actuales de la competencia seleccionada (${currentCompetition}).`;
+        if (!confirm(confirmMsg)) return;
+
+        setImporting(true);
+        console.log('[ImportFixtureFUBB] Iniciando importación...');
+
+        // Obtener el proxy que soporta POST (cors-anywhere)
+        const postProxy = PROXIES.find(p => p.supportsPost);
+        if (!postProxy) {
+            setImporting(false);
+            alert('❌ No hay proxy disponible que soporte POST.');
+            return;
+        }
+
+        const proxyUrl = postProxy.buildUrl(TARGET_URL);
+
+        // Determinar los parámetros del POST según la competencia
+        let compValue = '141';
+        let catValue = '350'; // U20
+        if (currentCompetition === 'FEM') {
+            catValue = '351'; // U19 Femenina
+        } else if (currentCompetition === 'LFB') {
+            compValue = '149'; // Competencia: LFB
+            catValue = '';
+        }
+
+        // Hacer POST final con fase y grupo seleccionados para traer el fixture correcto
+        let fixtureHtml = null;
+        try {
+            const headers = {
+                ...BROWSER_HEADERS,
+                ...(postProxy.extraHeaders || {}),
+                'Content-Type': 'application/x-www-form-urlencoded',
+            };
+
+            const res = await fetchWithTimeout(proxyUrl, {
+                method: 'POST',
+                headers,
+                body: new URLSearchParams({
+                    '__EVENTTARGET':        'DDLGrupos',
+                    '__EVENTARGUMENT':      '',
+                    '__LASTFOCUS':          '',
+                    '__VIEWSTATE':          fubbCachedViewState,
+                    '__VIEWSTATEGENERATOR': fubbCachedVSG,
+                    '__EVENTVALIDATION':    fubbCachedEventVal,
+                    'DDLCompeticiones':     compValue,
+                    'DDLCategorias':        catValue,
+                    'DDLFases':             faseSel.value,
+                    'DDLGrupos':            grupoSel.value,
+                }).toString(),
+                cache: 'no-store',
+            }, FETCH_TIMEOUT_MS);
+
+            if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+            fixtureHtml = await res.text();
+        } catch (postErr) {
+            console.error('[ImportFixtureFUBB] Error en POST:', postErr);
+            setImporting(false);
+            alert(`❌ Error al obtener el fixture de FUBB.\nError: ${postErr.message}`);
+            return;
+        }
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(fixtureHtml, 'text/html');
+        const divCalendario = doc.getElementById('calendario');
+
+        if (!divCalendario) {
+            setImporting(false);
+            alert('❌ No se encontró la sección de calendario (#calendario) de la FUBB con la configuración seleccionada.');
+            return;
+        }
+
+        const headings = Array.from(divCalendario.querySelectorAll('h4'));
+        const tables = Array.from(divCalendario.querySelectorAll('table'));
+
+        const newFixture = {};
+        const uniqueTeams = new Set();
+
+        const currentBranchCategories = COMPETITIONS[currentCompetition].categories
+            .filter(c => c.id !== 'ACUMULADA')
+            .map(c => c.id);
+
+        let matchCount = 1;
+
+        headings.forEach((heading, idx) => {
+            const headingText = (heading.textContent || '').trim();
+            const matchJornada = headingText.match(/Jornada\s+(\d+)/i);
+            if (!matchJornada) return;
+
+            const jornadaNum = parseInt(matchJornada[1]);
+            const table = tables[idx];
+            if (!table) return;
+
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            rows.forEach(tr => {
+                const cells = Array.from(tr.querySelectorAll('td'));
+                if (cells.length < 5) return;
+
+                const homeTeam = (cells[0].textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+                const awayTeam = (cells[3].textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+
+                if (!homeTeam || !awayTeam) return;
+
+                newFixture[matchCount] = {
+                    jornada: jornadaNum,
+                    home: homeTeam,
+                    away: awayTeam
+                };
+
+                uniqueTeams.add(homeTeam);
+                uniqueTeams.add(awayTeam);
+
+                matchCount++;
+            });
+        });
+
+        if (Object.keys(newFixture).length === 0) {
+            setImporting(false);
+            alert('❌ No se encontraron partidos en el calendario seleccionado.');
+            return;
+        }
+
+        const sortedTeams = Array.from(uniqueTeams);
+        const teamsObj = {};
+        sortedTeams.forEach((t, i) => { teamsObj[i] = t; });
+
+    // =========================================================================
 
     init();
 });

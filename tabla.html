@@ -342,8 +342,92 @@
                     </div>
                 </div>
 
-                <!-- Tab Importar -->
                 <div id="adminTab-import" class="admin-tab-content space-y-8 hidden">
+
+                    <!-- *** Sincronizar Tablas FUBB *** -->
+                    <div class="p-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-8 h-8 rounded-xl bg-cyan-600/20 flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-bold text-white">Sincronizar desde FUBB</h4>
+                                <p class="text-[10px] text-cyan-400/70 uppercase font-black tracking-tighter">Extrae las tablas oficiales de competicionesfubb.gesdeportiva.es</p>
+                            </div>
+                        </div>
+                        <button id="syncFubbBtn"
+                            class="w-full bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-black text-sm py-3.5 rounded-2xl transition-all shadow-lg shadow-cyan-900/20 flex items-center justify-center gap-3 active:scale-[0.98]">
+                            <!-- Ícono normal (sincronizar) -->
+                            <svg id="syncFubbIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            <!-- Spinner (oculto por defecto) -->
+                            <svg id="syncFubbSpinner" class="w-5 h-5 animate-spin hidden" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            <span id="syncFubbBtnText">SINCRONIZAR TABLAS FUBB</span>
+                        </button>
+                    </div>
+
+                    <div class="h-px bg-slate-800"></div>
+
+                    <!-- Importar Fixture desde FUBB -->
+                    <div class="p-4 rounded-2xl border border-violet-500/20 bg-violet-500/5">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-8 h-8 rounded-xl bg-violet-600/20 flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-bold text-white">Importar Fixture desde FUBB</h4>
+                                <p class="text-[10px] text-violet-400/70 uppercase font-black tracking-tighter">Descarga el fixture oficial de FUBB para la etapa seleccionada</p>
+                            </div>
+                        </div>
+
+                        <!-- Selectores de Mapeo de Etapa/Fase FUBB -->
+                        <div class="mb-4 space-y-3">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Fase FUBB (ej. PRIMERA FASE)</label>
+                                    <select id="importFubbFaseSelect" class="w-full bg-slate-900 border-none rounded-lg px-2 py-1.5 text-xs text-white focus:ring-1 focus:ring-violet-500 outline-none">
+                                        <option value="">Cargando fases...</option>
+                                    </select>
+                                </div>
+                                <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                                    <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Grupo FUBB (ej. GRUPO 1)</label>
+                                    <select id="importFubbGrupoSelect" class="w-full bg-slate-900 border-none rounded-lg px-2 py-1.5 text-xs text-white focus:ring-1 focus:ring-violet-500 outline-none">
+                                        <option value="">Cargando grupos...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                                <label class="block text-[9px] font-semibold text-slate-400 uppercase mb-1">Etapa de Destino en esta App</label>
+                                <select id="importFubbStageDestSelect" class="w-full bg-slate-900 border-none rounded-lg px-3 py-1.5 text-xs text-white focus:ring-1 focus:ring-violet-500 outline-none">
+                                    <option value="1">Etapa 1</option>
+                                    <option value="2">Etapa 2</option>
+                                    <option value="3">Play Offs</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button id="importFixtureFubbBtn"
+                            class="w-full bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-black text-sm py-3.5 rounded-2xl transition-all shadow-lg shadow-violet-900/20 flex items-center justify-center gap-3 active:scale-[0.98]">
+                            <svg id="importFixtureIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                            <svg id="importFixtureSpinner" class="w-5 h-5 animate-spin hidden" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            <span id="importFixtureBtnText">IMPORTAR FIXTURE DESDE FUBB</span>
+                        </button>
+                    </div>
+
+                    <div class="h-px bg-slate-800"></div>
+
                     <!-- Carga Masiva (CSV) -->
                     <div id="importMassiveContainer">
                         <div class="flex items-center gap-3 mb-6">
@@ -405,6 +489,7 @@
                                 </svg>
                                 PROCESAR E IMPORTAR FIXTURE
                             </button>
+
                         </div>
                         
                         <div class="mt-6 p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20">
