@@ -1930,7 +1930,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const availableOptions = catSelect
             ? Array.from(catSelect.querySelectorAll('option')).map(o => ({
                 value: o.value,
-                text: (o.textContent || '').trim().toUpperCase(),
+                text: (o.textContent || '').trim(),
                 selected: o.hasAttribute('selected') || o.selected,
               }))
             : [];
@@ -1945,21 +1945,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // 3. Mapa: fragmento del texto del select → { cat Firebase, es femenino }
         const OPTION_TO_FIREBASE = [
-            { match: 'U20',       cat: 'U20', fem: false },
-            { match: 'U19',       cat: 'U19', fem: true  },
-            { match: 'U18',       cat: 'U18', fem: false },
-            { match: 'U16 FEM',   cat: 'U16', fem: true  },
-            { match: 'U16 MASC',  cat: 'U16', fem: false },
-            { match: 'U16',       cat: 'U16', fem: false },
-            { match: 'U14 MASC',  cat: 'U14', fem: false },
-            { match: 'U14 FEM',   cat: 'U14', fem: true  },
-            { match: 'U14',       cat: 'U14', fem: false },
-            { match: 'U12 FEM',   cat: 'U12', fem: true  },
-            { match: 'U12 MIXT',  cat: 'U12', fem: false },
-            { match: 'U12',       cat: 'U12', fem: false },
-            { match: 'U11',       cat: 'U11', fem: false },
-            { match: 'LFB',       cat: 'LFB', fem: true  },
-            { match: 'LDA',       cat: 'LDA', fem: false },
+            { match: 'U20 Masculino', cat: 'U20', fem: false },
+            { match: 'U18 Masculino', cat: 'U18', fem: false },
+            { match: 'U16 Masculino', cat: 'U16', fem: false },
+            { match: 'U14 Masculino', cat: 'U14', fem: false },
+            { match: 'U19 Femenina',  cat: 'U19', fem: true  },
+            { match: 'U16 Femenino',  cat: 'U16', fem: true  },
+            { match: 'U14 Femenino',  cat: 'U14', fem: true  },
+            { match: 'Liga Femenina', cat: 'LFB', fem: true  },
+            { match: 'LFB',           cat: 'LFB', fem: true  },
         ];
 
         // Encontrar el proxy que soporta POST (cors-anywhere)
@@ -1970,44 +1964,131 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // Helper: obtener el HTML de una categoría vía POST ASP.NET
+        // Helper: obtener el HTML de una categoría vía scraping ASP.NET
+        // Para cada categoría que no sea la default (U20), hace:
+        //   1. GET fresco → obtiene ViewState limpio con la categoría default
+        //   2. POST cambiando DDLCategorias → obtiene las fases de la categoría deseada
+        //   3. POST seleccionando la primera fase → obtiene la clasificación/calendario
         async function fetchCategory(catValue, isFirstLoad, currentHtml) {
             if (isFirstLoad && currentHtml) {
                 console.log('[SyncFUBB] Reutilizando HTML inicial para la 1ª categoría.');
                 return currentHtml;
             }
 
-            const proxyUrl = postProxy.buildUrl(TARGET_URL);
             const headers = {
                 ...BROWSER_HEADERS,
                 ...(postProxy.extraHeaders || {}),
-                'Content-Type': 'application/x-www-form-urlencoded',
             };
 
-            const bodyParams = new URLSearchParams({
+            // PASO 1: GET fresco para obtener un ViewState limpio
+            console.log(`[SyncFUBB] [Cat ${catValue}] Paso 1: GET fresco...`);
+            const proxyUrl = postProxy.buildUrl(TARGET_URL);
+            const resGet = await fetchWithTimeout(proxyUrl, { headers, cache: 'no-store' }, FETCH_TIMEOUT_MS);
+            if (!resGet.ok) throw new Error(`GET falló: HTTP ${resGet.status}`);
+            const htmlGet = await resGet.text();
+            if (!htmlGet || htmlGet.length < 500) throw new Error('GET devolvió respuesta vacía');
+
+            const docGet = parser.parseFromString(htmlGet, 'text/html');
+            let freshVS  = getHiddenVal(docGet, '__VIEWSTATE');
+            let freshVSG = getHiddenVal(docGet, '__VIEWSTATEGENERATOR');
+            let freshEV  = getHiddenVal(docGet, '__EVENTVALIDATION');
+
+            if (!freshVS) throw new Error('No se obtuvo ViewState del GET fresco');
+
+            // Verificar si la categoría deseada ya es la seleccionada por defecto
+            const catSelectEl = docGet.getElementById('DDLCategorias');
+            const selectedOpt = catSelectEl ? catSelectEl.querySelector('option[selected]') : null;
+            if (selectedOpt && selectedOpt.value === catValue) {
+                console.log(`[SyncFUBB] [Cat ${catValue}] Ya es la categoría por defecto, usando HTML del GET.`);
+                return htmlGet;
+            }
+
+            await new Promise(r => setTimeout(r, 600));
+
+            // PASO 2: POST para cambiar la categoría
+            console.log(`[SyncFUBB] [Cat ${catValue}] Paso 2: POST cambiar categoría...`);
+            const postHeaders = { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' };
+
+            const bodyStep1 = new URLSearchParams({
                 '__EVENTTARGET':        'DDLCategorias',
                 '__EVENTARGUMENT':      '',
                 '__LASTFOCUS':          '',
-                '__VIEWSTATE':          viewState,
-                '__VIEWSTATEGENERATOR': viewStateGenerator,
-                '__EVENTVALIDATION':    eventValidation,
+                '__VIEWSTATE':          freshVS,
+                '__VIEWSTATEGENERATOR': freshVSG,
+                '__EVENTVALIDATION':    freshEV,
                 'DDLCompeticiones':     '141',
                 'DDLCategorias':        catValue,
                 'DDLFases':             '',
                 'DDLGrupos':            '',
             });
 
-            const res = await fetchWithTimeout(proxyUrl, {
+            const res1 = await fetchWithTimeout(proxyUrl, {
                 method: 'POST',
-                headers,
-                body: bodyParams.toString(),
+                headers: postHeaders,
+                body: bodyStep1.toString(),
                 cache: 'no-store',
             }, FETCH_TIMEOUT_MS);
 
-            if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-            const text = await res.text();
-            if (!text || text.length < 500) throw new Error('Respuesta vacía del POST');
-            return text;
+            if (!res1.ok) throw new Error(`POST cat falló: HTTP ${res1.status}`);
+            const html1 = await res1.text();
+            if (!html1 || html1.length < 500) throw new Error('POST cat devolvió respuesta vacía');
+
+            // Actualizar ViewState desde la respuesta del paso 2
+            const doc1 = parser.parseFromString(html1, 'text/html');
+            freshVS  = getHiddenVal(doc1, '__VIEWSTATE') || freshVS;
+            freshVSG = getHiddenVal(doc1, '__VIEWSTATEGENERATOR') || freshVSG;
+            freshEV  = getHiddenVal(doc1, '__EVENTVALIDATION') || freshEV;
+
+            // Obtener la primera fase disponible
+            const faseSelect = doc1.getElementById('DDLFases');
+            const firstFase = faseSelect
+                ? (faseSelect.querySelector('option:not([value=""])') || faseSelect.querySelector('option'))
+                : null;
+
+            if (!firstFase || !firstFase.value) {
+                console.log(`[SyncFUBB] [Cat ${catValue}] No hay fases, usando HTML del paso 2.`);
+                // Actualizar ViewState global para la siguiente categoría
+                viewState = freshVS;
+                viewStateGenerator = freshVSG;
+                eventValidation = freshEV;
+                return html1;
+            }
+
+            console.log(`[SyncFUBB] [Cat ${catValue}] Paso 3: POST seleccionar fase [${firstFase.value}] ${firstFase.textContent.trim()}...`);
+            await new Promise(r => setTimeout(r, 600));
+
+            // PASO 3: POST para seleccionar la primera fase
+            const bodyStep2 = new URLSearchParams({
+                '__EVENTTARGET':        'DDLFases',
+                '__EVENTARGUMENT':      '',
+                '__LASTFOCUS':          '',
+                '__VIEWSTATE':          freshVS,
+                '__VIEWSTATEGENERATOR': freshVSG,
+                '__EVENTVALIDATION':    freshEV,
+                'DDLCompeticiones':     '141',
+                'DDLCategorias':        catValue,
+                'DDLFases':             firstFase.value,
+                'DDLGrupos':            '',
+            });
+
+            const res2 = await fetchWithTimeout(proxyUrl, {
+                method: 'POST',
+                headers: postHeaders,
+                body: bodyStep2.toString(),
+                cache: 'no-store',
+            }, FETCH_TIMEOUT_MS);
+
+            if (!res2.ok) throw new Error(`POST fase falló: HTTP ${res2.status}`);
+            const html2 = await res2.text();
+            if (!html2 || html2.length < 500) throw new Error('POST fase devolvió respuesta vacía');
+
+            // Actualizar ViewState global para la siguiente categoría
+            const doc2 = parser.parseFromString(html2, 'text/html');
+            viewState          = getHiddenVal(doc2, '__VIEWSTATE') || freshVS;
+            viewStateGenerator = getHiddenVal(doc2, '__VIEWSTATEGENERATOR') || freshVSG;
+            eventValidation    = getHiddenVal(doc2, '__EVENTVALIDATION') || freshEV;
+
+            return html2;
         }
 
         // Helper: parsear la tabla de clasificación del div#PClasificacion
@@ -2105,6 +2186,13 @@ document.addEventListener('DOMContentLoaded', function () {
             return Object.keys(standings).length > 0 ? standings : null;
         }
 
+        // Helper para detección flexible de Defensor Sporting / DSC
+        function isDefensorSporting(name) {
+            if (!name) return false;
+            const norm = name.toUpperCase().trim();
+            return norm.includes('DEFENSOR') || norm.includes('DSC') || norm === 'DEFENSOR SPORTING';
+        }
+
         // Helper para normalizar nombres de equipos
         function normalizeTeamName(name) {
             if (!name) return '';
@@ -2181,8 +2269,13 @@ document.addEventListener('DOMContentLoaded', function () {
                         const normAwayFixture = normalizeTeamName(f.away);
 
                         // Comparación flexible
-                        return (normHomeFixture.includes(normHomeScraped) || normHomeScraped.includes(normHomeFixture)) &&
-                               (normAwayFixture.includes(normAwayScraped) || normAwayScraped.includes(normAwayFixture));
+                        const matchHome = (isDefensorSporting(f.home) && isDefensorSporting(homeTeamRaw)) ||
+                                          normHomeFixture.includes(normHomeScraped) || 
+                                          normHomeScraped.includes(normHomeFixture);
+                        const matchAway = (isDefensorSporting(f.away) && isDefensorSporting(awayTeamRaw)) ||
+                                          normAwayFixture.includes(normAwayScraped) || 
+                                          normAwayScraped.includes(normAwayFixture);
+                        return matchHome && matchAway;
                     });
 
                     if (matchedFixtureEntry) {
@@ -2217,11 +2310,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const opt = availableOptions[i];
             console.log(`[SyncFUBB] --- Categoría ${i + 1}/${availableOptions.length}: "${opt.text}" ---`);
 
-            // Mapear a categoría Firebase
+            // Mapear a categoría Firebase (comparación insensible a mayúsculas/minúsculas)
             let firebaseCat = null;
             let isFemenino  = false;
             for (const entry of OPTION_TO_FIREBASE) {
-                if (opt.text.includes(entry.match)) {
+                if (opt.text.toUpperCase().includes(entry.match.toUpperCase())) {
                     firebaseCat = entry.cat;
                     isFemenino  = entry.fem;
                     break;
@@ -2251,11 +2344,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 continue;
             }
 
-            const dscKey = Object.keys(standings).find(k => k.includes(CLUB_NAME));
+            const dscKey = Object.keys(standings).find(k => isDefensorSporting(k));
             if (dscKey) {
-                console.log(`[SyncFUBB] ✅ [${opt.text}] DSC: pos=${standings[dscKey].pos} pts=${standings[dscKey].pts}`);
+                console.log(`[SyncFUBB] ✅ [${opt.text}] DSC (${dscKey}): pos=${standings[dscKey].pos} pts=${standings[dscKey].pts}`);
             } else {
-                console.warn(`[SyncFUBB] [${opt.text}] ${CLUB_NAME} no está en esta clasificación.`);
+                console.warn(`[SyncFUBB] [${opt.text}] Defensor Sporting/DSC no está en esta clasificación.`);
             }
 
             const targetBranch = isFemenino ? COMPETITIONS.FEM.path : COMPETITIONS.MASC.path;
