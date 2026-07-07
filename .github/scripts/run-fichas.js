@@ -82,8 +82,8 @@ function horaUY() {
         `\n` +
         `Recibirás un segundo email cuando el proceso finalice (con éxito o error).`;
 
-    await sendEmail('🚀 Inicio — Actualizador de Fichas Médicas DSC', mensajeInicio);
-    capturarLog(`[${horaUY()}] Email de inicio enviado.`);
+    //await sendEmail('🚀 Inicio — Actualizador de Fichas Médicas DSC', mensajeInicio);
+    //capturarLog(`[${horaUY()}] Email de inicio enviado.`);
 
     // Construir la URL con ?auto=1 para que fichasmedicas.js sepa que corre
     // en modo automático y no envíe emails duplicados via EmailJS
