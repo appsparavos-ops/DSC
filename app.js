@@ -499,7 +499,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
 
                     if (combined._isCedido) {
-                        combined['ESTADO LICENCIA'] = 'Cedido en Pase';
+                        combined['ESTADO LICENCIA'] = combined._tipoCedido === 'definitivo' ? 'Pase Definitivo' : 'Pase Temporal';
                     }
 
                     return combined;
