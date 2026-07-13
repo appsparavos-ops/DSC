@@ -487,16 +487,18 @@ document.addEventListener('DOMContentLoaded', function () {
                             const esDeDefensor = origen.includes('DEFENSOR');
                             const esAFuera = !destino.includes('DEFENSOR');
                             const esTemporal = tipoPase.includes('TEMPORAL') || tipoPase.includes('PRÉSTAMO') || tipoPase.includes('PRESTAMO') || tipoPase === 'T' || tipoPase === 'P';
+                            const esDefinitivo = tipoPase.includes('DEFINITIVO') || tipoPase === 'D';
                             const estaActivo = (status === 'vigente' || status === 'aVencer');
 
-                            if (esDeDefensor && esAFuera && esTemporal && estaActivo) {
+                            if (esDeDefensor && esAFuera && (esTemporal || esDefinitivo) && estaActivo) {
                                 combined._isCedido = true;
+                                combined._tipoCedido = esDefinitivo ? 'definitivo' : 'temporal';
                                 combined._paseStatus = status;
                             }
                         });
                     }
 
-                    if (String(combined['ESTADO LICENCIA'] || '').toUpperCase() === 'SIN INSCRIBIR' && combined._isCedido) {
+                    if (combined._isCedido) {
                         combined['ESTADO LICENCIA'] = 'Cedido en Pase';
                     }
 
@@ -1034,7 +1036,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (isBaja) {
                     iconHtml += '<span class="inline-flex items-center justify-center bg-white text-red-600 font-bold rounded-full mr-1" style="width: 1.1rem; height: 1.1rem; font-size: 0.75rem;">X</span>';
                 } else if (isCedido) {
-                    iconHtml += '<span title="Cedido en Pase" class="inline-flex items-center justify-center bg-blue-100 text-blue-800 font-bold rounded-full mr-1" style="width: 1.2rem; height: 1.2rem; font-size: 0.75rem;">⇄</span>';
+                    const bgColor = player._tipoCedido === 'definitivo' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800';
+                    const iconTitle = player._tipoCedido === 'definitivo' ? 'Cedido en Pase (Definitivo)' : 'Cedido en Pase (Temporal)';
+                    iconHtml += `<span title="${iconTitle}" class="inline-flex items-center justify-center ${bgColor} font-bold rounded-full mr-1" style="width: 1.2rem; height: 1.2rem; font-size: 0.75rem;">⇄</span>`;
                 } else if (!isDiligenciado && player.TIPO !== 'ENTRENADOR/A' && !player._isGlobal) {
                     if (isSinInscribir) {
                         iconHtml += '<span title="Sin Inscribir" class="inline-flex items-center justify-center bg-red-600 text-white font-black mr-1" style="clip-path: polygon(50% 0%, 0% 100%, 100% 100%); width: 1.1rem; height: 1rem; font-size: 0.65rem; padding-top: 0.3rem;">!</span>';
