@@ -834,7 +834,7 @@ document.addEventListener('DOMContentLoaded', function () {
             textClass = 'text-white';
         } else {
             const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-            const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+            const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 65);
 
             if (expDate <= thirtyDays) {
                 bgClass = 'bg-orange-500 hover:bg-orange-600';
@@ -866,7 +866,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const selectedCategory = categoryFilter ? categoryFilter.value : '';
 
         const today = new Date(); today.setHours(0, 0, 0, 0);
-        const limitDate = new Date(); limitDate.setDate(today.getDate() + 60);
+        const limitDate = new Date(); limitDate.setDate(today.getDate() + 65);
 
         // Incluimos jugadores sin ficha ("", nulo, undefined o solo espacios) además de los que vencen pronto
         let expiringPlayers = allPlayers.filter(p => {
@@ -2647,7 +2647,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 data.cell.styles.textColor = [255, 255, 255];
                             } else {
                                 const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-                                const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+                                const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 65);
 
                                 if (expDate <= thirtyDays) {
                                     data.cell.styles.fillColor = [249, 115, 22]; // Orange-500
@@ -2784,7 +2784,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     else if (tournamentEndDate && expirationDate > tournamentEndDate) { fillColor = [22, 163, 74]; textColor = [255, 255, 255]; }
                     else {
                         const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-                        const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+                        const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 65);
                         if (expirationDate <= thirtyDays) { fillColor = [249, 115, 22]; textColor = [0, 0, 0]; }
                         else if (expirationDate <= sixtyDays) { fillColor = [254, 240, 138]; textColor = [0, 0, 0]; }
                     }
@@ -3055,7 +3055,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         textColor = [255, 255, 255];
                     } else {
                         const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-                        const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 60);
+                        const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 65);
 
                         if (expirationDate <= thirtyDays) {
                             fillColor = [249, 115, 22]; // Orange-500
