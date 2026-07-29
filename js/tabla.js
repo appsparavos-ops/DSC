@@ -263,9 +263,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const otherModals = [resultModal, document.getElementById('teamResultsModal'), document.getElementById('pendingMatchesModal')];
             otherModals.forEach(m => { if (m) { m.classList.add('hidden'); m.classList.remove('flex'); } });
 
-            // Inicializar selectores dinámicos de importación FUBB
-            initFubbImportSelectors();
-
             if (adminModal) {
                 adminModal.classList.remove('hidden');
                 adminModal.classList.add('flex');
@@ -749,44 +746,59 @@ document.addEventListener('DOMContentLoaded', function () {
         const branch = COMPETITIONS[currentCompetition].path;
         currentDataRef = database.ref(`${branch}/${season}`);
 
+        let isFirstLoad = true;
+
         currentDataRef.on('value', snap => {
             const data = snap.val() || {};
             allStagesData = data; // Guardamos todo para cálculos de arrastre
-            applySavedStagePreference(data);
-
-            // Determinar qué datos usar para la etapa actual
-            let stageKey = `etapa${currentStage}`;
-            let stageData = data[stageKey];
-
-            // Fallback para Etapa 1 (si no existe el nodo etapa1, usamos la raíz para compatibilidad)
-            if (currentStage === '1' && (!stageData || !stageData.fixture)) {
-                stageData = data;
-            } else if (!stageData) {
-                stageData = {};
+            
+            if (isFirstLoad) {
+                applySavedStagePreference(data);
+                isFirstLoad = false;
             }
 
-            // Cargar la lista de equipos de la etapa actual.
-            // El fallback a data.equipos (raíz) solo aplica a Etapa 1 (formato legacy).
-            // En Etapa 2+ NUNCA se cae a la raíz, para evitar que equipos descendidos aparezcan.
-            if (stageData.equipos) {
-                teamsList = Object.values(stageData.equipos);
-            } else if (currentStage === '1' && data.equipos) {
-                teamsList = Object.values(data.equipos); // Legacy: Etapa 1 guardada en raíz
-            } else {
-                teamsList = ['DEFENSOR SPORTING']; // Mínimo por defecto
-            }
-            sharedFixture = stageData.fixture || {};
-            allResults = {};
-
-            const categories = COMPETITIONS[currentCompetition].categories
-                .filter(c => c.id !== 'ACUMULADA')
-                .map(c => c.id);
-
-            categories.forEach(cat => {
-                allResults[cat] = (stageData[cat] && stageData[cat].resultados) ? stageData[cat].resultados : {};
-            });
-            updateUI();
+            refreshData(data);
         });
+    }
+
+    function refreshData(data) {
+        if (!data) data = allStagesData || {};
+
+        // Determinar qué datos usar para la etapa actual
+        let stageKey = `etapa${currentStage}`;
+        let stageData = data[stageKey];
+
+        // Fallback para Etapa 1 (si no existe el nodo etapa1, usamos la raíz para compatibilidad)
+        if (currentStage === '1' && (!stageData || !stageData.fixture)) {
+            stageData = data;
+        } else if (!stageData) {
+            stageData = {};
+        }
+
+        // Cargar la lista de equipos de la etapa actual.
+        // El fallback a data.equipos (raíz) solo aplica a Etapa 1 (formato legacy).
+        // En Etapa 2+ NUNCA se cae a la raíz, para evitar que equipos descendidos aparezcan.
+        if (stageData.equipos) {
+            teamsList = Object.values(stageData.equipos);
+        } else if (currentStage === '1' && data.equipos) {
+            teamsList = Object.values(data.equipos); // Legacy: Etapa 1 guardada en raíz
+        } else {
+            teamsList = ['DEFENSOR SPORTING']; // Mínimo por defecto
+        }
+        // Debug: mostrar equipos cargados para la etapa actual
+        console.log(`[DEBUG] teamsList cargada para Etapa ${currentStage}:`, teamsList);
+
+        sharedFixture = stageData.fixture || {};
+        allResults = {};
+
+        const categories = COMPETITIONS[currentCompetition].categories
+            .filter(c => c.id !== 'ACUMULADA')
+            .map(c => c.id);
+
+        categories.forEach(cat => {
+            allResults[cat] = (stageData[cat] && stageData[cat].resultados) ? stageData[cat].resultados : {};
+        });
+        updateUI();
     }
 
     // --- CÁLCULOS ---
@@ -1628,7 +1640,10 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         if (stageSelect) stageSelect.addEventListener('change', () => {
             currentStage = stageSelect.value;
-            saveCurrentStagePreference().then(() => connectToSeason(currentSeason));
+            saveCurrentStagePreference(); // Fire and forget
+            if (allStagesData) {
+                refreshData(allStagesData);
+            }
         });
         if (categorySelect) categorySelect.addEventListener('change', () => updateUI());
 
@@ -1672,11 +1687,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const importMassiveBtn = document.getElementById('importMassiveBtn');
         if (importMassiveBtn) importMassiveBtn.addEventListener('click', () => {
-            let input = document.getElementById('massiveFixtureInput').value.trim();
-            if (selectedFileContent) input = selectedFileContent.trim();
+            let input = selectedFileContent ? selectedFileContent.trim() : '';
 
             if (!input) {
-                alert('Por favor, selecciona un archivo CSV o pega los datos en el cuadro de texto.');
+                alert('Por favor, selecciona un archivo CSV.');
                 return;
             }
 
@@ -1803,13 +1817,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const syncFubbBtn = document.getElementById('syncFubbBtn');
         if (syncFubbBtn) syncFubbBtn.addEventListener('click', () => syncFubbTables());
 
-        // --- IMPORTAR FIXTURE DESDE FUBB ---
-        const importFixtureFubbBtn = document.getElementById('importFixtureFubbBtn');
-        if (importFixtureFubbBtn) importFixtureFubbBtn.addEventListener('click', () => importFixtureFromFubb());
-
-        const importFubbFaseSelect = document.getElementById('importFubbFaseSelect');
-        if (importFubbFaseSelect) importFubbFaseSelect.addEventListener('change', () => updateFubbGruposOnFaseChange());
-
         const saveJornadaResultsBtn = document.getElementById('saveJornadaResultsBtn');
         if (saveJornadaResultsBtn) saveJornadaResultsBtn.addEventListener('click', () => {
             const branch = COMPETITIONS[currentCompetition].path;
@@ -1853,7 +1860,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- FUNCIÓN: SINCRONIZAR TABLAS FUBB (Scraping Frontend con Proxy CORS) ---
     // =========================================================================
     async function syncFubbTables() {
-        // --- Configuración ---
         const TARGET_URL = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
         const CLUB_NAME  = 'DEFENSOR SPORTING';
         const FETCH_TIMEOUT_MS = 20000; // 20s por intento
@@ -1875,92 +1881,6 @@ document.addEventListener('DOMContentLoaded', function () {
         // --- Inicio ---
         setSyncing(true);
         console.log('[SyncFUBB] Iniciando sincronización...');
-
-        // 0. Verificar si cors-anywhere está activo. Si no, abrir /corsdemo y esperar confirmación.
-        const CORS_ANYWHERE_BASE = 'https://cors-anywhere.herokuapp.com';
-        const CORS_DEMO_URL      = `${CORS_ANYWHERE_BASE}/corsdemo`;
-
-        const probeCorsAnywhere = async () => {
-            try {
-                const probe = await fetch(`${CORS_ANYWHERE_BASE}/${TARGET_URL}`, {
-                    method: 'HEAD',
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                    signal: AbortSignal.timeout(6000),
-                });
-                // 200-399 → activo; 403 → necesita activación
-                return probe.status !== 403;
-            } catch {
-                // Error de red o timeout → asumir bloqueado
-                return false;
-            }
-        };
-
-        const ensureCorsAnywhere = async () => {
-            if (await probeCorsAnywhere()) return true; // Ya activo
-
-            // Abrir la página de activación en una ventana emergente
-            const popup = window.open(CORS_DEMO_URL, 'corsActivation',
-                'width=700,height=500,resizable=yes,scrollbars=yes');
-
-            return new Promise((resolve) => {
-                // Crear diálogo de espera sobre la UI
-                const overlay = document.createElement('div');
-                overlay.id = 'corsOverlay';
-                overlay.style.cssText = `
-                    position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;
-                    display:flex;align-items:center;justify-content:center;`;
-                overlay.innerHTML = `
-                    <div style="background:#1e293b;border:1px solid #334155;border-radius:1.5rem;
-                                padding:2rem;max-width:440px;width:90%;text-align:center;font-family:sans-serif;">
-                        <div style="font-size:2.5rem;margin-bottom:1rem;">🔓</div>
-                        <h3 style="color:#c4b5fd;font-size:1.1rem;font-weight:700;margin:0 0 .75rem">
-                            Activar acceso a CORS Proxy</h3>
-                        <p style="color:#94a3b8;font-size:.85rem;line-height:1.6;margin:0 0 1.5rem">
-                            Se abrió la página de activación.<br>
-                            Haz clic en <strong style="color:#fff">"Request temporary access to the demo server"</strong>
-                            y luego vuelve aquí y presiona <strong style="color:#fff">Continuar</strong>.
-                        </p>
-                        <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;">
-                            <button id="corsRetryBtn"
-                                style="background:#7c3aed;color:#fff;font-weight:700;padding:.65rem 1.5rem;
-                                       border:none;border-radius:.75rem;cursor:pointer;font-size:.9rem;">
-                                ✅ Continuar
-                            </button>
-                            <button id="corsOpenBtn"
-                                style="background:#334155;color:#94a3b8;font-weight:600;padding:.65rem 1.25rem;
-                                       border:1px solid #475569;border-radius:.75rem;cursor:pointer;font-size:.85rem;">
-                                🔗 Abrir de nuevo
-                            </button>
-                            <button id="corsCancelBtn"
-                                style="background:transparent;color:#64748b;font-weight:600;padding:.65rem 1rem;
-                                       border:1px solid #334155;border-radius:.75rem;cursor:pointer;font-size:.85rem;">
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>`;
-                document.body.appendChild(overlay);
-
-                document.getElementById('corsRetryBtn').onclick = async () => {
-                    const active = await probeCorsAnywhere();
-                    if (active) {
-                        overlay.remove();
-                        resolve(true);
-                    } else {
-                        document.getElementById('corsRetryBtn').textContent = '⏳ Aún no activo, reintentando...';
-                        setTimeout(() => {
-                            document.getElementById('corsRetryBtn').textContent = '✅ Continuar';
-                        }, 2000);
-                    }
-                };
-                document.getElementById('corsOpenBtn').onclick = () => {
-                    window.open(CORS_DEMO_URL, 'corsActivation', 'width=700,height=500,resizable=yes,scrollbars=yes');
-                };
-                document.getElementById('corsCancelBtn').onclick = () => {
-                    overlay.remove();
-                    resolve(false);
-                };
-            });
-        };
 
         const corsReady = await ensureCorsAnywhere();
         if (!corsReady) {
@@ -2157,9 +2077,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!freshVS) throw new Error('No se obtuvo ViewState del GET fresco');
 
-            // Preferir los selectores del UI, y la competencia actual
-            const uiFase = document.getElementById('importFubbFaseSelect') ? document.getElementById('importFubbFaseSelect').value : '';
-            const uiGrupo = document.getElementById('importFubbGrupoSelect') ? document.getElementById('importFubbGrupoSelect').value : '';
+            // Usar siempre la fase/grupo por defecto de FUBB (la activa)
             let compValue = '141';
             if (currentCompetition === 'LFB') compValue = '149';
 
@@ -2192,9 +2110,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const faseSelect = doc1.getElementById('DDLFases');
             let targetFase = '';
             if (faseSelect) {
-                const opt = uiFase ? faseSelect.querySelector(`option[value="${uiFase}"]`) : null;
-                if (opt) targetFase = uiFase;
-                else targetFase = (faseSelect.querySelector('option:not([value=""])') || faseSelect.querySelector('option') || {value:''}).value;
+                // Usar la primera fase disponible (la activa por defecto en FUBB)
+                targetFase = (faseSelect.querySelector('option:not([value=""])') || faseSelect.querySelector('option') || {value:''}).value;
             }
 
             if (!targetFase) {
@@ -2232,9 +2149,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const grupoSelect = doc2.getElementById('DDLGrupos');
             let targetGrupo = '';
             if (grupoSelect) {
-                const opt = uiGrupo ? grupoSelect.querySelector(`option[value="${uiGrupo}"]`) : null;
-                if (opt) targetGrupo = uiGrupo;
-                else targetGrupo = (grupoSelect.querySelector('option:not([value=""])') || grupoSelect.querySelector('option') || {value:''}).value;
+                // Usar el primer grupo disponible (Grupo 1 por defecto)
+                targetGrupo = (grupoSelect.querySelector('option:not([value=""])') || grupoSelect.querySelector('option') || {value:''}).value;
             }
 
             if (!targetGrupo) {
@@ -2601,397 +2517,78 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-    // --- CARGAR DINÁMICAMENTE FASES Y GRUPOS DE LA FUBB ---
-    let fubbCachedViewState = '';
-    let fubbCachedVSG = '';
-    let fubbCachedEventVal = '';
-
-    async function initFubbImportSelectors() {
-        const faseSel = document.getElementById('importFubbFaseSelect');
-        const grupoSel = document.getElementById('importFubbGrupoSelect');
-        if (!faseSel || !grupoSel) return;
-
-        faseSel.innerHTML = '<option value="">Cargando fases...</option>';
-        grupoSel.innerHTML = '<option value="">Cargando grupos...</option>';
-
-        const TARGET_URL = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
-        const postProxy = PROXIES.find(p => p.supportsPost);
-        if (!postProxy) return;
-
-        // Activar cors-anywhere automáticamente
-        try {
-            await fetch('https://cors-anywhere.herokuapp.com/corsdemo', { method: 'POST' });
-        } catch (e) {
-            console.warn('[initFubbSelectors] No se pudo activar cors-anywhere automáticamente:', e.message);
-        }
-
-        try {
-            const proxyUrl = postProxy.buildUrl(TARGET_URL);
-            const headers = { ...BROWSER_HEADERS, ...(postProxy.extraHeaders || {}) };
-            const res = await fetchWithTimeout(proxyUrl, { headers, cache: 'no-store' }, 15000);
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            const html = await res.text();
-
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-
-            const getHiddenVal = (d, id) => (d.getElementById(id) || {}).value || '';
-            fubbCachedViewState = getHiddenVal(doc, '__VIEWSTATE');
-            fubbCachedVSG = getHiddenVal(doc, '__VIEWSTATEGENERATOR');
-            fubbCachedEventVal = getHiddenVal(doc, '__EVENTVALIDATION');
-
-            // Determinar categoría por defecto según competencia
-            let compValue = '141';
-            let catValue = '350'; // U20
-            if (currentCompetition === 'FEM') catValue = '351'; // U19
-            else if (currentCompetition === 'LFB') { compValue = '149'; catValue = ''; }
-
-            // Hacer POST para obtener las fases reales de la categoría
-            const postRes = await fetchWithTimeout(proxyUrl, {
-                method: 'POST',
-                headers: {
-                    ...headers,
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    '__EVENTTARGET': 'DDLCategorias',
-                    '__EVENTARGUMENT': '',
-                    '__VIEWSTATE': fubbCachedViewState,
-                    '__VIEWSTATEGENERATOR': fubbCachedVSG,
-                    '__EVENTVALIDATION': fubbCachedEventVal,
-                    'DDLCompeticiones': compValue,
-                    'DDLCategorias': catValue,
-                    'DDLFases': '',
-                    'DDLGrupos': '',
-                }).toString(),
-                cache: 'no-store'
-            }, 15000);
-
-            if (!postRes.ok) throw new Error('POST HTTP ' + postRes.status);
-            const postHtml = await postRes.text();
-            const postDoc = parser.parseFromString(postHtml, 'text/html');
-
-            fubbCachedViewState = getHiddenVal(postDoc, '__VIEWSTATE');
-            fubbCachedVSG = getHiddenVal(postDoc, '__VIEWSTATEGENERATOR');
-            fubbCachedEventVal = getHiddenVal(postDoc, '__EVENTVALIDATION');
-
-            // Leer selectores de Fases
-            const fFases = postDoc.getElementById('DDLFases');
-            if (fFases) {
-                faseSel.innerHTML = Array.from(fFases.querySelectorAll('option')).map(o => 
-                    `<option value="${o.value}" ${o.selected ? 'selected' : ''}>${o.textContent.trim()}</option>`
-                ).join('');
-            } else {
-                faseSel.innerHTML = '<option value="">Sin Fases</option>';
-            }
-
-            // Leer selectores de Grupos
-            const fGrupos = postDoc.getElementById('DDLGrupos');
-            if (fGrupos) {
-                grupoSel.innerHTML = Array.from(fGrupos.querySelectorAll('option')).map(o => 
-                    `<option value="${o.value}" ${o.selected ? 'selected' : ''}>${o.textContent.trim()}</option>`
-                ).join('');
-            } else {
-                grupoSel.innerHTML = '<option value="">Sin Grupos</option>';
-            }
-
-        } catch (e) {
-            console.error('[SyncFUBB] Error cargando selectores iniciales:', e);
-            faseSel.innerHTML = '<option value="">Error al cargar fases</option>';
-            grupoSel.innerHTML = '<option value="">Error al cargar grupos</option>';
-        }
-    }
-
-    // Escuchar el cambio en Fase FUBB para actualizar Grupos
-    async function updateFubbGruposOnFaseChange() {
-        const faseSel = document.getElementById('importFubbFaseSelect');
-        const grupoSel = document.getElementById('importFubbGrupoSelect');
-        if (!faseSel || !grupoSel || !faseSel.value) return;
-
-        grupoSel.innerHTML = '<option value="">Cargando grupos...</option>';
-
-        const TARGET_URL = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
-        const postProxy = PROXIES.find(p => p.supportsPost);
-        if (!postProxy) return;
-
-        // Activar cors-anywhere automáticamente
-        try {
-            await fetch('https://cors-anywhere.herokuapp.com/corsdemo', { method: 'POST' });
-        } catch (e) {
-            console.warn('[updateFubbGrupos] No se pudo activar cors-anywhere automáticamente:', e.message);
-        }
-
-        try {
-            const proxyUrl = postProxy.buildUrl(TARGET_URL);
-            const headers = { 
-                ...BROWSER_HEADERS, 
-                ...(postProxy.extraHeaders || {}),
-                'Content-Type': 'application/x-www-form-urlencoded',
-            };
-
-            let compValue = '141';
-            let catValue = '350';
-            if (currentCompetition === 'FEM') catValue = '351';
-            else if (currentCompetition === 'LFB') { compValue = '149'; catValue = ''; }
-
-            const res = await fetchWithTimeout(proxyUrl, {
-                method: 'POST',
-                headers,
-                body: new URLSearchParams({
-                    '__EVENTTARGET': 'DDLFases',
-                    '__EVENTARGUMENT': '',
-                    '__VIEWSTATE': fubbCachedViewState,
-                    '__VIEWSTATEGENERATOR': fubbCachedVSG,
-                    '__EVENTVALIDATION': fubbCachedEventVal,
-                    'DDLCompeticiones': compValue,
-                    'DDLCategorias': catValue,
-                    'DDLFases': faseSel.value,
-                    'DDLGrupos': '',
-                }).toString(),
-                cache: 'no-store'
-            }, 15000);
-
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            const html = await res.text();
-
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-
-            const getHiddenVal = (d, id) => (d.getElementById(id) || {}).value || '';
-            fubbCachedViewState = getHiddenVal(doc, '__VIEWSTATE');
-            fubbCachedVSG = getHiddenVal(doc, '__VIEWSTATEGENERATOR');
-            fubbCachedEventVal = getHiddenVal(doc, '__EVENTVALIDATION');
-
-            const fGrupos = doc.getElementById('DDLGrupos');
-            if (fGrupos) {
-                grupoSel.innerHTML = Array.from(fGrupos.querySelectorAll('option')).map(o => 
-                    `<option value="${o.value}" ${o.selected ? 'selected' : ''}>${o.textContent.trim()}</option>`
-                ).join('');
-            } else {
-                grupoSel.innerHTML = '<option value="">Sin Grupos</option>';
-            }
-        } catch (e) {
-            console.error('[SyncFUBB] Error al actualizar grupos:', e);
-            grupoSel.innerHTML = '<option value="">Error al cargar grupos</option>';
-        }
-    }
-
     // =========================================================================
-    // --- FUNCIÓN: IMPORTAR FIXTURE COMPLETO DESDE FUBB ---
+    // --- HELPERS GLOBALES: CORS ANYWHERE ---
     // =========================================================================
-    async function importFixtureFromFubb() {
-        const TARGET_URL = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
-        const FETCH_TIMEOUT_MS = 20000;
+    const CORS_ANYWHERE_BASE = 'https://cors-anywhere.herokuapp.com';
+    const CORS_DEMO_URL      = `${CORS_ANYWHERE_BASE}/corsdemo`;
+    const GLOBAL_TARGET_URL = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
 
-        const btn = document.getElementById('importFixtureFubbBtn');
-        const btnText = document.getElementById('importFixtureBtnText');
-        const icon = document.getElementById('importFixtureIcon');
-        const spinner = document.getElementById('importFixtureSpinner');
-
-        function setImporting(active) {
-            if (!btn) return;
-            btn.disabled = active;
-            if (btnText) btnText.textContent = active ? 'Importando fixture...' : 'IMPORTAR FIXTURE DESDE FUBB';
-            if (icon) icon.classList.toggle('hidden', active);
-            if (spinner) spinner.classList.toggle('hidden', !active);
-        }
-
-        const targetStage = document.getElementById('importFubbStageDestSelect').value;
-        const faseSel = document.getElementById('importFubbFaseSelect');
-        const grupoSel = document.getElementById('importFubbGrupoSelect');
-
-        if (!faseSel || !faseSel.value || !grupoSel || !grupoSel.value) {
-            alert('❌ Debes seleccionar una Fase y Grupo válidos de la FUBB antes de importar.');
-            return;
-        }
-
-        const confirmMsg = `¿Importar el fixture desde FUBB para la Etapa ${targetStage}?\n\n` +
-                           `Esto reemplazará el fixture y los equipos actuales de la competencia seleccionada (${currentCompetition}).`;
-        if (!confirm(confirmMsg)) return;
-
-        setImporting(true);
-        console.log('[ImportFixtureFUBB] Iniciando importación...');
-
-        // Obtener el proxy que soporta POST (cors-anywhere)
-        const postProxy = PROXIES.find(p => p.supportsPost);
-        if (!postProxy) {
-            setImporting(false);
-            alert('❌ No hay proxy disponible que soporte POST.');
-            return;
-        }
-
-        const proxyUrl = postProxy.buildUrl(TARGET_URL);
-
-        // Determinar los parámetros del POST según la competencia
-        let compValue = '141';
-        let catValue = '350'; // U20
-        if (currentCompetition === 'FEM') {
-            catValue = '351'; // U19 Femenina
-        } else if (currentCompetition === 'LFB') {
-            compValue = '149'; // Competencia: LFB
-            catValue = '';
-        }
-
-        // Hacer POST final con fase y grupo seleccionados para traer el fixture correcto
-        let fixtureHtml = null;
+    const probeCorsAnywhere = async () => {
         try {
-            const headers = {
-                ...BROWSER_HEADERS,
-                ...(postProxy.extraHeaders || {}),
-                'Content-Type': 'application/x-www-form-urlencoded',
-            };
-
-            const res = await fetchWithTimeout(proxyUrl, {
-                method: 'POST',
-                headers,
-                body: new URLSearchParams({
-                    '__EVENTTARGET':        'DDLGrupos',
-                    '__EVENTARGUMENT':      '',
-                    '__LASTFOCUS':          '',
-                    '__VIEWSTATE':          fubbCachedViewState,
-                    '__VIEWSTATEGENERATOR': fubbCachedVSG,
-                    '__EVENTVALIDATION':    fubbCachedEventVal,
-                    'DDLCompeticiones':     compValue,
-                    'DDLCategorias':        catValue,
-                    'DDLFases':             faseSel.value,
-                    'DDLGrupos':            grupoSel.value,
-                }).toString(),
-                cache: 'no-store',
-            }, FETCH_TIMEOUT_MS);
-
-            if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-            fixtureHtml = await res.text();
-        } catch (postErr) {
-            console.error('[ImportFixtureFUBB] Error en POST:', postErr);
-            setImporting(false);
-            alert(`❌ Error al obtener el fixture de FUBB.\nError: ${postErr.message}`);
-            return;
-        }
-
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(fixtureHtml, 'text/html');
-        const divCalendario = doc.getElementById('calendario');
-
-        if (!divCalendario) {
-            setImporting(false);
-            alert('❌ No se encontró la sección de calendario (#calendario) de la FUBB con la configuración seleccionada.');
-            return;
-        }
-
-        const headings = Array.from(divCalendario.querySelectorAll('h4'));
-        const tables = Array.from(divCalendario.querySelectorAll('table'));
-
-        const newFixture = {};
-        const uniqueTeams = new Set();
-
-        const currentBranchCategories = COMPETITIONS[currentCompetition].categories
-            .filter(c => c.id !== 'ACUMULADA')
-            .map(c => c.id);
-
-        let matchCount = 1;
-
-        headings.forEach((heading, idx) => {
-            const headingText = (heading.textContent || '').trim();
-            const matchJornada = headingText.match(/Jornada\s+(\d+)/i);
-            if (!matchJornada) return;
-
-            const jornadaNum = parseInt(matchJornada[1]);
-            const table = tables[idx];
-            if (!table) return;
-
-            const rows = Array.from(table.querySelectorAll('tbody tr'));
-            rows.forEach(tr => {
-                const cells = Array.from(tr.querySelectorAll('td'));
-                if (cells.length < 5) return;
-
-                const homeTeam = (cells[0].textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
-                const awayTeam = (cells[3].textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
-
-                if (!homeTeam || !awayTeam) return;
-
-                newFixture[matchCount] = {
-                    jornada: jornadaNum,
-                    home: homeTeam,
-                    away: awayTeam
-                };
-
-                uniqueTeams.add(homeTeam);
-                uniqueTeams.add(awayTeam);
-
-                matchCount++;
+            const probe = await fetch(`${CORS_ANYWHERE_BASE}/${GLOBAL_TARGET_URL}`, {
+                method: 'HEAD',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                signal: AbortSignal.timeout(6000),
             });
+            return probe.status !== 403;
+        } catch {
+            return false;
+        }
+    };
+
+    const ensureCorsAnywhere = async () => {
+        if (await probeCorsAnywhere()) return true;
+
+        const popup = window.open(CORS_DEMO_URL, 'corsActivation', 'width=700,height=500,resizable=yes,scrollbars=yes');
+
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.id = 'corsOverlay';
+            overlay.style.cssText = `
+                position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;
+                display:flex;align-items:center;justify-content:center;`;
+            overlay.innerHTML = `
+                <div style="background:#1e293b;border:1px solid #334155;border-radius:1.5rem;
+                            padding:2rem;max-width:440px;width:90%;text-align:center;font-family:sans-serif;">
+                    <div style="font-size:2.5rem;margin-bottom:1rem;">🔓</div>
+                    <h3 style="color:#c4b5fd;font-size:1.1rem;font-weight:700;margin:0 0 .75rem">Activar acceso a CORS Proxy</h3>
+                    <p style="color:#94a3b8;font-size:.85rem;line-height:1.6;margin:0 0 1.5rem">
+                        Se abrió la página de activación.<br>
+                        Haz clic en <strong style="color:#fff">"Request temporary access to the demo server"</strong>
+                        y luego vuelve aquí y presiona <strong style="color:#fff">Continuar</strong>.
+                    </p>
+                    <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;">
+                        <button id="corsRetryBtn" style="background:#7c3aed;color:#fff;font-weight:700;padding:.65rem 1.5rem;border:none;border-radius:.75rem;cursor:pointer;font-size:.9rem;">✅ Continuar</button>
+                        <button id="corsOpenBtn" style="background:#334155;color:#94a3b8;font-weight:600;padding:.65rem 1.25rem;border:1px solid #475569;border-radius:.75rem;cursor:pointer;font-size:.85rem;">🔗 Abrir de nuevo</button>
+                        <button id="corsCancelBtn" style="background:transparent;color:#64748b;font-weight:600;padding:.65rem 1rem;border:1px solid #334155;border-radius:.75rem;cursor:pointer;font-size:.85rem;">Cancelar</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+
+            document.getElementById('corsRetryBtn').onclick = async () => {
+                const active = await probeCorsAnywhere();
+                if (active) {
+                    overlay.remove();
+                    resolve(true);
+                } else {
+                    document.getElementById('corsRetryBtn').textContent = '⏳ Aún no activo, reintentando...';
+                    setTimeout(() => { document.getElementById('corsRetryBtn').textContent = '✅ Continuar'; }, 2000);
+                }
+            };
+            document.getElementById('corsOpenBtn').onclick = () => {
+                window.open(CORS_DEMO_URL, 'corsActivation', 'width=700,height=500,resizable=yes,scrollbars=yes');
+            };
+            document.getElementById('corsCancelBtn').onclick = () => {
+                overlay.remove();
+                resolve(false);
+            };
         });
+    };
 
-        if (Object.keys(newFixture).length === 0) {
-            setImporting(false);
-            alert('❌ No se encontraron partidos en el calendario seleccionado.');
-            return;
-        }
 
-        const sortedTeams = Array.from(uniqueTeams);
-        const teamsObj = {};
-        sortedTeams.forEach((t, i) => { teamsObj[i] = t; });
-
-        // 7. Preparar updates de Firebase
-        const branch = COMPETITIONS[currentCompetition].path;
-        let stageNode = `${branch}/${currentSeason}/etapa${targetStage}`;
-        if (targetStage === '1') {
-            // Si la etapa 1 no está bajo nodo etapa1, usamos la raíz
-            if (!allStagesData.etapa1 || !allStagesData.etapa1.fixture) {
-                stageNode = `${branch}/${currentSeason}`;
-            }
-        }
-
-        const updates = {};
-        updates[`${stageNode}/fixture`] = newFixture;
-        updates[`${stageNode}/equipos`] = teamsObj;
-
-        // Limpiar o inicializar resultados de cada categoría de esta etapa para que no queden obsoletos del fixture anterior
-        currentBranchCategories.forEach(cat => {
-            updates[`${stageNode}/${cat}/resultados`] = null;
-        });
-
-        // Configurar etapa actual en config
-        updates[`${branch}/${currentSeason}/config/lastStage`] = targetStage;
-
-        // 8. Escribir a Firebase
-        try {
-            // Remover etapa existente para asegurar que el fixture antiguo se borre completamente
-            await database.ref(stageNode).remove();
-            await database.ref().update(updates);
-
-            setImporting(false);
-            toggleAdminPanel();
-
-            // Cambiar selectores a la etapa importada
-            if (stageSelect) {
-                stageSelect.value = targetStage;
-                currentStage = targetStage;
-            }
-
-            connectToSeason(currentSeason);
-            alert(`✅ Fixture y equipos importados correctamente desde la FUBB para la Etapa ${targetStage}.\nSe detectaron ${Object.keys(newFixture).length} partidos y ${sortedTeams.length} equipos.`);
-        } catch (fbErr) {
-            setImporting(false);
-            console.error('[ImportFixtureFUBB] Error al guardar en Firebase:', fbErr);
-            alert('❌ Error al guardar el fixture en Firebase: ' + fbErr.message);
-        }
-    }
-
+    // =========================================================================
     // =========================================================================
 
     init();
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
