@@ -765,7 +765,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 stageData = {};
             }
 
-            teamsList = stageData.equipos ? Object.values(stageData.equipos) : (data.equipos ? Object.values(data.equipos) : ["DEFENSOR SPORTING"]);
+            // Cargar la lista de equipos de la etapa actual.
+            // El fallback a data.equipos (raíz) solo aplica a Etapa 1 (formato legacy).
+            // En Etapa 2+ NUNCA se cae a la raíz, para evitar que equipos descendidos aparezcan.
+            if (stageData.equipos) {
+                teamsList = Object.values(stageData.equipos);
+            } else if (currentStage === '1' && data.equipos) {
+                teamsList = Object.values(data.equipos); // Legacy: Etapa 1 guardada en raíz
+            } else {
+                teamsList = ['DEFENSOR SPORTING']; // Mínimo por defecto
+            }
             sharedFixture = stageData.fixture || {};
             allResults = {};
 
@@ -806,10 +815,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 isFibaLogic = true;
             }
 
+            const teamSet = new Set(teams); // Conjunto de equipos válidos para esta etapa
             Object.entries(results).forEach(([matchId, res]) => {
                 const fix = fixture[matchId];
                 if (!fix || res.status !== 'played') return;
                 const h = fix.home; const a = fix.away;
+
+                // Solo procesar partidos donde ambos equipos pertenecen a esta etapa.
+                // Esto evita que equipos descendidos (ej. de Etapa 1 en datos raíz)
+                // aparezcan como "colados" en la tabla de la etapa siguiente.
+                if (!teamSet.has(h) || !teamSet.has(a)) return;
+
                 if (!standings[h]) standings[h] = { name: h, pj: 0, g: 0, p: 0, pts: 0 };
                 if (!standings[a]) standings[a] = { name: a, pj: 0, g: 0, p: 0, pts: 0 };
 
@@ -1860,19 +1876,96 @@ document.addEventListener('DOMContentLoaded', function () {
         setSyncing(true);
         console.log('[SyncFUBB] Iniciando sincronización...');
 
-        // 0. Activar cors-anywhere automáticamente.
-        // El botón "Request temporary access" en /corsdemo simplemente hace un POST
-        // desde el navegador del usuario. Lo replicamos aquí antes de cualquier petición.
-        try {
-            console.log('[SyncFUBB] Activando cors-anywhere...');
-            await fetch('https://cors-anywhere.herokuapp.com/corsdemo', {
-                method: 'POST',
-                // Sin body — el endpoint solo necesita recibir el POST para registrar el origen
+        // 0. Verificar si cors-anywhere está activo. Si no, abrir /corsdemo y esperar confirmación.
+        const CORS_ANYWHERE_BASE = 'https://cors-anywhere.herokuapp.com';
+        const CORS_DEMO_URL      = `${CORS_ANYWHERE_BASE}/corsdemo`;
+
+        const probeCorsAnywhere = async () => {
+            try {
+                const probe = await fetch(`${CORS_ANYWHERE_BASE}/${TARGET_URL}`, {
+                    method: 'HEAD',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    signal: AbortSignal.timeout(6000),
+                });
+                // 200-399 → activo; 403 → necesita activación
+                return probe.status !== 403;
+            } catch {
+                // Error de red o timeout → asumir bloqueado
+                return false;
+            }
+        };
+
+        const ensureCorsAnywhere = async () => {
+            if (await probeCorsAnywhere()) return true; // Ya activo
+
+            // Abrir la página de activación en una ventana emergente
+            const popup = window.open(CORS_DEMO_URL, 'corsActivation',
+                'width=700,height=500,resizable=yes,scrollbars=yes');
+
+            return new Promise((resolve) => {
+                // Crear diálogo de espera sobre la UI
+                const overlay = document.createElement('div');
+                overlay.id = 'corsOverlay';
+                overlay.style.cssText = `
+                    position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;
+                    display:flex;align-items:center;justify-content:center;`;
+                overlay.innerHTML = `
+                    <div style="background:#1e293b;border:1px solid #334155;border-radius:1.5rem;
+                                padding:2rem;max-width:440px;width:90%;text-align:center;font-family:sans-serif;">
+                        <div style="font-size:2.5rem;margin-bottom:1rem;">🔓</div>
+                        <h3 style="color:#c4b5fd;font-size:1.1rem;font-weight:700;margin:0 0 .75rem">
+                            Activar acceso a CORS Proxy</h3>
+                        <p style="color:#94a3b8;font-size:.85rem;line-height:1.6;margin:0 0 1.5rem">
+                            Se abrió la página de activación.<br>
+                            Haz clic en <strong style="color:#fff">"Request temporary access to the demo server"</strong>
+                            y luego vuelve aquí y presiona <strong style="color:#fff">Continuar</strong>.
+                        </p>
+                        <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;">
+                            <button id="corsRetryBtn"
+                                style="background:#7c3aed;color:#fff;font-weight:700;padding:.65rem 1.5rem;
+                                       border:none;border-radius:.75rem;cursor:pointer;font-size:.9rem;">
+                                ✅ Continuar
+                            </button>
+                            <button id="corsOpenBtn"
+                                style="background:#334155;color:#94a3b8;font-weight:600;padding:.65rem 1.25rem;
+                                       border:1px solid #475569;border-radius:.75rem;cursor:pointer;font-size:.85rem;">
+                                🔗 Abrir de nuevo
+                            </button>
+                            <button id="corsCancelBtn"
+                                style="background:transparent;color:#64748b;font-weight:600;padding:.65rem 1rem;
+                                       border:1px solid #334155;border-radius:.75rem;cursor:pointer;font-size:.85rem;">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(overlay);
+
+                document.getElementById('corsRetryBtn').onclick = async () => {
+                    const active = await probeCorsAnywhere();
+                    if (active) {
+                        overlay.remove();
+                        resolve(true);
+                    } else {
+                        document.getElementById('corsRetryBtn').textContent = '⏳ Aún no activo, reintentando...';
+                        setTimeout(() => {
+                            document.getElementById('corsRetryBtn').textContent = '✅ Continuar';
+                        }, 2000);
+                    }
+                };
+                document.getElementById('corsOpenBtn').onclick = () => {
+                    window.open(CORS_DEMO_URL, 'corsActivation', 'width=700,height=500,resizable=yes,scrollbars=yes');
+                };
+                document.getElementById('corsCancelBtn').onclick = () => {
+                    overlay.remove();
+                    resolve(false);
+                };
             });
-            console.log('[SyncFUBB] cors-anywhere activado correctamente.');
-        } catch (activationErr) {
-            // No es fatal: puede que ya esté activado, o que se use otro proxy
-            console.warn('[SyncFUBB] No se pudo activar cors-anywhere (puede que ya esté activo):', activationErr.message);
+        };
+
+        const corsReady = await ensureCorsAnywhere();
+        if (!corsReady) {
+            setSyncing(false);
+            return; // El usuario canceló
         }
 
         let htmlText = null;
