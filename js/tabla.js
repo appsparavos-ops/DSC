@@ -87,6 +87,18 @@ document.addEventListener('DOMContentLoaded', function () {
             categories: [
                 { id: 'LFB', name: 'LIGA FEMENINA' }
             ]
+        },
+        LDD: {
+            path: 'tablas_posiciones_ldd',
+            categories: [
+                { id: 'LDD', name: 'LDD' }
+            ]
+        },
+        LUB: {
+            path: 'tablas_posiciones_lub',
+            categories: [
+                { id: 'LUB', name: 'LUB' }
+            ]
         }
     };
 
@@ -244,7 +256,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Seleccionar pestaña por defecto (Configuración)
             if (typeof switchAdminTab === 'function') {
-                switchAdminTab('config');
+                switchAdminTab('import');
             }
 
             // Ocultar otros modales abiertos para que el panel admin quede en primer plano
@@ -699,19 +711,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 const seasons = Object.keys(data).sort().reverse();
                 if (seasonSelect) {
                     seasonSelect.innerHTML = seasons.map(s => `<option value="${s}">${s}</option>`).join('');
-                    
-                    // 1. Intentar usar la que ya estaba seleccionada en memoria (al cambiar de pestaña)
-                    // 2. Intentar usar la última vista guardada en el navegador (localStorage)
-                    const savedSeason = localStorage.getItem('lastViewedSeason');
-                    
-                    if (currentSeason && seasons.includes(currentSeason)) {
-                        seasonSelect.value = currentSeason;
-                    } else if (savedSeason && seasons.includes(savedSeason)) {
+
+                    // 1. Intentar usar la guardada para esta rama específica (localStorage por rama)
+                    // 2. Fallback: buscar cuál está marcada como activa en Firebase
+                    const savedSeason = localStorage.getItem(`lastSeason_${currentCompetition}`);
+
+                    if (savedSeason && seasons.includes(savedSeason)) {
                         currentSeason = savedSeason;
                         seasonSelect.value = savedSeason;
                     } else {
-                        // 3. Fallback: Buscar cuál está marcada como activa en la base de datos
-                        let activeSeason = seasons[0]; 
+                        // Fallback: Buscar cuál está marcada como activa en la base de datos
+                        let activeSeason = seasons[0];
                         for (const s of seasons) {
                             if (data[s] && data[s].activa === true) {
                                 activeSeason = s;
@@ -721,7 +731,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         currentSeason = activeSeason;
                         seasonSelect.value = activeSeason;
                     }
-                    
+
                     connectToSeason(currentSeason);
                 }
             }
@@ -1575,7 +1585,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 tab.classList.add('active');
                 tab.classList.remove('text-slate-500');
 
+                // Guardar la temporada actual de la rama que estamos abandonando
+                if (currentSeason) {
+                    localStorage.setItem(`lastSeason_${currentCompetition}`, currentSeason);
+                }
+
                 currentCompetition = tab.dataset.comp;
+                // Limpiar currentSeason para que loadSeasons tome la de la nueva rama
+                currentSeason = null;
                 // Limpiar datos actuales
                 teamsList = [];
                 sharedFixture = {};
@@ -1587,10 +1604,11 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
 
-        if (seasonSelect) seasonSelect.addEventListener('change', () => { 
-            currentSeason = seasonSelect.value; 
-            localStorage.setItem('lastViewedSeason', currentSeason);
-            connectToSeason(currentSeason); 
+        if (seasonSelect) seasonSelect.addEventListener('change', () => {
+            currentSeason = seasonSelect.value;
+            // Guardar la temporada por rama en localStorage
+            localStorage.setItem(`lastSeason_${currentCompetition}`, currentSeason);
+            connectToSeason(currentSeason);
         });
         if (stageSelect) stageSelect.addEventListener('change', () => {
             currentStage = stageSelect.value;
@@ -1678,7 +1696,9 @@ document.addEventListener('DOMContentLoaded', function () {
                         uniqueTeams.add(h);
                         uniqueTeams.add(a);
 
-                        if (isAcum) {
+                        const hasMultiCatScores = parts.length >= (3 + allBranchCategories.length * 2);
+                        
+                        if (isAcum || hasMultiCatScores) {
                             allBranchCategories.forEach((c, i) => {
                                 const rawH = parts[3 + i * 2];
                                 const rawA = parts[4 + i * 2];
@@ -1925,9 +1945,59 @@ document.addEventListener('DOMContentLoaded', function () {
 
         console.log('[SyncFUBB] ViewState obtenido:', viewState.length > 0 ? `${viewState.length} chars` : 'VACÍO');
 
+        // 3. Mapa: fragmento del texto del select → { cat Firebase, es femenino }
+        const OPTION_TO_FIREBASE = [
+            { match: 'U20 Masculino', cat: 'U20', fem: false },
+            { match: 'U18 Masculino', cat: 'U18', fem: false },
+            { match: 'U16 Masculino', cat: 'U16', fem: false },
+            { match: 'U14 Masculino', cat: 'U14', fem: false },
+            { match: 'U12 Mixta',     cat: 'U12', fem: false },
+            { match: 'U11 Mixta',     cat: 'U11', fem: false },
+            { match: 'U19 Femenina',  cat: 'U19', fem: true  },
+            { match: 'U16 Femenino',  cat: 'U16', fem: true  },
+            { match: 'U14 Femenino',  cat: 'U14', fem: true  },
+            { match: 'U12 Femenino',  cat: 'U12', fem: true  },
+            { match: 'Liga Femenina', cat: 'LFB', fem: true  },
+            { match: 'LFB',           cat: 'LFB', fem: true  },
+            { match: 'Liga de Desarrollo', cat: 'LDD', fem: false },
+            { match: 'LDD',                cat: 'LDD', fem: false },
+            { match: 'Liga Uruguaya',      cat: 'LUB', fem: false },
+            { match: 'LUB',                cat: 'LUB', fem: false },
+        ];
+
+        // Si estamos en LFB, hacer POST para cambiar a competición LFB y obtener sus categorías
+        if (currentCompetition === 'LFB') {
+            const postProxy = PROXIES.find(p => p.supportsPost) || PROXIES[0];
+            const postHeaders = { ...BROWSER_HEADERS, ...(postProxy.extraHeaders || {}), 'Content-Type': 'application/x-www-form-urlencoded' };
+            const bodyStep = new URLSearchParams({
+                '__EVENTTARGET':        'DDLCompeticiones',
+                '__EVENTARGUMENT':      '',
+                '__LASTFOCUS':          '',
+                '__VIEWSTATE':          viewState,
+                '__VIEWSTATEGENERATOR': viewStateGenerator,
+                '__EVENTVALIDATION':    eventValidation,
+                'DDLCompeticiones':     '149',
+                'DDLCategorias':        '',
+                'DDLFases':             '',
+                'DDLGrupos':            '',
+            });
+            try {
+                const resLfb = await fetchWithTimeout(postProxy.buildUrl(TARGET_URL), { method: 'POST', headers: postHeaders, body: bodyStep.toString(), cache: 'no-store' }, FETCH_TIMEOUT_MS);
+                if (resLfb.ok) {
+                    htmlText = await resLfb.text();
+                    initialDoc = parser.parseFromString(htmlText, 'text/html');
+                    viewState          = getHiddenVal(initialDoc, '__VIEWSTATE') || viewState;
+                    viewStateGenerator = getHiddenVal(initialDoc, '__VIEWSTATEGENERATOR') || viewStateGenerator;
+                    eventValidation    = getHiddenVal(initialDoc, '__EVENTVALIDATION') || eventValidation;
+                }
+            } catch(e) {
+                console.warn('[SyncFUBB] Error al cambiar competición a LFB:', e);
+            }
+        }
+
         // Leer las categorías del select #DDLCategorias
         const catSelect = initialDoc.getElementById('DDLCategorias');
-        const availableOptions = catSelect
+        let availableOptions = catSelect
             ? Array.from(catSelect.querySelectorAll('option')).map(o => ({
                 value: o.value,
                 text: (o.textContent || '').trim(),
@@ -1935,26 +2005,25 @@ document.addEventListener('DOMContentLoaded', function () {
               }))
             : [];
 
-        console.log('[SyncFUBB] Categorías disponibles:', availableOptions.map(o => o.text));
+        // Filtrar opciones para sincronizar SOLO las de la rama actual (Masculino, Femenino o LFB)
+        availableOptions = availableOptions.filter(opt => {
+            const mapped = OPTION_TO_FIREBASE.find(entry => opt.text.toUpperCase().includes(entry.match.toUpperCase()));
+            if (!mapped) return false;
+            if (currentCompetition === 'MASC') return !mapped.fem && mapped.cat !== 'LFB' && mapped.cat !== 'LDD' && mapped.cat !== 'LUB';
+            if (currentCompetition === 'FEM') return mapped.fem && mapped.cat !== 'LFB' && mapped.cat !== 'LDD' && mapped.cat !== 'LUB';
+            if (currentCompetition === 'LFB') return mapped.cat === 'LFB';
+            if (currentCompetition === 'LDD') return mapped.cat === 'LDD';
+            if (currentCompetition === 'LUB') return mapped.cat === 'LUB';
+            return false;
+        });
+
+        console.log('[SyncFUBB] Categorías a sincronizar:', availableOptions.map(o => o.text));
 
         if (availableOptions.length === 0) {
             setSyncing(false);
-            alert('❌ No se encontraron categorías en la página FUBB.\nEl sitio puede haber cambiado su estructura.');
+            alert('❌ No se encontraron categorías para la rama seleccionada en FUBB.\nSi estás en LFB, puede requerir configuración adicional.');
             return;
         }
-
-        // 3. Mapa: fragmento del texto del select → { cat Firebase, es femenino }
-        const OPTION_TO_FIREBASE = [
-            { match: 'U20 Masculino', cat: 'U20', fem: false },
-            { match: 'U18 Masculino', cat: 'U18', fem: false },
-            { match: 'U16 Masculino', cat: 'U16', fem: false },
-            { match: 'U14 Masculino', cat: 'U14', fem: false },
-            { match: 'U19 Femenina',  cat: 'U19', fem: true  },
-            { match: 'U16 Femenino',  cat: 'U16', fem: true  },
-            { match: 'U14 Femenino',  cat: 'U14', fem: true  },
-            { match: 'Liga Femenina', cat: 'LFB', fem: true  },
-            { match: 'LFB',           cat: 'LFB', fem: true  },
-        ];
 
         // Encontrar el proxy que soporta POST (cors-anywhere)
         const postProxy = PROXIES.find(p => p.supportsPost);
@@ -1971,7 +2040,7 @@ document.addEventListener('DOMContentLoaded', function () {
         //   3. POST seleccionando la primera fase → obtiene la clasificación/calendario
         async function fetchCategory(catValue, isFirstLoad, currentHtml) {
             if (isFirstLoad && currentHtml) {
-                console.log('[SyncFUBB] Reutilizando HTML inicial para la 1ª categoría.');
+                console.log(`[SyncFUBB] Reutilizando HTML inicial para la 1ª categoría.`);
                 return currentHtml;
             }
 
@@ -1995,17 +2064,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!freshVS) throw new Error('No se obtuvo ViewState del GET fresco');
 
-            // Verificar si la categoría deseada ya es la seleccionada por defecto
-            const catSelectEl = docGet.getElementById('DDLCategorias');
-            const selectedOpt = catSelectEl ? catSelectEl.querySelector('option[selected]') : null;
-            if (selectedOpt && selectedOpt.value === catValue) {
-                console.log(`[SyncFUBB] [Cat ${catValue}] Ya es la categoría por defecto, usando HTML del GET.`);
-                return htmlGet;
-            }
+            // Preferir los selectores del UI, y la competencia actual
+            const uiFase = document.getElementById('importFubbFaseSelect') ? document.getElementById('importFubbFaseSelect').value : '';
+            const uiGrupo = document.getElementById('importFubbGrupoSelect') ? document.getElementById('importFubbGrupoSelect').value : '';
+            let compValue = '141';
+            if (currentCompetition === 'LFB') compValue = '149';
 
-            await new Promise(r => setTimeout(r, 600));
-
-            // PASO 2: POST para cambiar la categoría
+            // PASO 2: POST cambiar categoría
             console.log(`[SyncFUBB] [Cat ${catValue}] Paso 2: POST cambiar categoría...`);
             const postHeaders = { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' };
 
@@ -2016,48 +2081,39 @@ document.addEventListener('DOMContentLoaded', function () {
                 '__VIEWSTATE':          freshVS,
                 '__VIEWSTATEGENERATOR': freshVSG,
                 '__EVENTVALIDATION':    freshEV,
-                'DDLCompeticiones':     '141',
+                'DDLCompeticiones':     compValue,
                 'DDLCategorias':        catValue,
                 'DDLFases':             '',
                 'DDLGrupos':            '',
             });
 
-            const res1 = await fetchWithTimeout(proxyUrl, {
-                method: 'POST',
-                headers: postHeaders,
-                body: bodyStep1.toString(),
-                cache: 'no-store',
-            }, FETCH_TIMEOUT_MS);
-
+            const res1 = await fetchWithTimeout(proxyUrl, { method: 'POST', headers: postHeaders, body: bodyStep1.toString(), cache: 'no-store' }, FETCH_TIMEOUT_MS);
             if (!res1.ok) throw new Error(`POST cat falló: HTTP ${res1.status}`);
             const html1 = await res1.text();
-            if (!html1 || html1.length < 500) throw new Error('POST cat devolvió respuesta vacía');
-
-            // Actualizar ViewState desde la respuesta del paso 2
+            
             const doc1 = parser.parseFromString(html1, 'text/html');
             freshVS  = getHiddenVal(doc1, '__VIEWSTATE') || freshVS;
             freshVSG = getHiddenVal(doc1, '__VIEWSTATEGENERATOR') || freshVSG;
             freshEV  = getHiddenVal(doc1, '__EVENTVALIDATION') || freshEV;
 
-            // Obtener la primera fase disponible
             const faseSelect = doc1.getElementById('DDLFases');
-            const firstFase = faseSelect
-                ? (faseSelect.querySelector('option:not([value=""])') || faseSelect.querySelector('option'))
-                : null;
+            let targetFase = '';
+            if (faseSelect) {
+                const opt = uiFase ? faseSelect.querySelector(`option[value="${uiFase}"]`) : null;
+                if (opt) targetFase = uiFase;
+                else targetFase = (faseSelect.querySelector('option:not([value=""])') || faseSelect.querySelector('option') || {value:''}).value;
+            }
 
-            if (!firstFase || !firstFase.value) {
-                console.log(`[SyncFUBB] [Cat ${catValue}] No hay fases, usando HTML del paso 2.`);
-                // Actualizar ViewState global para la siguiente categoría
-                viewState = freshVS;
-                viewStateGenerator = freshVSG;
-                eventValidation = freshEV;
+            if (!targetFase) {
+                console.log(`[SyncFUBB] [Cat ${catValue}] No hay fases, fin.`);
+                viewState = freshVS; viewStateGenerator = freshVSG; eventValidation = freshEV;
                 return html1;
             }
 
-            console.log(`[SyncFUBB] [Cat ${catValue}] Paso 3: POST seleccionar fase [${firstFase.value}] ${firstFase.textContent.trim()}...`);
             await new Promise(r => setTimeout(r, 600));
 
-            // PASO 3: POST para seleccionar la primera fase
+            // PASO 3: POST cambiar fase
+            console.log(`[SyncFUBB] [Cat ${catValue}] Paso 3: POST seleccionar fase [${targetFase}]...`);
             const bodyStep2 = new URLSearchParams({
                 '__EVENTTARGET':        'DDLFases',
                 '__EVENTARGUMENT':      '',
@@ -2065,30 +2121,62 @@ document.addEventListener('DOMContentLoaded', function () {
                 '__VIEWSTATE':          freshVS,
                 '__VIEWSTATEGENERATOR': freshVSG,
                 '__EVENTVALIDATION':    freshEV,
-                'DDLCompeticiones':     '141',
+                'DDLCompeticiones':     compValue,
                 'DDLCategorias':        catValue,
-                'DDLFases':             firstFase.value,
+                'DDLFases':             targetFase,
                 'DDLGrupos':            '',
             });
 
-            const res2 = await fetchWithTimeout(proxyUrl, {
-                method: 'POST',
-                headers: postHeaders,
-                body: bodyStep2.toString(),
-                cache: 'no-store',
-            }, FETCH_TIMEOUT_MS);
-
+            const res2 = await fetchWithTimeout(proxyUrl, { method: 'POST', headers: postHeaders, body: bodyStep2.toString(), cache: 'no-store' }, FETCH_TIMEOUT_MS);
             if (!res2.ok) throw new Error(`POST fase falló: HTTP ${res2.status}`);
             const html2 = await res2.text();
-            if (!html2 || html2.length < 500) throw new Error('POST fase devolvió respuesta vacía');
 
-            // Actualizar ViewState global para la siguiente categoría
             const doc2 = parser.parseFromString(html2, 'text/html');
-            viewState          = getHiddenVal(doc2, '__VIEWSTATE') || freshVS;
-            viewStateGenerator = getHiddenVal(doc2, '__VIEWSTATEGENERATOR') || freshVSG;
-            eventValidation    = getHiddenVal(doc2, '__EVENTVALIDATION') || freshEV;
+            freshVS  = getHiddenVal(doc2, '__VIEWSTATE') || freshVS;
+            freshVSG = getHiddenVal(doc2, '__VIEWSTATEGENERATOR') || freshVSG;
+            freshEV  = getHiddenVal(doc2, '__EVENTVALIDATION') || freshEV;
 
-            return html2;
+            const grupoSelect = doc2.getElementById('DDLGrupos');
+            let targetGrupo = '';
+            if (grupoSelect) {
+                const opt = uiGrupo ? grupoSelect.querySelector(`option[value="${uiGrupo}"]`) : null;
+                if (opt) targetGrupo = uiGrupo;
+                else targetGrupo = (grupoSelect.querySelector('option:not([value=""])') || grupoSelect.querySelector('option') || {value:''}).value;
+            }
+
+            if (!targetGrupo) {
+                console.log(`[SyncFUBB] [Cat ${catValue}] No hay grupos, fin.`);
+                viewState = freshVS; viewStateGenerator = freshVSG; eventValidation = freshEV;
+                return html2;
+            }
+
+            await new Promise(r => setTimeout(r, 600));
+
+            // PASO 4: POST cambiar grupo (Carga el calendario y clasificación definitivos)
+            console.log(`[SyncFUBB] [Cat ${catValue}] Paso 4: POST seleccionar grupo [${targetGrupo}]...`);
+            const bodyStep3 = new URLSearchParams({
+                '__EVENTTARGET':        'DDLGrupos',
+                '__EVENTARGUMENT':      '',
+                '__LASTFOCUS':          '',
+                '__VIEWSTATE':          freshVS,
+                '__VIEWSTATEGENERATOR': freshVSG,
+                '__EVENTVALIDATION':    freshEV,
+                'DDLCompeticiones':     compValue,
+                'DDLCategorias':        catValue,
+                'DDLFases':             targetFase,
+                'DDLGrupos':            targetGrupo,
+            });
+
+            const res3 = await fetchWithTimeout(proxyUrl, { method: 'POST', headers: postHeaders, body: bodyStep3.toString(), cache: 'no-store' }, FETCH_TIMEOUT_MS);
+            if (!res3.ok) throw new Error(`POST grupo falló: HTTP ${res3.status}`);
+            const html3 = await res3.text();
+
+            const doc3 = parser.parseFromString(html3, 'text/html');
+            viewState          = getHiddenVal(doc3, '__VIEWSTATE') || freshVS;
+            viewStateGenerator = getHiddenVal(doc3, '__VIEWSTATEGENERATOR') || freshVSG;
+            eventValidation    = getHiddenVal(doc3, '__EVENTVALIDATION') || freshEV;
+
+            return html3;
         }
 
         // Helper: parsear la tabla de clasificación del div#PClasificacion
@@ -2351,10 +2439,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.warn(`[SyncFUBB] [${opt.text}] Defensor Sporting/DSC no está en esta clasificación.`);
             }
 
-            const targetBranch = isFemenino ? COMPETITIONS.FEM.path : COMPETITIONS.MASC.path;
-            let stageNode = `${targetBranch}/${currentSeason}/etapa${currentStage}`;
+            let stageNode = `${branch}/${currentSeason}/etapa${currentStage}`;
             if (currentStage === '1' && (!allStagesData.etapa1 || !allStagesData.etapa1.fixture)) {
-                stageNode = `${targetBranch}/${currentSeason}`;
+                stageNode = `${branch}/${currentSeason}`;
             }
 
             const syncPath = `${stageNode}/fubb_sync/${firebaseCat}`;
