@@ -94,6 +94,8 @@
                     <button class="comp-tab px-4 sm:px-8 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all active whitespace-nowrap" data-comp="MASC">Masculino</button>
                     <button class="comp-tab px-4 sm:px-8 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all text-slate-500 whitespace-nowrap" data-comp="FEM">Femenino</button>
                     <button class="comp-tab px-4 sm:px-8 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all text-slate-500 whitespace-nowrap" data-comp="LFB">Liga Femenina</button>
+                    <button class="comp-tab px-4 sm:px-8 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all text-slate-500 whitespace-nowrap" data-comp="LDD">LDD</button>
+                    <button class="comp-tab px-4 sm:px-8 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all text-slate-500 whitespace-nowrap" data-comp="LUB">LUB</button>
                 </div>
             </div>
 
@@ -200,6 +202,9 @@
     </div>
     </main>
 
+
+
+
     </div> <!-- End Main Container -->
 
     <!-- Admin Modal -->
@@ -226,9 +231,9 @@
 
             <!-- Tabs -->
             <div class="flex border-b border-slate-800 bg-slate-900/50">
-                <button onclick="switchAdminTab('config')" id="tabBtn-config" class="admin-tab-btn flex-1 py-3 text-xs sm:text-sm font-bold text-violet-400 border-b-2 border-violet-500 transition-all">Configuración</button>
+                <button onclick="switchAdminTab('import')" id="tabBtn-import" class="admin-tab-btn flex-1 py-3 text-xs sm:text-sm font-bold text-violet-400 border-b-2 border-violet-500 transition-all">Importar</button>
                 <button onclick="switchAdminTab('sanciones')" id="tabBtn-sanciones" class="admin-tab-btn flex-1 py-3 text-xs sm:text-sm font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-300 transition-all">Sanciones</button>
-                <button onclick="switchAdminTab('import')" id="tabBtn-import" class="admin-tab-btn flex-1 py-3 text-xs sm:text-sm font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-300 transition-all">Importar</button>
+                <button onclick="switchAdminTab('config')" id="tabBtn-config" class="admin-tab-btn flex-1 py-3 text-xs sm:text-sm font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-300 transition-all">Configuración</button>
             </div>
 
             <div class="p-8 overflow-y-auto flex-grow">
