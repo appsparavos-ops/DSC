@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (adminModalTitle) {
                 const compTab = document.querySelector(`.comp-tab[data-comp="${currentCompetition}"]`);
                 const compName = compTab ? compTab.textContent : currentCompetition;
-                adminModalTitle.textContent = `IMPORTAR CALENDARIO`;
+                adminModalTitle.textContent = `Rama Seleccionada`;
                 if (currentBranchName) currentBranchName.textContent = compName.toUpperCase();
             }
 
@@ -254,7 +254,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
 
-            // Seleccionar pestaña por defecto (Configuración)
+            // Seleccionar pestaña por defecto
             if (typeof switchAdminTab === 'function') {
                 switchAdminTab('import');
             }
