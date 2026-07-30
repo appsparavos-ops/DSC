@@ -1734,11 +1734,14 @@ document.addEventListener('DOMContentLoaded', function () {
                                 const rawA = parts[4 + i * 2];
 
                                 if (rawH !== undefined && rawA !== undefined && rawH.trim() !== "" && rawA.trim() !== "") {
+                                    const sH = parseInt(rawH) || 0;
+                                    const sA = parseInt(rawA) || 0;
+
+                                    if (sH === 0 && sA === 0 && c !== 'U11') return;
+
                                     const resNode = `${stageNode}/${c}/resultados`;
                                     if (!updates[resNode]) updates[resNode] = {}; // Inicializar objeto si no existe
 
-                                    const sH = parseInt(rawH) || 0;
-                                    const sA = parseInt(rawA) || 0;
                                     updates[resNode][mCount] = {
                                         scoreHome: c === 'U11' ? 0 : sH,
                                         scoreAway: c === 'U11' ? 0 : sA,
@@ -1753,18 +1756,21 @@ document.addEventListener('DOMContentLoaded', function () {
                             const rawA = parts[4];
 
                             if (rawH !== undefined && rawA !== undefined && rawH.trim() !== "" && rawA.trim() !== "") {
-                                const resNode = `${stageNode}/${cat}/resultados`;
-                                if (!updates[resNode]) updates[resNode] = {};
-
                                 const sH = parseInt(rawH) || 0;
                                 const sA = parseInt(rawA) || 0;
-                                updates[resNode][mCount] = {
-                                    scoreHome: (cat === 'U11') ? 0 : sH,
-                                    scoreAway: (cat === 'U11') ? 0 : sA,
-                                    status: 'played',
-                                    homeNoShow: (sH === 0 && sA === 20),
-                                    awayNoShow: (sH === 20 && sA === 0)
-                                };
+
+                                if (!(sH === 0 && sA === 0 && cat !== 'U11')) {
+                                    const resNode = `${stageNode}/${cat}/resultados`;
+                                    if (!updates[resNode]) updates[resNode] = {};
+
+                                    updates[resNode][mCount] = {
+                                        scoreHome: (cat === 'U11') ? 0 : sH,
+                                        scoreAway: (cat === 'U11') ? 0 : sA,
+                                        status: 'played',
+                                        homeNoShow: (sH === 0 && sA === 20),
+                                        awayNoShow: (sH === 20 && sA === 0)
+                                    };
+                                }
                             }
                         }
                         mCount++;
@@ -2353,6 +2359,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     const scoreAway = parseInt(ptsAwayRaw);
 
                     if (isNaN(scoreHome) || isNaN(scoreAway)) return; // Partido sin jugar o suspendido
+                    if (scoreHome === 0 && scoreAway === 0 && !catLabel.includes('U11')) return; // No importar si es 0-0 excepto U11
 
                     const normHomeScraped = normalizeTeamName(homeTeamRaw);
                     const normAwayScraped = normalizeTeamName(awayTeamRaw);
