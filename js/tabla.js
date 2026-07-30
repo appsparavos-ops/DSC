@@ -2153,45 +2153,61 @@ document.addEventListener('DOMContentLoaded', function () {
             freshEV  = getHiddenVal(doc2, '__EVENTVALIDATION') || freshEV;
 
             const grupoSelect = doc2.getElementById('DDLGrupos');
-            let targetGrupo = '';
+            let grupos = [];
             if (grupoSelect) {
-                // Usar el primer grupo disponible (Grupo 1 por defecto)
-                targetGrupo = (grupoSelect.querySelector('option:not([value=""])') || grupoSelect.querySelector('option') || {value:''}).value;
+                grupos = Array.from(grupoSelect.querySelectorAll('option:not([value=""])')).map(o => o.value);
             }
 
-            if (!targetGrupo) {
+            if (grupos.length === 0) {
                 console.log(`[SyncFUBB] [Cat ${catValue}] No hay grupos, fin.`);
                 viewState = freshVS; viewStateGenerator = freshVSG; eventValidation = freshEV;
                 return html2;
             }
 
-            await new Promise(r => setTimeout(r, 600));
+            let bestHtml = null;
 
-            // PASO 4: POST cambiar grupo (Carga el calendario y clasificación definitivos)
-            console.log(`[SyncFUBB] [Cat ${catValue}] Paso 4: POST seleccionar grupo [${targetGrupo}]...`);
-            const bodyStep3 = new URLSearchParams({
-                '__EVENTTARGET':        'DDLGrupos',
-                '__EVENTARGUMENT':      '',
-                '__LASTFOCUS':          '',
-                '__VIEWSTATE':          freshVS,
-                '__VIEWSTATEGENERATOR': freshVSG,
-                '__EVENTVALIDATION':    freshEV,
-                'DDLCompeticiones':     compValue,
-                'DDLCategorias':        catValue,
-                'DDLFases':             targetFase,
-                'DDLGrupos':            targetGrupo,
-            });
+            for (let i = 0; i < grupos.length; i++) {
+                const targetGrupo = grupos[i];
+                await new Promise(r => setTimeout(r, 600));
 
-            const res3 = await fetchWithTimeout(proxyUrl, { method: 'POST', headers: postHeaders, body: bodyStep3.toString(), cache: 'no-store' }, FETCH_TIMEOUT_MS);
-            if (!res3.ok) throw new Error(`POST grupo falló: HTTP ${res3.status}`);
-            const html3 = await res3.text();
+                console.log(`[SyncFUBB] [Cat ${catValue}] Paso 4: POST seleccionar grupo [${targetGrupo}]...`);
+                const bodyStep3 = new URLSearchParams({
+                    '__EVENTTARGET':        'DDLGrupos',
+                    '__EVENTARGUMENT':      '',
+                    '__LASTFOCUS':          '',
+                    '__VIEWSTATE':          freshVS,
+                    '__VIEWSTATEGENERATOR': freshVSG,
+                    '__EVENTVALIDATION':    freshEV,
+                    'DDLCompeticiones':     compValue,
+                    'DDLCategorias':        catValue,
+                    'DDLFases':             targetFase,
+                    'DDLGrupos':            targetGrupo,
+                });
 
-            const doc3 = parser.parseFromString(html3, 'text/html');
+                const res3 = await fetchWithTimeout(proxyUrl, { method: 'POST', headers: postHeaders, body: bodyStep3.toString(), cache: 'no-store' }, FETCH_TIMEOUT_MS);
+                if (!res3.ok) throw new Error(`POST grupo falló: HTTP ${res3.status}`);
+                const html3 = await res3.text();
+                
+                if (i === 0) bestHtml = html3; // Guardar el primero como fallback
+
+                // Verificar si Defensor está en este grupo
+                const standings = parseClasificacion(html3, catValue + ` (Grupo ${targetGrupo})`);
+                if (standings) {
+                    const dscKey = Object.keys(standings).find(k => isDefensorSporting(k));
+                    if (dscKey) {
+                        console.log(`[SyncFUBB] ✅ Defensor Sporting encontrado en grupo ${targetGrupo}!`);
+                        bestHtml = html3;
+                        break; // Encontramos el grupo correcto, no seguimos buscando
+                    }
+                }
+            }
+
+            const doc3 = parser.parseFromString(bestHtml, 'text/html');
             viewState          = getHiddenVal(doc3, '__VIEWSTATE') || freshVS;
             viewStateGenerator = getHiddenVal(doc3, '__VIEWSTATEGENERATOR') || freshVSG;
             eventValidation    = getHiddenVal(doc3, '__EVENTVALIDATION') || freshEV;
 
-            return html3;
+            return bestHtml;
         }
 
         // Helper: parsear la tabla de clasificación del div#PClasificacion
