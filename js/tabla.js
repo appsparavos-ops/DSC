@@ -14,6 +14,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentCategory = 'ACUMULADA';
     let currentCompetition = 'MASC'; // MASC, FEM, LFB
     let currentStage = '1'; // 1, 2, 3 (Play Offs)
+    let currentFubbFase = ''; // Nombre de la Fase en FUBB (ej: "PRIMERA FASE")
+    let currentFubbGrupo = ''; // Nombre del Grupo en FUBB (ej: "GRUPO 2")
     let teamsList = [];
     let sharedFixture = {};
     let allResults = {};
@@ -790,6 +792,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
         sharedFixture = stageData.fixture || {};
         allResults = {};
+
+        // Cargar nombre de Fase y Grupo de FUBB para esta etapa
+        currentFubbFase  = (stageData.config && stageData.config.fubbFase)  ? stageData.config.fubbFase  : '';
+        currentFubbGrupo = (stageData.config && stageData.config.fubbGrupo) ? stageData.config.fubbGrupo : '';
+        // Actualizar los inputs en el panel admin si existen
+        const inputFase  = document.getElementById('fubbFaseInput');
+        const inputGrupo = document.getElementById('fubbGrupoInput');
+        if (inputFase)  inputFase.value  = currentFubbFase;
+        if (inputGrupo) inputGrupo.value = currentFubbGrupo;
 
         const categories = COMPETITIONS[currentCompetition].categories
             .filter(c => c.id !== 'ACUMULADA')
@@ -1791,6 +1802,12 @@ document.addEventListener('DOMContentLoaded', function () {
             sortedTeams.forEach((t, i) => { teamsObj[i] = t; });
             updates[`${stageNode}/equipos`] = teamsObj;
 
+            // Guardar nombre de Fase y Grupo FUBB si fueron ingresados
+            const inputFaseVal  = (document.getElementById('fubbFaseInput')  || {}).value  || '';
+            const inputGrupoVal = (document.getElementById('fubbGrupoInput') || {}).value || '';
+            if (inputFaseVal.trim())  updates[`${stageNode}/config/fubbFase`]  = inputFaseVal.trim();
+            if (inputGrupoVal.trim()) updates[`${stageNode}/config/fubbGrupo`] = inputGrupoVal.trim();
+
             // Configuración de Etapa 2 (Arrastre)
             if (targetStage === '2') {
                 const carryOver = document.getElementById('carryOverSelect').value;
@@ -1822,6 +1839,38 @@ document.addEventListener('DOMContentLoaded', function () {
         // --- SINCRONIZAR TABLAS FUBB ---
         const syncFubbBtn = document.getElementById('syncFubbBtn');
         if (syncFubbBtn) syncFubbBtn.addEventListener('click', () => syncFubbTables());
+
+        // --- GUARDAR FASE Y GRUPO FUBB (independiente del CSV) ---
+        const saveFubbMetaBtn = document.getElementById('saveFubbMetaBtn');
+        if (saveFubbMetaBtn) saveFubbMetaBtn.addEventListener('click', () => {
+            const branch = COMPETITIONS[currentCompetition].path;
+            const targetStage = document.getElementById('importStageSelect').value;
+            let stageNode = `${branch}/${currentSeason}/etapa${targetStage}`;
+            
+            if (targetStage === '1' && (!allStagesData.etapa1 || !allStagesData.etapa1.fixture)) {
+                stageNode = `${branch}/${currentSeason}`;
+            }
+            const faseVal  = (document.getElementById('fubbFaseInput')  || {}).value || '';
+            const grupoVal = (document.getElementById('fubbGrupoInput') || {}).value || '';
+
+            if (!faseVal.trim() && !grupoVal.trim()) {
+                alert('Ingresá al menos un valor (Fase o Grupo) para guardar.');
+                return;
+            }
+
+            const updates = {};
+            if (faseVal.trim())  updates[`${stageNode}/config/fubbFase`]  = faseVal.trim();
+            if (grupoVal.trim()) updates[`${stageNode}/config/fubbGrupo`] = grupoVal.trim();
+
+            database.ref().update(updates).then(() => {
+                currentFubbFase  = faseVal.trim();
+                currentFubbGrupo = grupoVal.trim();
+                alert(`✅ Guardado.\nFase: "${currentFubbFase || '(vacío)'}"\nGrupo: "${currentFubbGrupo || '(vacío)'}"`);
+            }).catch(err => {
+                console.error('Error al guardar datos FUBB:', err);
+                alert('Error al guardar. Revisá la consola.');
+            });
+        });
 
         const saveJornadaResultsBtn = document.getElementById('saveJornadaResultsBtn');
         if (saveJornadaResultsBtn) saveJornadaResultsBtn.addEventListener('click', () => {
@@ -2015,7 +2064,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // Leer las categorías del select #DDLCategorias
-        const catSelect = initialDoc.getElementById('DDLCategorias');
+        const catSelect = initialDoc.getElementById('DDLCategorias')
+            || initialDoc.querySelector('select[name="DDLCategorias"]')
+            || initialDoc.querySelector('select[id$="DDLCategorias"]');
         let availableOptions = catSelect
             ? Array.from(catSelect.querySelectorAll('option')).map(o => ({
                 value: o.value,
@@ -2058,7 +2109,9 @@ document.addEventListener('DOMContentLoaded', function () {
         //   2. POST cambiando DDLCategorias → obtiene las fases de la categoría deseada
         //   3. POST seleccionando la primera fase → obtiene la clasificación/calendario
         async function fetchCategory(catValue, isFirstLoad, currentHtml) {
-            if (isFirstLoad && currentHtml) {
+            // Si el usuario guardó una fase o grupo específico, NO podemos reutilizar el HTML
+            // por defecto (que trae la fase activa actual), debemos forzar los POST.
+            if (isFirstLoad && currentHtml && !currentFubbFase && !currentFubbGrupo) {
                 console.log(`[SyncFUBB] Reutilizando HTML inicial para la 1ª categoría.`);
                 return currentHtml;
             }
@@ -2083,6 +2136,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!freshVS) throw new Error('No se obtuvo ViewState del GET fresco');
 
+            // Extraer los valores por defecto de la página para no mandar '' y romper el ASP.NET
+            const defaultFase = docGet.getElementById('DDLFases') ? docGet.getElementById('DDLFases').value : '';
+            const defaultGrupo = docGet.getElementById('DDLGrupos') ? docGet.getElementById('DDLGrupos').value : '';
+
             // Usar siempre la fase/grupo por defecto de FUBB (la activa)
             let compValue = '141';
             if (currentCompetition === 'LFB') compValue = '149';
@@ -2100,8 +2157,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 '__EVENTVALIDATION':    freshEV,
                 'DDLCompeticiones':     compValue,
                 'DDLCategorias':        catValue,
-                'DDLFases':             '',
-                'DDLGrupos':            '',
+                'DDLFases':             defaultFase,
+                'DDLGrupos':            defaultGrupo,
             });
 
             const res1 = await fetchWithTimeout(proxyUrl, { method: 'POST', headers: postHeaders, body: bodyStep1.toString(), cache: 'no-store' }, FETCH_TIMEOUT_MS);
@@ -2113,11 +2170,27 @@ document.addEventListener('DOMContentLoaded', function () {
             freshVSG = getHiddenVal(doc1, '__VIEWSTATEGENERATOR') || freshVSG;
             freshEV  = getHiddenVal(doc1, '__EVENTVALIDATION') || freshEV;
 
-            const faseSelect = doc1.getElementById('DDLFases');
+            // ASP.NET puede manglar el ID; buscar por name, id exacto o id que termina en el nombre
+            const faseSelect = doc1.getElementById('DDLFases')
+                || doc1.querySelector('select[name="DDLFases"]')
+                || doc1.querySelector('select[id$="DDLFases"]');
             let targetFase = '';
             if (faseSelect) {
-                // Usar la primera fase disponible (la activa por defecto en FUBB)
-                targetFase = (faseSelect.querySelector('option:not([value=""])') || faseSelect.querySelector('option') || {value:''}).value;
+                const faseOptions = Array.from(faseSelect.querySelectorAll('option:not([value=""])'));
+                if (currentFubbFase) {
+                    // Buscar la fase que coincida con el nombre guardado (case-insensitive)
+                    const matched = faseOptions.find(o => (o.textContent || '').toUpperCase().includes(currentFubbFase.toUpperCase()));
+                    if (matched) {
+                        targetFase = matched.value;
+                        console.log(`[SyncFUBB] [Cat ${catValue}] ✅ Fase encontrada por nombre: "${matched.textContent.trim()}"`);
+                    } else {
+                        console.warn(`[SyncFUBB] [Cat ${catValue}] ⚠️ No se encontró fase "${currentFubbFase}". Usando la primera disponible.`);
+                        targetFase = (faseOptions[0] || {value:''}).value;
+                    }
+                } else {
+                    // Sin nombre guardado: usar la primera fase (comportamiento original)
+                    targetFase = (faseOptions[0] || faseSelect.querySelector('option') || {value:''}).value;
+                }
             }
 
             if (!targetFase) {
@@ -2152,7 +2225,11 @@ document.addEventListener('DOMContentLoaded', function () {
             freshVSG = getHiddenVal(doc2, '__VIEWSTATEGENERATOR') || freshVSG;
             freshEV  = getHiddenVal(doc2, '__EVENTVALIDATION') || freshEV;
 
-            const grupoSelect = doc2.getElementById('DDLGrupos');
+            const grupoSelect = doc2.getElementById('DDLGrupos')
+                || doc2.querySelector('select[name="DDLGrupos"]')
+                || doc2.querySelector('select[name*="DDLGrupos"]')
+                || doc2.querySelector('select[id$="DDLGrupos"]')
+                || doc2.querySelector('select[id*="DDLGrupos"]');
             let grupos = [];
             if (grupoSelect) {
                 grupos = Array.from(grupoSelect.querySelectorAll('option:not([value=""])')).map(o => o.value);
@@ -2165,6 +2242,38 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             let bestHtml = null;
+
+            // Si tenemos el grupo guardado, intentar ir directo sin iterar todos
+            if (currentFubbGrupo) {
+                const grupoOptions = Array.from(grupoSelect.querySelectorAll('option:not([value=""])')).map(o => ({ value: o.value, text: (o.textContent || '').trim() }));
+                const matchedGrupo = grupoOptions.find(o => o.text.toUpperCase().includes(currentFubbGrupo.toUpperCase()));
+                if (matchedGrupo) {
+                    console.log(`[SyncFUBB] [Cat ${catValue}] ✅ Grupo encontrado por nombre: "${matchedGrupo.text}". Yendo directo...`);
+                    await new Promise(r => setTimeout(r, 600));
+                    const bodyStep3 = new URLSearchParams({
+                        '__EVENTTARGET':        'DDLGrupos',
+                        '__EVENTARGUMENT':      '',
+                        '__LASTFOCUS':          '',
+                        '__VIEWSTATE':          freshVS,
+                        '__VIEWSTATEGENERATOR': freshVSG,
+                        '__EVENTVALIDATION':    freshEV,
+                        'DDLCompeticiones':     compValue,
+                        'DDLCategorias':        catValue,
+                        'DDLFases':             targetFase,
+                        'DDLGrupos':            matchedGrupo.value,
+                    });
+                    const res3 = await fetchWithTimeout(proxyUrl, { method: 'POST', headers: postHeaders, body: bodyStep3.toString(), cache: 'no-store' }, FETCH_TIMEOUT_MS);
+                    if (!res3.ok) throw new Error(`POST grupo directo falló: HTTP ${res3.status}`);
+                    bestHtml = await res3.text();
+                    const docDirect = parser.parseFromString(bestHtml, 'text/html');
+                    viewState          = getHiddenVal(docDirect, '__VIEWSTATE') || freshVS;
+                    viewStateGenerator = getHiddenVal(docDirect, '__VIEWSTATEGENERATOR') || freshVSG;
+                    eventValidation    = getHiddenVal(docDirect, '__EVENTVALIDATION') || freshEV;
+                    return bestHtml;
+                } else {
+                    console.warn(`[SyncFUBB] [Cat ${catValue}] ⚠️ No se encontró grupo "${currentFubbGrupo}". Buscando en todos los grupos...`);
+                }
+            }
 
             for (let i = 0; i < grupos.length; i++) {
                 const targetGrupo = grupos[i];
@@ -2381,6 +2490,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     const normAwayScraped = normalizeTeamName(awayTeamRaw);
 
                     // Buscar este partido en el fixture base de Firebase
+                    let isSwapped = false;
                     const matchedFixtureEntry = Object.entries(currentFixture).find(([matchId, f]) => {
                         const isSameJornada = (f.jornada || 1) === jornadaNum;
                         if (!isSameJornada) return false;
@@ -2388,24 +2498,43 @@ document.addEventListener('DOMContentLoaded', function () {
                         const normHomeFixture = normalizeTeamName(f.home);
                         const normAwayFixture = normalizeTeamName(f.away);
 
-                        // Comparación flexible
-                        const matchHome = (isDefensorSporting(f.home) && isDefensorSporting(homeTeamRaw)) ||
-                                          normHomeFixture.includes(normHomeScraped) || 
-                                          normHomeScraped.includes(normHomeFixture);
-                        const matchAway = (isDefensorSporting(f.away) && isDefensorSporting(awayTeamRaw)) ||
-                                          normAwayFixture.includes(normAwayScraped) || 
-                                          normAwayScraped.includes(normAwayFixture);
-                        return matchHome && matchAway;
+                        // Comparación flexible directa
+                        const matchHomeDirect = (isDefensorSporting(f.home) && isDefensorSporting(homeTeamRaw)) ||
+                                          normHomeFixture.includes(normHomeScraped) || normHomeScraped.includes(normHomeFixture);
+                        const matchAwayDirect = (isDefensorSporting(f.away) && isDefensorSporting(awayTeamRaw)) ||
+                                          normAwayFixture.includes(normAwayScraped) || normAwayScraped.includes(normAwayFixture);
+                        
+                        if (matchHomeDirect && matchAwayDirect) {
+                            return true;
+                        }
+
+                        // Comparación flexible invertida (Local y Visitante al revés)
+                        const matchHomeInverted = (isDefensorSporting(f.home) && isDefensorSporting(awayTeamRaw)) ||
+                                          normHomeFixture.includes(normAwayScraped) || normAwayScraped.includes(normHomeFixture);
+                        const matchAwayInverted = (isDefensorSporting(f.away) && isDefensorSporting(homeTeamRaw)) ||
+                                          normAwayFixture.includes(normHomeScraped) || normHomeScraped.includes(normAwayFixture);
+                        
+                        if (matchHomeInverted && matchAwayInverted) {
+                            isSwapped = true;
+                            return true;
+                        }
+
+                        return false;
                     });
 
                     if (matchedFixtureEntry) {
                         const [matchId] = matchedFixtureEntry;
+                        
+                        // Si estaban invertidos en el CSV, invertimos los resultados para que encajen
+                        const finalScoreHome = isSwapped ? scoreAway : scoreHome;
+                        const finalScoreAway = isSwapped ? scoreHome : scoreAway;
+
                         resultsUpdates[matchId] = {
-                            scoreHome: scoreHome,
-                            scoreAway: scoreAway,
+                            scoreHome: finalScoreHome,
+                            scoreAway: finalScoreAway,
                             status: 'played',
-                            homeNoShow: (scoreHome === 0 && scoreAway === 20),
-                            awayNoShow: (scoreHome === 20 && scoreAway === 0)
+                            homeNoShow: (finalScoreHome === 0 && finalScoreAway === 20),
+                            awayNoShow: (finalScoreHome === 20 && finalScoreAway === 0)
                         };
                         parsedCount++;
                     } else {
