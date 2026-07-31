@@ -310,7 +310,7 @@
                         </div>
 
                         <!-- Configuración de Etapa e Importación -->
-                        <div class="mb-6">
+                        <div class="mb-6 space-y-4">
                             <div class="bg-slate-800/50 p-3 rounded-2xl border border-slate-700 md:max-w-[50%]">
                                 <label class="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Etapa a Importar</label>
                                 <select id="importStageSelect" class="w-full bg-slate-900 border-none rounded-xl px-3 py-2 text-white text-xs focus:ring-2 focus:ring-violet-500 outline-none">
@@ -318,6 +318,36 @@
                                     <option value="2">Etapa 2</option>
                                     <option value="3">Play Offs</option>
                                 </select>
+                            </div>
+
+                            <!-- Datos FUBB para el scraping -->
+                            <div class="bg-slate-800/30 p-4 rounded-2xl border border-slate-700/60">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <svg class="w-4 h-4 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                                    </svg>
+                                    <span class="text-[11px] font-bold text-cyan-300 uppercase tracking-wide">Datos FUBB para esta Etapa</span>
+                                    <span class="text-[10px] text-slate-500 font-medium">(opcional — mejora el scraping)</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3 mb-3">
+                                    <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                                        <label class="block text-[9px] font-semibold text-cyan-400/70 uppercase mb-1">Fase en FUBB</label>
+                                        <input type="text" id="fubbFaseInput" placeholder="ej: PRIMERA FASE"
+                                            class="w-full bg-transparent text-xs text-white placeholder-slate-600 outline-none focus:ring-0 border-none">
+                                    </div>
+                                    <div class="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                                        <label class="block text-[9px] font-semibold text-cyan-400/70 uppercase mb-1">Grupo en FUBB</label>
+                                        <input type="text" id="fubbGrupoInput" placeholder="ej: GRUPO 2"
+                                            class="w-full bg-transparent text-xs text-white placeholder-slate-600 outline-none focus:ring-0 border-none">
+                                    </div>
+                                </div>
+                                <button id="saveFubbMetaBtn"
+                                    class="w-full bg-cyan-700/50 hover:bg-cyan-600/60 border border-cyan-600/30 text-cyan-200 font-bold text-[11px] py-2 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+                                    </svg>
+                                    GUARDAR FASE Y GRUPO EN FIREBASE
+                                </button>
                             </div>
                         </div>
 
@@ -429,9 +459,7 @@
                                 <h4 class="text-sm font-bold text-white">Sincronizar desde FUBB</h4>
                                 <p class="text-[10px] text-cyan-400/70 uppercase font-black tracking-tighter">Extrae los resultados oficiales de competicionesfubb.gesdeportiva.es</p>
                             </div>
-                            </div>
                         </div>
-                        
 
                         <button id="syncFubbBtn"
                             class="w-full bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-black text-sm py-3.5 rounded-2xl transition-all shadow-lg shadow-cyan-900/20 flex items-center justify-center gap-3 active:scale-[0.98]">
