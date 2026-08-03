@@ -3,10 +3,10 @@ import re
 import time
 import requests
 from bs4 import BeautifulSoup
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='.', static_url_path='')
 # Permitir peticiones CORS desde cualquier origen (local, GitHub Actions, GitHub Pages)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
@@ -259,7 +259,11 @@ def scrape_category_html(session, comp_id, opt_value, opt_text, fubb_fase_req, f
 
 @app.route('/', methods=['GET'])
 def index():
-    return jsonify({'status': 'online', 'service': 'FUBB Scraping Backend'})
+    return app.send_static_file('resultados.html')
+
+@app.route('/firebase-config.js', methods=['GET'])
+def firebase_config():
+    return send_from_directory(os.path.join(os.path.dirname(__file__), '..'), 'firebase-config.js')
 
 @app.route('/scrape_branch', methods=['POST'])
 def scrape_branch():

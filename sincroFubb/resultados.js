@@ -1,6 +1,6 @@
 // --- CONFIGURACIÓN BACKEND RENDER ---
 // Define la URL del servicio de scraping desplegado en Render
-const API_BASE_URL = 'https://dsc-resultados.onrender.com'; // O la URL de tu nuevo servicio
+const API_BASE_URL = 'https://dsc-vh8j.onrender.com'; // O la URL de tu nuevo servicio
 
 // --- CONFIGURACIÓN AUTOMÁTICA DE LOGINS ---
 const AUTO_EMAIL    = 'invitado@dsc.com';
