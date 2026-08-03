@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sincronización Automática de Resultados FUBB</title>
+    <link rel="icon" href="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_SportingCuad.png" type="image/png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="../firebase-config.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+        }
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100 p-4 sm:p-8 flex items-center justify-center">
+    <div class="max-w-3xl w-full">
+        <!-- Header -->
+        <header class="glass rounded-3xl p-6 shadow-2xl mb-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div class="flex items-center gap-4">
+                <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png" alt="Logo" class="h-16 w-auto">
+                <div>
+                    <h1 class="text-2xl font-extrabold text-white font-['Outfit'] tracking-tight">Sincronizador FUBB</h1>
+                    <p class="text-slate-400 text-xs">Actualización automática de tablas y fixture</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <span id="status-badge" class="px-3 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full text-xs font-bold uppercase tracking-wider animate-pulse">
+                    Iniciando...
+                </span>
+            </div>
+        </header>
+
+        <!-- Main Card -->
+        <main class="glass rounded-3xl p-6 shadow-2xl space-y-6">
+            <div>
+                <h2 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">Consola de Ejecución</h2>
+                <div id="log-display" class="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 font-mono text-[11px] text-green-400 h-80 overflow-y-auto shadow-inner leading-relaxed custom-scrollbar">
+                    [SISTEMA] Listo para iniciar sincronización...
+                </div>
+            </div>
+            
+            <div class="flex justify-between items-center text-xs text-slate-500">
+                <p>Usuario: <span id="user-display" class="text-slate-400">Autologin...</span></p>
+                <p>Ruta Firebase: <span class="text-slate-400 font-bold">tablas_posiciones*</span></p>
+            </div>
+        </main>
+    </div>
+
+    <script src="resultados.js"></script>
+</body>
+</html>
