@@ -552,9 +552,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const ref = database.ref(`${targetPath}/${cat}/resultados/${matchId}`);
         if (dateVal) {
+            // Convert YYYY-MM-DD to DD-MM-YYYY
+            let savedDate = dateVal;
+            if (dateVal.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                const parts = dateVal.split('-');
+                savedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+
             ref.update({
                 status: 'pending',
-                fechaPendiente: dateVal
+                fechaPendiente: savedDate
             }).then(() => {
                 alert('Fecha guardada correctamente.');
                 // showPendingMatches se llama para reflejar el cambio en el modal abierto
@@ -1414,13 +1421,28 @@ document.addEventListener('DOMContentLoaded', function () {
                                     const matchRes = results[m.id] || {};
                                     const currentFecha = matchRes.fechaPendiente || '';
                                     
-                                    // Determinar si la fecha es pasada
+                                    // Determinar si la fecha es pasada y formatear para el input
                                     let isPast = false;
+                                    let inputDateValue = currentFecha; // Default
+                                    
                                     if (currentFecha) {
+                                        let scheduledDate = null;
+                                        // Chequear si viene en formato DD-MM-YYYY
+                                        if (currentFecha.match(/^\d{2}-\d{2}-\d{4}$/)) {
+                                            const parts = currentFecha.split('-');
+                                            scheduledDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`);
+                                            inputDateValue = `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD para el input
+                                        } else {
+                                            scheduledDate = new Date(currentFecha + 'T00:00:00');
+                                            inputDateValue = currentFecha;
+                                        }
+
                                         const today = new Date();
                                         today.setHours(0, 0, 0, 0);
-                                        const scheduledDate = new Date(currentFecha + 'T00:00:00');
-                                        isPast = scheduledDate < today;
+                                        
+                                        if (scheduledDate && !isNaN(scheduledDate.getTime())) {
+                                            isPast = scheduledDate < today;
+                                        }
                                     }
 
                                     let dateControlHtml = '';
@@ -1445,7 +1467,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                                     ${alertBadgeHtml}
                                                 </div>
                                                 <div class="flex items-center gap-2 mt-1 sm:mt-0">
-                                                    <input type="date" id="date-pending-${m.id}-${cat}" value="${currentFecha}" 
+                                                    <input type="date" id="date-pending-${m.id}-${cat}" value="${inputDateValue}" 
                                                         class="bg-slate-900 border ${inputBorderClass} rounded-xl px-2 py-1 text-[11px] text-white outline-none">
                                                     <button onclick="savePendingMatchDate('${m.id}', '${cat}', 'date-pending-${m.id}-${cat}')" 
                                                         class="text-[9px] font-bold bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-1.5 rounded-lg transition-all uppercase tracking-wider shrink-0 shadow-md">
@@ -2474,17 +2496,49 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     const ptsHomeRaw = (cells[1].textContent || '').trim();
                     const ptsAwayRaw = (cells[2].textContent || '').trim();
+                    const fechaRaw = cells[4] ? (cells[4].textContent || '').trim() : '';
 
                     if (!homeTeamRaw || !awayTeamRaw) return;
 
-                    // Si no hay puntos registrados, omitir partido (aún no jugado)
-                    if (ptsHomeRaw === '' || ptsAwayRaw === '') return;
+                    let scoreHome = NaN;
+                    let scoreAway = NaN;
+                    let isUnplayed = false;
 
-                    const scoreHome = parseInt(ptsHomeRaw);
-                    const scoreAway = parseInt(ptsAwayRaw);
+                    if (ptsHomeRaw === '' || ptsAwayRaw === '') {
+                        isUnplayed = true;
+                    } else {
+                        scoreHome = parseInt(ptsHomeRaw);
+                        scoreAway = parseInt(ptsAwayRaw);
+                        if (isNaN(scoreHome) || isNaN(scoreAway)) isUnplayed = true; // Partido sin jugar o suspendido
+                        if (!isUnplayed && scoreHome === 0 && scoreAway === 0 && !catLabel.includes('U11')) isUnplayed = true; // No importar si es 0-0 excepto U11
+                    }
 
-                    if (isNaN(scoreHome) || isNaN(scoreAway)) return; // Partido sin jugar o suspendido
-                    if (scoreHome === 0 && scoreAway === 0 && !catLabel.includes('U11')) return; // No importar si es 0-0 excepto U11
+                    let futureDateStr = null;
+                    if (isUnplayed && fechaRaw) {
+                        const parts = fechaRaw.split(' ');
+                        const datePart = parts[0].split('/');
+                        if (datePart.length === 3) {
+                            const day = parseInt(datePart[0], 10);
+                            const month = parseInt(datePart[1], 10) - 1;
+                            const year = parseInt(datePart[2], 10);
+                            let fubbDate = new Date(year, month, day);
+                            if (parts.length > 1) {
+                                const timePart = parts[1].split(':');
+                                if (timePart.length >= 2) {
+                                    fubbDate = new Date(year, month, day, parseInt(timePart[0], 10), parseInt(timePart[1], 10));
+                                }
+                            }
+                            
+                            if (fubbDate > new Date()) {
+                                const yyyy = fubbDate.getFullYear();
+                                const mm = String(fubbDate.getMonth() + 1).padStart(2, '0');
+                                const dd = String(fubbDate.getDate()).padStart(2, '0');
+                                futureDateStr = `${dd}-${mm}-${yyyy}`;
+                            }
+                        }
+                    }
+
+                    if (isUnplayed && !futureDateStr) return;
 
                     const normHomeScraped = normalizeTeamName(homeTeamRaw);
                     const normAwayScraped = normalizeTeamName(awayTeamRaw);
@@ -2525,17 +2579,24 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (matchedFixtureEntry) {
                         const [matchId] = matchedFixtureEntry;
                         
-                        // Si estaban invertidos en el CSV, invertimos los resultados para que encajen
-                        const finalScoreHome = isSwapped ? scoreAway : scoreHome;
-                        const finalScoreAway = isSwapped ? scoreHome : scoreAway;
+                        if (isUnplayed) {
+                            resultsUpdates[matchId] = {
+                                status: 'pending',
+                                fechaPendiente: futureDateStr
+                            };
+                        } else {
+                            // Si estaban invertidos en el CSV, invertimos los resultados para que encajen
+                            const finalScoreHome = isSwapped ? scoreAway : scoreHome;
+                            const finalScoreAway = isSwapped ? scoreHome : scoreAway;
 
-                        resultsUpdates[matchId] = {
-                            scoreHome: finalScoreHome,
-                            scoreAway: finalScoreAway,
-                            status: 'played',
-                            homeNoShow: (finalScoreHome === 0 && finalScoreAway === 20),
-                            awayNoShow: (finalScoreHome === 20 && finalScoreAway === 0)
-                        };
+                            resultsUpdates[matchId] = {
+                                scoreHome: finalScoreHome,
+                                scoreAway: finalScoreAway,
+                                status: 'played',
+                                homeNoShow: (finalScoreHome === 0 && finalScoreAway === 20),
+                                awayNoShow: (finalScoreHome === 20 && finalScoreAway === 0)
+                            };
+                        }
                         parsedCount++;
                     } else {
                         console.warn(`[SyncFUBB] [${catLabel}] No se encontró partido en fixture para: Jornada ${jornadaNum} - ${homeTeamRaw} vs ${awayTeamRaw}`);
