@@ -2514,21 +2514,43 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
 
                     let futureDateStr = null;
-                    if (isUnplayed && fechaRaw) {
-                        const parts = fechaRaw.split(' ');
-                        const datePart = parts[0].split('/');
-                        if (datePart.length === 3) {
-                            const day = parseInt(datePart[0], 10);
-                            const month = parseInt(datePart[1], 10) - 1;
-                            const year = parseInt(datePart[2], 10);
-                            let fubbDate = new Date(year, month, day);
-                            if (parts.length > 1) {
-                                const timePart = parts[1].split(':');
-                                if (timePart.length >= 2) {
-                                    fubbDate = new Date(year, month, day, parseInt(timePart[0], 10), parseInt(timePart[1], 10));
+                    if (isUnplayed) {
+                        let dateToParse = fechaRaw;
+                        
+                        const tryParseDate = (dateString) => {
+                            if (!dateString) return null;
+                            const cleanDate = dateString.replace(/\s+/g, ' ').trim();
+                            const parts = cleanDate.split(' ');
+                            const datePart = parts[0].split(/[\/\-]/);
+                            if (datePart.length >= 3) {
+                                const day = parseInt(datePart[0], 10);
+                                const month = parseInt(datePart[1], 10) - 1;
+                                let year = parseInt(datePart[2], 10);
+                                if (year < 100) year += 2000; // handle 2-digit years
+
+                                let d = new Date(year, month, day);
+                                if (parts.length > 1) {
+                                    const timePart = parts[1].split(':');
+                                    if (timePart.length >= 2) {
+                                        d = new Date(year, month, day, parseInt(timePart[0], 10), parseInt(timePart[1], 10));
+                                    }
                                 }
+                                return d;
                             }
-                            
+                            return null;
+                        };
+
+                        let fubbDate = tryParseDate(dateToParse);
+                        
+                        // Si no hay fecha en la celda, intentamos buscarla en el título de la jornada (ej: "Jornada 1 - 22/03/2026")
+                        if (!fubbDate || isNaN(fubbDate.getTime())) {
+                            const matchDateHeading = headingText.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4}|\d{2})/);
+                            if (matchDateHeading) {
+                                fubbDate = tryParseDate(matchDateHeading[0]);
+                            }
+                        }
+
+                        if (fubbDate && !isNaN(fubbDate.getTime())) {
                             if (fubbDate > new Date()) {
                                 const yyyy = fubbDate.getFullYear();
                                 const mm = String(fubbDate.getMonth() + 1).padStart(2, '0');
