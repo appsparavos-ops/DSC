@@ -31,6 +31,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const PROXIES = [
         {
+            buildUrl: (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+            isJson: false,
+            extraHeaders: { 'X-Requested-With': 'XMLHttpRequest' },
+            supportsPost: true,
+        },
+        {
+            buildUrl: (u) => `https://thingproxy.freeboard.io/fetch/${u}`,
+            isJson: false,
+            extraHeaders: { 'X-Requested-With': 'XMLHttpRequest' },
+            supportsPost: true,
+        },
+        {
             buildUrl: (u) => `https://cors-anywhere.herokuapp.com/${u}`,
             isJson: false,
             extraHeaders: { 'X-Requested-With': 'XMLHttpRequest' },
