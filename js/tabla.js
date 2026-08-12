@@ -1435,23 +1435,35 @@ document.addEventListener('DOMContentLoaded', function () {
                                     
                                     // Determinar si la fecha es pasada y formatear para el input
                                     let isPast = false;
-                                    let inputDateValue = currentFecha; // Default
+                                    let inputDateValue = ''; // Para el <input type="date"> siempre YYYY-MM-DD
+                                    let displayDateValue = currentFecha; // Para mostrar al usuario
                                     
                                     if (currentFecha) {
+                                        // Extraer los componentes de fecha con regex flexible
+                                        // Soporta: DD-MM-YYYY, YYYY-MM-DD, DD-MM-YYYYhh (dato viejo malformado)
+                                        const dateMatch = currentFecha.match(/(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})/);
                                         let scheduledDate = null;
-                                        // Chequear si viene en formato DD-MM-YYYY
-                                        if (currentFecha.match(/^\d{2}-\d{2}-\d{4}$/)) {
-                                            const parts = currentFecha.split('-');
-                                            scheduledDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00`);
-                                            inputDateValue = `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD para el input
-                                        } else {
-                                            scheduledDate = new Date(currentFecha + 'T00:00:00');
-                                            inputDateValue = currentFecha;
+                                        if (dateMatch) {
+                                            let d1 = parseInt(dateMatch[1], 10);
+                                            let d2 = parseInt(dateMatch[2], 10);
+                                            let d3 = parseInt(dateMatch[3], 10); // siempre 4 dígitos
+                                            let day, month, year;
+                                            // Si d3 es año (>= 2000), entonces formato DD-MM-YYYY
+                                            if (d3 >= 2000) {
+                                                day = d1; month = d2; year = d3;
+                                            } else {
+                                                // Formato YYYY-MM-DD (d1=año, d2=mes, d3=dia) - legado
+                                                year = d1; month = d2; day = d3;
+                                            }
+                                            scheduledDate = new Date(year, month - 1, day);
+                                            // Formatear para el input (YYYY-MM-DD)
+                                            inputDateValue = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                                            // Formatear para mostrar (DD-MM-YYYY)
+                                            displayDateValue = `${String(day).padStart(2,'0')}-${String(month).padStart(2,'0')}-${year}`;
                                         }
 
                                         const today = new Date();
                                         today.setHours(0, 0, 0, 0);
-                                        
                                         if (scheduledDate && !isNaN(scheduledDate.getTime())) {
                                             isPast = scheduledDate < today;
                                         }
@@ -1499,7 +1511,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                             } else {
                                                 dateControlHtml = `
                                                     <span class="text-[9px] font-bold text-amber-500 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-lg shrink-0 mt-2 sm:mt-0 uppercase tracking-wider">
-                                                        📅 Juega: ${currentFecha}
+                                                        📅 Juega: ${displayDateValue}
                                                     </span>
                                                 `;
                                             }
@@ -1981,6 +1993,7 @@ document.addEventListener('DOMContentLoaded', function () {
         let lastError = null;
 
         // 1. Intentar cada proxy hasta obtener el HTML inicial (carga GET de la primera categoría)
+        let workingProxy = null; // Guardar el proxy que funcionó para reutilizarlo
         for (let i = 0; i < PROXIES.length; i++) {
             const proxy = PROXIES[i];
             const proxyUrl = proxy.buildUrl(TARGET_URL);
@@ -2001,9 +2014,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Validar que el HTML sea del sitio real
                 if (htmlText && htmlText.length > 1000 && (htmlText.includes('gesdeportiva') || htmlText.includes('<table') || htmlText.includes('competicion'))) {
                     console.log(`[SyncFUBB] ✅ HTML inicial válido (${htmlText.length} chars) via proxy ${i + 1}.`);
+                    workingProxy = proxy; // ← Guardar el proxy que funcionó
                     break;
                 } else if (htmlText && htmlText.length > 500) {
                     console.warn(`[SyncFUBB] HTML obtenido pero sin marcadores esperados (${htmlText.length} chars). Intentando parsear...`);
+                    workingProxy = proxy; // ← Guardar el proxy que funcionó
                     break;
                 } else {
                     throw new Error('Respuesta vacía o demasiado corta.');
@@ -2129,13 +2144,16 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        // Encontrar el proxy que soporta POST (cors-anywhere)
-        const postProxy = PROXIES.find(p => p.supportsPost);
+        // Usar el proxy que funcionó para el GET inicial (si soporta POST), o buscar el primero que lo soporte
+        const postProxy = (workingProxy && workingProxy.supportsPost)
+            ? workingProxy
+            : PROXIES.find(p => p.supportsPost);
         if (!postProxy) {
             setSyncing(false);
             alert('❌ No hay proxy disponible que soporte POST.\nVisita https://cors-anywhere.herokuapp.com/corsdemo y luego reintenta.');
             return;
         }
+        console.log(`[SyncFUBB] Usando proxy para categorías: ${postProxy.buildUrl('...')}`);
 
         // Helper: obtener el HTML de una categoría vía scraping ASP.NET
         // Para cada categoría que no sea la default (U20), hace:
@@ -2508,7 +2526,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     const ptsHomeRaw = (cells[1].textContent || '').trim();
                     const ptsAwayRaw = (cells[2].textContent || '').trim();
-                    const fechaRaw = cells[4] ? (cells[4].textContent || '').trim() : '';
+                    
+                    let fechaRaw = '';
+                    if (cells[4]) {
+                        fechaRaw = cells[4].innerHTML.replace(/<br\s*\/?>/gi, ' ').replace(/(<([^>]+)>)/gi, ' ').trim();
+                    }
 
                     if (!homeTeamRaw || !awayTeamRaw) return;
 
@@ -2531,21 +2553,18 @@ document.addEventListener('DOMContentLoaded', function () {
                         
                         const tryParseDate = (dateString) => {
                             if (!dateString) return null;
-                            const cleanDate = dateString.replace(/\s+/g, ' ').trim();
-                            const parts = cleanDate.split(' ');
-                            const datePart = parts[0].split(/[\/\-]/);
-                            if (datePart.length >= 3) {
-                                const day = parseInt(datePart[0], 10);
-                                const month = parseInt(datePart[1], 10) - 1;
-                                let year = parseInt(datePart[2], 10);
-                                if (year < 100) year += 2000; // handle 2-digit years
+                            const dateMatch = dateString.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+                            if (dateMatch) {
+                                const day = parseInt(dateMatch[1], 10);
+                                const month = parseInt(dateMatch[2], 10) - 1;
+                                let year = parseInt(dateMatch[3], 10);
+                                if (year < 100) year += 2000;
 
                                 let d = new Date(year, month, day);
-                                if (parts.length > 1) {
-                                    const timePart = parts[1].split(':');
-                                    if (timePart.length >= 2) {
-                                        d = new Date(year, month, day, parseInt(timePart[0], 10), parseInt(timePart[1], 10));
-                                    }
+                                
+                                const timeMatch = dateString.match(/(\d{1,2}):(\d{2})/);
+                                if (timeMatch) {
+                                    d = new Date(year, month, day, parseInt(timeMatch[1], 10), parseInt(timeMatch[2], 10));
                                 }
                                 return d;
                             }
