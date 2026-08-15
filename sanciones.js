@@ -41,10 +41,13 @@ const valueLabel = document.getElementById('valueLabel');
 const btnModePartidos = document.getElementById('btnModePartidos');
 const btnModeTiempo = document.getElementById('btnModeTiempo');
 
+const IMG_BASE_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/';
+
 let allPlayers = [];
 let activeSanctions = {};
 let currentType = 'jugador'; // 'jugador' o 'entrenador'
 let currentMode = 'partidos'; // 'partidos' o 'tiempo'
+let rostsByTeamSeason = {}; // Cache de rosters por temporada y equipo
 
 // Inicializar fecha de hoy
 const hoy = new Date();
@@ -66,7 +69,7 @@ function loadAllPlayers() {
     const p1 = database.ref('/jugadores').once('value');
     const p2 = database.ref('/entrenadores').once('value');
     
-    Promise.all([p1, p2]).then(snapshots => {
+    return Promise.all([p1, p2]).then(snapshots => {
         allPlayers = [];
         // Jugadores
         const jugData = snapshots[0].val();
@@ -74,6 +77,9 @@ function loadAllPlayers() {
             allPlayers = allPlayers.concat(Object.keys(jugData).map(dni => ({
                 DNI: dni,
                 NOMBRE: jugData[dni].datosPersonales?.NOMBRE || 'S/N',
+                EQUIPO: jugData[dni].datosPersonales?.EQUIPO || '',
+                CATEGORIA: jugData[dni].datosPersonales?.CATEGORIA || '',
+                ESTADO_LICENCIA: jugData[dni].datosPersonales?.['ESTADO LICENCIA'] || '',
                 TIPO: 'jugador'
             })));
         }
@@ -83,9 +89,12 @@ function loadAllPlayers() {
             allPlayers = allPlayers.concat(Object.keys(entData).map(dni => ({
                 DNI: dni,
                 NOMBRE: entData[dni].datosPersonales?.NOMBRE || 'S/N',
+                EQUIPO: entData[dni].datosPersonales?.EQUIPO || '',
+                CATEGORIA: entData[dni].datosPersonales?.CATEGORIA || '',
                 TIPO: 'entrenador'
             })));
         }
+        renderSanctions();
     });
 }
 
@@ -96,7 +105,8 @@ function loadSeasons() {
         if (seasons) {
             const seasonKeys = Object.keys(seasons).sort().reverse();
             seasonKeys.forEach(s => {
-                seasonSelect.appendChild(new Option(s, s));
+                const opt = new Option(s, s);
+                seasonSelect.appendChild(opt);
             });
         }
     });
@@ -175,7 +185,10 @@ window.selectPlayer = function(dni, nombre) {
     playerSearch.value = '';
     suggestions.classList.add('hidden');
     
-    playerInitial.textContent = nombre.charAt(0).toUpperCase();
+    // Mostrar foto o inicial
+    const photoUrl = `${IMG_BASE_URL}${encodeURIComponent(dni)}.jpg`;
+    playerInitial.innerHTML = `<img src="${photoUrl}" class="w-full h-full rounded-full object-cover" onerror="this.onerror=null; this.parentElement.textContent='${nombre.charAt(0).toUpperCase()}'">`;
+    
     displayName.textContent = nombre;
     displayDni.textContent = `DNI: ${dni}`;
     selectedPlayerInfo.classList.remove('hidden');
@@ -192,7 +205,7 @@ function loadSanctions() {
     });
 }
 
-function renderSanctions() {
+async function renderSanctions() {
     const keys = Object.keys(activeSanctions);
     sanctionCountEl.textContent = `${keys.length} Sancionados`;
     
@@ -201,14 +214,129 @@ function renderSanctions() {
         return;
     }
 
-    sanctionsList.innerHTML = keys.sort((a,b) => (activeSanctions[b].fechaCarga || "").localeCompare(activeSanctions[a].fechaCarga || "")).map(dni => {
+    if (allPlayers.length === 0) {
+        sanctionsList.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-gray-400">Cargando detalles de jugadores...</td></tr>';
+        return;
+    }
+
+    // Preparar contenido
+    sanctionsList.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-gray-400">Cargando fechas de sanciones...</td></tr>';
+    
+    const renderPromises = keys.sort((a,b) => (activeSanctions[b].fechaCarga || "").localeCompare(activeSanctions[a].fechaCarga || "")).map(async dni => {
         const s = activeSanctions[dni];
+        const initial = (s.nombre || '?').charAt(0).toUpperCase();
+        const photoUrl = `${IMG_BASE_URL}${encodeURIComponent(dni)}.jpg`;
+        
+        let fulfilledDates = [];
+        let remaining = parseInt(s.fechas);
+        let statusHtml = '';
+        
+        if (s.tipoSancion !== 'tiempo') {
+            // EQUIPO y CATEGORIA del jugador NO están en datosPersonales, sino en registrosPorTemporada.
+            // Los buscamos directamente para la temporada de la sanción.
+            let equipo = '';
+            let categoria = s.categoria || ''; // Fallback: categoría de la sanción (para entrenadores)
+
+            try {
+                const seasonSnap = await database.ref(`/registrosPorTemporada/${s.temporada}`).orderByChild('_dni').equalTo(dni).once('value');
+                if (!seasonSnap.exists()) {
+                    // Intentar también por campo DNI mayúscula
+                    const seasonSnap2 = await database.ref(`/registrosPorTemporada/${s.temporada}`).orderByChild('DNI').equalTo(dni).once('value');
+                    if (seasonSnap2.exists()) {
+                        const record = Object.values(seasonSnap2.val())[0];
+                        equipo = record.EQUIPO || '';
+                        categoria = record.CATEGORIA || s.categoria || '';
+                    }
+                } else {
+                    const record = Object.values(seasonSnap.val())[0];
+                    equipo = record.EQUIPO || '';
+                    categoria = record.CATEGORIA || s.categoria || '';
+                }
+            } catch(e) {
+                console.error('Error buscando registro de temporada para DNI ' + dni + ':', e);
+            }
+
+
+            const playerInfo = allPlayers.find(p => p.DNI === dni);
+            const isCoach = playerInfo && playerInfo.TIPO === 'entrenador';
+
+            if (equipo && s.temporada) {
+                const teamKey = `${s.temporada}_${equipo}`;
+                if (!rostsByTeamSeason[teamKey]) {
+                    try {
+                        const snap = await database.ref(`/rosters/${s.temporada}/${equipo}`).once('value');
+                        rostsByTeamSeason[teamKey] = snap.val() || {};
+                    } catch(e) {
+                        rostsByTeamSeason[teamKey] = {};
+                    }
+                }
+
+                const playedMatches = rostsByTeamSeason[teamKey];
+                const startDate = new Date(s.fechaInicio + 'T00:00:00');
+                const currentDate = new Date();
+
+                const isFUBBInvalid = playerInfo?.ESTADO_LICENCIA && playerInfo.ESTADO_LICENCIA.trim().toUpperCase() !== 'DILIGENCIADO';
+
+                Object.keys(playedMatches).forEach(mmdd => {
+                    const yearStr = s.temporada.includes('-') ? s.temporada.split('-')[0] : s.temporada;
+                    const mpDate = new Date(parseInt(yearStr), parseInt(mmdd.substring(0, 2)) - 1, parseInt(mmdd.substring(2, 4)));
+
+                    if (mpDate >= startDate && mpDate <= currentDate) {
+                        const rostersOnDate = playedMatches[mmdd];
+                        if (categoria && rostersOnDate[categoria]) {
+                            if (isCoach) {
+                                fulfilledDates.push(`${mpDate.getDate().toString().padStart(2, '0')}/${(mpDate.getMonth()+1).toString().padStart(2, '0')}/${mpDate.getFullYear()}`);
+                            } else {
+                                if (!isFUBBInvalid) {
+                                    fulfilledDates.push(`${mpDate.getDate().toString().padStart(2, '0')}/${(mpDate.getMonth()+1).toString().padStart(2, '0')}/${mpDate.getFullYear()}`);
+                                }
+                            }
+                        }
+                    }
+                });
+
+                fulfilledDates.sort((a,b) => {
+                    const partsA = a.split('/');
+                    const partsB = b.split('/');
+                    return new Date(partsA[2], partsA[1]-1, partsA[0]) - new Date(partsB[2], partsB[1]-1, partsB[0]);
+                });
+
+                remaining = Math.max(0, remaining - fulfilledDates.length);
+            }
+            
+            if (fulfilledDates.length > 0) {
+                statusHtml = `
+                    <div class="mt-2 text-[11px] text-left">
+                        <span class="text-green-600 font-bold">Cumplidos (${fulfilledDates.length}):</span> 
+                        <span class="text-gray-600 font-medium">${fulfilledDates.join(', ')}</span>
+                    </div>
+                    <div class="text-[11px] text-gray-500 font-bold uppercase mt-1">Restan: ${remaining}</div>
+                `;
+            } else {
+                statusHtml = `<div class="text-[11px] text-gray-500 font-bold uppercase mt-1">Restan: ${remaining}</div>`;
+            }
+        } else {
+            // Lógica de tiempo
+            const startDate = new Date(s.fechaInicio + 'T00:00:00');
+            const expirationDate = new Date(startDate);
+            expirationDate.setDate(expirationDate.getDate() + parseInt(s.fechas));
+            const currentDate = new Date();
+            
+            if (currentDate >= expirationDate) {
+                statusHtml = `<div class="text-[11px] text-green-600 font-bold uppercase mt-1">Cumplida el ${expirationDate.toLocaleDateString()}</div>`;
+            } else {
+                const diffTime = Math.abs(expirationDate - currentDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                statusHtml = `<div class="text-[11px] text-gray-500 font-bold uppercase mt-1">Restan: ${diffDays} días (hasta ${expirationDate.toLocaleDateString()})</div>`;
+            }
+        }
+
         return `
             <tr class="hover:bg-gray-50/50 transition-colors">
                 <td class="px-6 py-4">
                     <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-bold text-xs">
-                            ${(s.nombre || '?').charAt(0).toUpperCase()}
+                        <div class="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-bold text-xs overflow-hidden border border-red-200">
+                            <img src="${photoUrl}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\'text-red-700\'>${initial}</span>'">
                         </div>
                         <div>
                             <div class="font-bold text-gray-800">${s.nombre || 'N/N'}</div>
@@ -220,6 +348,7 @@ function renderSanctions() {
                     <span class="inline-block bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
                         ${s.fechas} ${s.tipoSancion === 'tiempo' ? 'Días' : 'Partidos'}
                     </span>
+                    ${statusHtml}
                 </td>
                 <td class="px-6 py-4 text-center">
                     <div class="text-xs font-medium text-gray-600">${s.fechaInicio || s.fechaCarga.split('T')[0]}</div>
@@ -234,7 +363,10 @@ function renderSanctions() {
                 </td>
             </tr>
         `;
-    }).join('');
+    });
+    
+    const htmlArr = await Promise.all(renderPromises);
+    sanctionsList.innerHTML = htmlArr.join('');
 }
 
 window.removeSanction = function(dni) {
@@ -295,15 +427,18 @@ sanctionForm.addEventListener('submit', (e) => {
 // Inicialización
 auth.onAuthStateChanged(user => {
     if (user) {
-        loadAllPlayers();
+        // Primero cargamos jugadores, y cuando terminan, cargamos sanciones
+        loadAllPlayers().then(() => {
+            loadSanctions();
+        });
         loadSeasons();
-        loadSanctions();
     } else {
         // Redirigir si no está logueado o manejar sesión de invitado
         auth.signInWithEmailAndPassword("invitado@dsc.com", "invitado123").then(() => {
-            loadAllPlayers();
+            loadAllPlayers().then(() => {
+                loadSanctions();
+            });
             loadSeasons();
-            loadSanctions();
         });
     }
 });

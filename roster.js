@@ -234,6 +234,9 @@ function handlePostLogin(user) {
             loadSeasons(lastSeason);
         })
         .catch(() => loadSeasons());
+
+    // Cargar sanciones luego de autenticar para evitar problemas de permisos
+    loadSanctions();
 }
 
 // Inicialización de sesión
@@ -507,12 +510,16 @@ function renderPlayers() {
                 }
             } else {
                 let fechasCumplidas = 0;
+                // Usar la categoría de ORIGEN del jugador (no la que se está visualizando)
+                // para contar las fechas cumplidas de la sanción.
+                const playerOriginCat = String(p.CATEGORIA || "").trim();
                 Object.keys(playedMatchesList).forEach(mmdd => {
                     const yearStr = seasonSelect.value.includes('-') ? seasonSelect.value.split('-')[0] : seasonSelect.value;
                     const mpDate = new Date(parseInt(yearStr), parseInt(mmdd.substring(0, 2)) - 1, parseInt(mmdd.substring(2, 4)));
                     if (mpDate >= startDate && mpDate < currentDate) {
                         const rostersOnDate = playedMatchesList[mmdd];
-                        if (rostersOnDate && rostersOnDate[selCat]) {
+                        // Contar si la categoría DE ORIGEN del jugador jugó ese día
+                        if (rostersOnDate && rostersOnDate[playerOriginCat]) {
                             if (!isFUBBInvalid) fechasCumplidas++;
                         }
                     }
@@ -1043,4 +1050,3 @@ function parseDateDDMMYYYY(dateStr) {
 }
 
 // Eliminamos la llamada directa a signInGuest() al final porque ahora usamos onAuthStateChanged
-loadSanctions();
