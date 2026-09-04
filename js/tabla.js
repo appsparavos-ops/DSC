@@ -116,6 +116,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
+    // Categorías cuyas tablas se ordenan con el sistema de desempate FIBA (Apéndice D):
+    // enfrentamientos directos / mini tabla entre los equipos empatados.
+    // El resto (U11, U12, T. GENERAL, etc.) mantiene el criterio: puntos → partidos ganados.
+    const FIBA_TIEBREAK_CATEGORIES = {
+        MASC: ['U14', 'U16', 'U18', 'U20'],
+        FEM: ['U14', 'U16', 'U19'],
+        LFB: ['LFB']
+    };
+
     // --- ELEMENTOS DEL DOM ---
     const seasonSelect = document.getElementById('seasonSelect');
     const stageSelect = document.getElementById('stageSelect');
@@ -831,10 +840,165 @@ document.addEventListener('DOMContentLoaded', function () {
         updateUI();
     }
 
+    // =========================================================================
+    // --- DESEMPATE FIBA (Apéndice D "Clasificación de equipos", Reglas Oficiales FIBA) ---
+    // Cuando 2 o más equipos igualan en puntos se aplica, en este orden:
+    //   1. Puntos obtenidos en los partidos jugados entre los equipos empatados (mini tabla).
+    //   2. Diferencia de puntos (gol average) en los partidos entre ellos.
+    //   3. Mayor cantidad de puntos a favor en los partidos entre ellos.
+    //   4. Diferencia de puntos en todos los partidos de la etapa.
+    //   5. Mayor cantidad de puntos a favor en todos los partidos de la etapa.
+    // D.1.4: si en cualquier nivel uno o más equipos quedan clasificados, el procedimiento
+    // se repite DESDE EL INICIO para los equipos que siguen empatados.
+    // Solo se consideran resultados de la MISMA etapa (el arrastre no interviene).
+    // =========================================================================
+    const TIEBREAK_LABELS = {
+        h2h_pts: { label: 'Duelo directo',           desc: 'puntos en los partidos entre los equipos empatados' },
+        h2h_dif: { label: 'Dif. en duelos directos', desc: 'diferencia de puntos en los partidos entre los equipos empatados' },
+        h2h_pf:  { label: 'Pts. a favor en duelos',  desc: 'puntos a favor en los partidos entre los equipos empatados' },
+        dif:     { label: 'Dif. general',            desc: 'diferencia de puntos en todos los partidos de la etapa' },
+        pf:      { label: 'Pts. a favor general',    desc: 'puntos a favor en todos los partidos de la etapa' },
+        none:    { label: 'Sin definir',             desc: 'igualdad total en todos los criterios (FIBA lo define por sorteo)' }
+    };
+
+    function usesFibaTiebreak(category) {
+        const cats = FIBA_TIEBREAK_CATEGORIES[currentCompetition] || [];
+        return cats.includes(category);
+    }
+
+    // Evita falsos "desempates" por errores de coma flotante (ej. arrastre 30% → 8.000000000000002)
+    function roundPts(v) { return Math.round((Number(v) || 0) * 10000) / 10000; }
+
+    // Marcador efectivo de un partido: un no presentado (NP) se computa 20-0 (Art. 20 FIBA).
+    function effectiveScore(res) {
+        if (res.homeNoShow && res.awayNoShow) return [0, 0];
+        if (res.homeNoShow) return [0, 20];
+        if (res.awayNoShow) return [20, 0];
+        return [Number(res.scoreHome) || 0, Number(res.scoreAway) || 0];
+    }
+
+    // Partidos jugados de una categoría en la etapa dada (solo entre equipos de esa etapa).
+    function collectPlayedMatches(stageData, category, teams) {
+        const results = (stageData[category] && stageData[category].resultados) ? stageData[category].resultados : {};
+        const fixture = stageData.fixture || {};
+        const teamSet = new Set(teams);
+        const matches = [];
+        Object.entries(results).forEach(([matchId, res]) => {
+            const fix = fixture[matchId];
+            if (!fix || !res || res.status !== 'played') return;
+            if (!teamSet.has(fix.home) || !teamSet.has(fix.away)) return;
+            const [sH, sA] = effectiveScore(res);
+            matches.push({
+                home: fix.home, away: fix.away,
+                scoreHome: sH, scoreAway: sA,
+                homeNoShow: !!res.homeNoShow, awayNoShow: !!res.awayNoShow
+            });
+        });
+        return matches;
+    }
+
+    // Mini tabla con los partidos jugados únicamente entre los equipos del grupo.
+    function buildMiniTable(group, matches) {
+        const set = new Set(group);
+        const mini = {};
+        group.forEach(n => { mini[n] = { pj: 0, pts: 0, pf: 0, pc: 0, dif: 0 }; });
+        matches.forEach(m => {
+            if (!set.has(m.home) || !set.has(m.away)) return;
+            const h = mini[m.home], a = mini[m.away];
+            h.pj++; a.pj++;
+            h.pf += m.scoreHome; h.pc += m.scoreAway;
+            a.pf += m.scoreAway; a.pc += m.scoreHome;
+            // Puntos de clasificación FIBA: 2 ganado, 1 perdido, 0 perdido por no presentación
+            if (m.homeNoShow && m.awayNoShow) { /* ambos 0 */ }
+            else if (m.homeNoShow) a.pts += 2;
+            else if (m.awayNoShow) h.pts += 2;
+            else if (m.scoreHome > m.scoreAway) { h.pts += 2; a.pts += 1; }
+            else if (m.scoreAway > m.scoreHome) { a.pts += 2; h.pts += 1; }
+            else { h.pts += 1; a.pts += 1; }
+        });
+        group.forEach(n => { mini[n].dif = mini[n].pf - mini[n].pc; });
+        return mini;
+    }
+
+    // Ordena desc. por keyFn y agrupa a los que quedan iguales → [[a,b],[c],[d,e,f]]
+    function splitByKey(names, keyFn) {
+        const sorted = [...names].sort((a, b) => keyFn(b) - keyFn(a));
+        const buckets = [];
+        sorted.forEach(n => {
+            const last = buckets[buckets.length - 1];
+            if (last && keyFn(last[0]) === keyFn(n)) last.push(n);
+            else buckets.push([n]);
+        });
+        return buckets;
+    }
+
+    // Resuelve un grupo de equipos empatados en puntos. Devuelve [{ name, criterio, mini, rivales }] ordenado.
+    function resolveTie(group, matches, overall) {
+        if (group.length === 1) return [{ name: group[0], criterio: null, mini: null, rivales: [] }];
+        const mini = buildMiniTable(group, matches);
+        const criteria = [
+            { id: 'h2h_pts', key: n => mini[n].pts },
+            { id: 'h2h_dif', key: n => mini[n].dif },
+            { id: 'h2h_pf',  key: n => mini[n].pf },
+            { id: 'dif',     key: n => (overall[n].pf || 0) - (overall[n].pc || 0) },
+            { id: 'pf',      key: n => overall[n].pf || 0 }
+        ];
+        for (const c of criteria) {
+            const buckets = splitByKey(group, c.key);
+            if (buckets.length === 1) continue; // Nadie se separó: pasar al siguiente criterio
+            // Al menos un equipo quedó clasificado. Los subgrupos que sigan empatados
+            // repiten el procedimiento desde el inicio con su propia mini tabla (D.1.4).
+            const out = [];
+            buckets.forEach(b => {
+                if (b.length === 1) {
+                    out.push({ name: b[0], criterio: c.id, mini: mini[b[0]], rivales: group.filter(x => x !== b[0]) });
+                } else {
+                    resolveTie(b, matches, overall).forEach(r => out.push(r));
+                }
+            });
+            return out;
+        }
+        // Igualdad absoluta (FIBA: sorteo). Fallback estable: más ganados, luego orden de carga.
+        return [...group]
+            .sort((a, b) => (overall[b].g || 0) - (overall[a].g || 0))
+            .map(n => ({ name: n, criterio: 'none', mini: mini[n], rivales: group.filter(x => x !== n) }));
+    }
+
+    // Ordena la tabla completa: puntos totales → desempate FIBA para cada grupo de igualados.
+    function sortStandingsFIBA(standingsArr, matches) {
+        const overall = {};
+        standingsArr.forEach(s => { overall[s.name] = s; s.desempate = null; });
+        const buckets = splitByKey(standingsArr.map(s => s.name), n => roundPts(overall[n].pts));
+        const ordered = [];
+        buckets.forEach(b => {
+            if (b.length === 1) { ordered.push(overall[b[0]]); return; }
+            resolveTie(b, matches, overall).forEach(r => {
+                const s = overall[r.name];
+                const info = TIEBREAK_LABELS[r.criterio] || TIEBREAK_LABELS.none;
+                const m = r.mini || { pj: 0, pts: 0, pf: 0, dif: 0 };
+                const sign = v => (v > 0 ? '+' : '') + v;
+                s.desempate = {
+                    criterio: r.criterio,
+                    label: info.label,
+                    detalle: `Empate en ${roundPts(s.pts)} pts con ${r.rivales.join(', ')}. ` +
+                             `Definido por ${info.desc}. ` +
+                             `Entre sí: ${m.pj} PJ, ${m.pts} pts, dif ${sign(m.dif)}, ${m.pf} PF. ` +
+                             `Etapa: dif ${sign((s.pf || 0) - (s.pc || 0))}, ${s.pf || 0} PF.`
+                };
+                ordered.push(s);
+            });
+        });
+        return ordered;
+    }
+
+    function escapeAttr(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
     // --- CÁLCULOS ---
     function calculateStandingsForData(stageData, teams, category, isAcumContext = false) {
         let standings = {};
-        teams.forEach(name => { standings[name] = { name, pj: 0, g: 0, p: 0, pts: 0 }; });
+        teams.forEach(name => { standings[name] = { name, pj: 0, g: 0, p: 0, pts: 0, pf: 0, pc: 0 }; });
 
         const categoriesToProcess = (category === 'ACUMULADA')
             ? COMPETITIONS[currentCompetition].categories.filter(c => c.id !== 'ACUMULADA').map(c => c.id)
@@ -868,8 +1032,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 // aparezcan como "colados" en la tabla de la etapa siguiente.
                 if (!teamSet.has(h) || !teamSet.has(a)) return;
 
-                if (!standings[h]) standings[h] = { name: h, pj: 0, g: 0, p: 0, pts: 0 };
-                if (!standings[a]) standings[a] = { name: a, pj: 0, g: 0, p: 0, pts: 0 };
+                if (!standings[h]) standings[h] = { name: h, pj: 0, g: 0, p: 0, pts: 0, pf: 0, pc: 0 };
+                if (!standings[a]) standings[a] = { name: a, pj: 0, g: 0, p: 0, pts: 0, pf: 0, pc: 0 };
+
+                // Puntos a favor / en contra (para desempates). Un NP se computa 20-0.
+                if (cat !== 'U11') {
+                    const [effH, effA] = effectiveScore(res);
+                    standings[h].pf += effH; standings[h].pc += effA;
+                    standings[a].pf += effA; standings[a].pc += effH;
+                }
 
                 if (isFibaLogic) {
                     standings[h].pj++; standings[a].pj++;
@@ -942,7 +1113,17 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
 
-        return Object.values(standings).sort((a, b) => (b.pts !== a.pts) ? (b.pts - a.pts) : (b.g - a.g));
+        const arr = Object.values(standings);
+
+        // Categorías con sistema FIBA: desempate por enfrentamientos directos / mini tabla,
+        // usando únicamente los partidos de la etapa actual.
+        if (usesFibaTiebreak(category)) {
+            const matches = collectPlayedMatches(stageData, category, teamsList);
+            return sortStandingsFIBA(arr, matches);
+        }
+
+        // Resto (T. GENERAL, U11, U12, etc.): criterio original → puntos, luego partidos ganados
+        return arr.sort((a, b) => (roundPts(b.pts) - roundPts(a.pts)) || (b.g - a.g));
     }
 
     function updateUI() {
@@ -1005,6 +1186,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     <td class="px-6 py-4 text-center font-black text-violet-400 text-lg">
                         ${team.pts.toFixed(1).replace('.0', '')}
                         ${team.ptsSancion > 0 ? `<span class="block text-[10px] text-red-400 font-bold tracking-tight">-${team.ptsSancion} Pts</span>` : ''}
+                        ${team.desempate ? `<span class="block text-[9px] ${team.desempate.criterio === 'none' ? 'text-slate-500' : 'text-amber-500/80'} font-bold uppercase tracking-tight cursor-help" title="${escapeAttr(team.desempate.detalle)}">⚖ ${team.desempate.label}</span>` : ''}
                     </td>
                 </tr>
             `).join('');
