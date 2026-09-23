@@ -236,19 +236,10 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <!-- Debe estar en la misma carpeta que este archivo y definir firebaseConfig. -->
+    <script src="firebase-config.js"></script>
 
     <script>
-        // Reemplazar estos valores por los mismos datos de firebaseConfig usados por la aplicación.
-        const firebaseConfig = {
-            apiKey: 'REEMPLAZAR_API_KEY',
-            authDomain: 'REEMPLAZAR_PROJECT_ID.firebaseapp.com',
-            databaseURL: 'https://REEMPLAZAR_PROJECT_ID-default-rtdb.firebaseio.com',
-            projectId: 'REEMPLAZAR_PROJECT_ID',
-            storageBucket: 'REEMPLAZAR_PROJECT_ID.appspot.com',
-            messagingSenderId: 'REEMPLAZAR_MESSAGING_SENDER_ID',
-            appId: 'REEMPLAZAR_APP_ID'
-        };
-
         const AUTO_SEASONS_NODE = 'AutoSeasons';
         const firebaseApp = firebase.initializeApp(firebaseConfig);
         const auth = firebaseApp.auth();
@@ -378,5 +369,5 @@
             }
         });
     </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3fab1a67aecdb70',t:'MTc5MDE3ODUwOQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
