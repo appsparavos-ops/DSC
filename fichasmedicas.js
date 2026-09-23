@@ -8,7 +8,7 @@ const SEASONS_URL  = `${API_BASE_URL}/seasons`;
 // --- CONFIGURACIÓN AUTOMÁTICA ---
 const AUTO_EMAIL    = 'invitado@dsc.com';
 const AUTO_PASSWORD = 'invitado123';
-const AUTO_SEASON   = '2026';
+const AUTO_SEASONS  = ['2026', '2026-2027'];
 
 // --- CONFIGURACIÓN EMAIL (EmailJS) ---
 // Solo se usa en modo MANUAL (cuando un usuario abre la página en el navegador).
@@ -67,7 +67,7 @@ async function runProcess() {
     if (!IS_AUTO_MODE) {
         const inicioMsg =
             `🚀 Actualización de Fichas Médicas Iniciada\n` +
-            `📅 Temporada: ${AUTO_SEASON}\n` +
+            `📅 Temporadas: ${AUTO_SEASONS.join(' y ')}\n` +
             `⏰ Hora: ${new Date().toLocaleTimeString('es-UY', { timeZone: 'America/Montevideo' })}\n` +
             `⏳ Iniciando escaneo y procesamiento...`;
         await notificarEmail(inicioMsg);
@@ -77,35 +77,40 @@ async function runProcess() {
     log('Cargando temporadas...');
     const resSeasons = await fetch(SEASONS_URL);
     const seasons    = await resSeasons.json();
-    if (!seasons.includes(AUTO_SEASON)) {
-        throw new Error(`Temporada ${AUTO_SEASON} no encontrada.`);
+    const missingSeasons = AUTO_SEASONS.filter(season => !seasons.includes(season));
+    if (missingSeasons.length > 0) {
+        throw new Error(`Temporada(s) no encontrada(s): ${missingSeasons.join(', ')}.`);
     }
 
     // 2. ESCANEAR JUGADORES
-    log(`Escaneando jugadores de la temporada ${AUTO_SEASON}...`);
-    const resPlayers = await fetch(`${PLAYERS_URL}?season=${AUTO_SEASON}`);
-    const data       = await resPlayers.json();
-
+    // Se recorren las temporadas en el orden definido en AUTO_SEASONS.
     const playersToScrape = [];
     const DAYS_THRESHOLD  = 60;
     const now             = new Date();
     const thresholdDate   = new Date();
     thresholdDate.setDate(now.getDate() + DAYS_THRESHOLD);
 
-    Object.keys(data).forEach(dni => {
-        const p = data[dni];
-        if (p.datosPersonales) {
-            const fmHastaStr  = p.datosPersonales['FM Hasta'];
-            const expireDate  = parseDate(fmHastaStr);
-            if (!fmHastaStr || (expireDate && expireDate < thresholdDate)) {
-                playersToScrape.push({
-                    dni,
-                    nombre: p.datosPersonales['NOMBRE'] || dni,
-                    vencimiento: fmHastaStr
-                });
+    for (const season of AUTO_SEASONS) {
+        log(`Escaneando jugadores de la temporada ${season}...`);
+        const resPlayers = await fetch(`${PLAYERS_URL}?season=${season}`);
+        const data       = await resPlayers.json();
+
+        Object.keys(data).forEach(dni => {
+            const p = data[dni];
+            if (p.datosPersonales) {
+                const fmHastaStr  = p.datosPersonales['FM Hasta'];
+                const expireDate  = parseDate(fmHastaStr);
+                if (!fmHastaStr || (expireDate && expireDate < thresholdDate)) {
+                    playersToScrape.push({
+                        dni,
+                        temporada: season,
+                        nombre: p.datosPersonales['NOMBRE'] || dni,
+                        vencimiento: fmHastaStr
+                    });
+                }
             }
-        }
-    });
+        });
+    }
 
     log(`Encontrados ${playersToScrape.length} jugadores para procesar.`);
     if (playersToScrape.length === 0) {
@@ -119,7 +124,7 @@ async function runProcess() {
 
     for (const player of playersToScrape) {
         processed++;
-        log(`Scrapping (${processed}/${playersToScrape.length}): ${player.nombre}...`);
+        log(`Scrapping (${processed}/${playersToScrape.length}): ${player.nombre} [${player.temporada}]...`);
         try {
             const resp   = await fetch(SCRAPE_URL, {
                 method:  'POST',
@@ -134,10 +139,11 @@ async function runProcess() {
             // Solo se considera actualizado si la nueva fecha es superior a la existente
             if (result.success && newHastaDate && (!oldHastaDate || newHastaDate > oldHastaDate)) {
                 resultsToUpdate.push({
-                    dni:    player.dni,
-                    nombre: player.nombre,
-                    desde:  result.desde,
-                    hasta:  result.hasta
+                    dni:       player.dni,
+                    temporada: player.temporada,
+                    nombre:    player.nombre,
+                    desde:     result.desde,
+                    hasta:     result.hasta
                 });
                 log(`   -> Nueva fecha encontrada: ${result.hasta} (Superior a la actual: ${player.vencimiento || 'N/A'})`);
             } else {
@@ -165,14 +171,14 @@ async function runProcess() {
 
     // 5. RESUMEN FINAL
     let resumen  = `✅ Fichas Médicas Finalizado\n`;
-    resumen     += `📅 Temporada: ${AUTO_SEASON}\n`;
+    resumen     += `📅 Temporadas: ${AUTO_SEASONS.join(' y ')}\n`;
     resumen     += `📝 Procesados: ${playersToScrape.length}\n`;
     resumen     += `✨ Actualizados: ${resultsToUpdate.length}\n`;
 
     if (resultsToUpdate.length > 0) {
         resumen += `\n👥 Jugadores Actualizados:\n`;
         resultsToUpdate.forEach(r => {
-            resumen += `• ${r.nombre} → FM Hasta: ${r.hasta}\n`;
+            resumen += `• ${r.nombre} (${r.temporada}) → FM Hasta: ${r.hasta}\n`;
         });
     }
 
