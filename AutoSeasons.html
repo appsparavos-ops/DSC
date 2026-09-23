@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temporadas activas</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --background: #f1f5f9;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+            --border: #cbd5e1;
+            --success: #15803d;
+            --error: #b91c1c;
+            --warning: #a16207;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Arial, Helvetica, sans-serif;
+            color: var(--text);
+            background: linear-gradient(135deg, #e0f2fe, var(--background));
+        }
+
+        main {
+            width: min(720px, calc(100% - 32px));
+            margin: 48px auto;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid rgba(148, 163, 184, .35);
+            border-radius: 18px;
+            padding: 28px;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, .10);
+        }
+
+        h1 { margin: 0 0 8px; font-size: 28px; }
+        h2 { margin: 0 0 14px; font-size: 19px; }
+        p { line-height: 1.5; }
+        .subtitle, .help { color: var(--muted); }
+        .subtitle { margin: 0 0 26px; }
+        .help { margin: 8px 0 0; font-size: 13px; }
+
+        .hidden { display: none !important; }
+
+        label {
+            display: block;
+            margin: 16px 0 7px;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        input, textarea {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 13px;
+            font: inherit;
+            color: var(--text);
+            background: #fff;
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+            line-height: 1.5;
+        }
+
+        input:focus, textarea:focus {
+            outline: 3px solid rgba(37, 99, 235, .16);
+            border-color: var(--primary);
+        }
+
+        button {
+            border: 0;
+            border-radius: 10px;
+            padding: 11px 16px;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        button:disabled { opacity: .55; cursor: not-allowed; }
+        .primary { color: #fff; background: var(--primary); }
+        .primary:hover:not(:disabled) { background: var(--primary-dark); }
+        .secondary { color: var(--text); background: #e2e8f0; }
+        .secondary:hover:not(:disabled) { background: #cbd5e1; }
+        .danger { color: #fff; background: #dc2626; }
+        .danger:hover:not(:disabled) { background: #b91c1c; }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }
+
+        .user {
+            color: var(--muted);
+            font-size: 13px;
+            overflow-wrap: anywhere;
+            text-align: right;
+        }
+
+        .status {
+            min-height: 22px;
+            margin-top: 16px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .status.success { color: var(--success); }
+        .status.error { color: var(--error); }
+        .status.warning { color: var(--warning); }
+
+        .preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            min-height: 42px;
+            padding: 12px;
+            border: 1px dashed var(--border);
+            border-radius: 10px;
+            background: #f8fafc;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 7px 10px;
+            border-radius: 999px;
+            color: #1e3a8a;
+            background: #dbeafe;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .empty { color: var(--muted); font-size: 14px; }
+
+        .login-note {
+            margin-top: 18px;
+            padding: 12px;
+            border-radius: 10px;
+            color: #854d0e;
+            background: #fef9c3;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        @media (max-width: 520px) {
+            main { margin: 20px auto; }
+            .card { padding: 20px; }
+            .topbar { flex-direction: column; }
+            .user { text-align: left; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section id="loginCard" class="card">
+            <h1>Temporadas activas</h1>
+            <p class="subtitle">Iniciá sesión para administrar el nodo <strong>AutoSeasons</strong> de Firebase.</p>
+
+            <form id="loginForm">
+                <label for="email">Email</label>
+                <input id="email" type="email" autocomplete="username" required>
+
+                <label for="password">Contraseña</label>
+                <input id="password" type="password" autocomplete="current-password" required>
+
+                <div class="actions">
+                    <button id="loginButton" class="primary" type="submit">Iniciar sesión</button>
+                </div>
+                <div id="loginStatus" class="status" role="status"></div>
+            </form>
+
+            <div class="login-note">
+                El usuario debe tener permisos de autenticación y escritura sobre el nodo
+                <strong>AutoSeasons</strong> en Firebase Realtime Database.
+            </div>
+        </section>
+
+        <section id="appCard" class="card hidden">
+            <div class="topbar">
+                <div>
+                    <h1>Temporadas activas</h1>
+                    <p class="subtitle">Configurá el orden en que se buscarán las actualizaciones.</p>
+                </div>
+                <div>
+                    <div id="currentUser" class="user"></div>
+                    <button id="logoutButton" class="secondary" type="button" style="margin-top: 8px;">Cerrar sesión</button>
+                </div>
+            </div>
+
+            <h2>Lista guardada</h2>
+            <div id="preview" class="preview" aria-live="polite">
+                <span class="empty">Cargando...</span>
+            </div>
+
+            <label for="seasonsInput">Temporadas activas</label>
+            <textarea
+                id="seasonsInput"
+                spellcheck="false"
+                placeholder="Ejemplo: 2026, 2026-2027"
+                aria-describedby="seasonsHelp"
+            ></textarea>
+            <p id="seasonsHelp" class="help">
+                Separá las temporadas con comas. El orden es importante: la primera se procesa antes que la segunda.
+            </p>
+
+            <div class="actions">
+                <button id="saveButton" class="primary" type="button">Guardar en Firebase</button>
+                <button id="reloadButton" class="secondary" type="button">Recargar</button>
+            </div>
+            <div id="appStatus" class="status" role="status"></div>
+        </section>
+    </main>
+
+    <!-- Firebase compat: permite usar firebase.initializeApp(), auth() y database(). -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+    <script>
+        // Reemplazar estos valores por los mismos datos de firebaseConfig usados por la aplicación.
+        const firebaseConfig = {
+            apiKey: 'REEMPLAZAR_API_KEY',
+            authDomain: 'REEMPLAZAR_PROJECT_ID.firebaseapp.com',
+            databaseURL: 'https://REEMPLAZAR_PROJECT_ID-default-rtdb.firebaseio.com',
+            projectId: 'REEMPLAZAR_PROJECT_ID',
+            storageBucket: 'REEMPLAZAR_PROJECT_ID.appspot.com',
+            messagingSenderId: 'REEMPLAZAR_MESSAGING_SENDER_ID',
+            appId: 'REEMPLAZAR_APP_ID'
+        };
+
+        const AUTO_SEASONS_NODE = 'AutoSeasons';
+        const firebaseApp = firebase.initializeApp(firebaseConfig);
+        const auth = firebaseApp.auth();
+        const database = firebaseApp.database();
+
+        const loginCard = document.getElementById('loginCard');
+        const appCard = document.getElementById('appCard');
+        const loginForm = document.getElementById('loginForm');
+        const loginButton = document.getElementById('loginButton');
+        const loginStatus = document.getElementById('loginStatus');
+        const currentUser = document.getElementById('currentUser');
+        const seasonsInput = document.getElementById('seasonsInput');
+        const preview = document.getElementById('preview');
+        const saveButton = document.getElementById('saveButton');
+        const reloadButton = document.getElementById('reloadButton');
+        const logoutButton = document.getElementById('logoutButton');
+        const appStatus = document.getElementById('appStatus');
+
+        function setStatus(element, message, type = '') {
+            element.textContent = message;
+            element.className = `status ${type}`;
+        }
+
+        function parseSeasons(value) {
+            return [...new Set(String(value || '')
+                .split(',')
+                .map(season => season.trim())
+                .filter(Boolean))];
+        }
+
+        function renderPreview(seasons) {
+            preview.replaceChildren();
+            if (seasons.length === 0) {
+                const empty = document.createElement('span');
+                empty.className = 'empty';
+                empty.textContent = 'No hay temporadas cargadas.';
+                preview.appendChild(empty);
+                return;
+            }
+
+            seasons.forEach((season, index) => {
+                const badge = document.createElement('span');
+                badge.className = 'badge';
+                badge.textContent = `${index + 1}. ${season}`;
+                preview.appendChild(badge);
+            });
+        }
+
+        function updatePreview() {
+            renderPreview(parseSeasons(seasonsInput.value));
+        }
+
+        async function loadSeasons() {
+            setStatus(appStatus, 'Cargando temporadas...', 'warning');
+            reloadButton.disabled = true;
+            try {
+                const snapshot = await database.ref(AUTO_SEASONS_NODE).once('value');
+                const value = snapshot.val();
+                const seasons = parseSeasons(value);
+                seasonsInput.value = seasons.join(',');
+                renderPreview(seasons);
+                setStatus(appStatus, `Temporadas cargadas: ${seasons.length}.`, 'success');
+            } catch (error) {
+                renderPreview([]);
+                setStatus(appStatus, `No se pudo cargar AutoSeasons: ${error.message}`, 'error');
+            } finally {
+                reloadButton.disabled = false;
+            }
+        }
+
+        async function saveSeasons() {
+            const seasons = parseSeasons(seasonsInput.value);
+            if (seasons.length === 0) {
+                setStatus(appStatus, 'Ingresá al menos una temporada.', 'error');
+                return;
+            }
+
+            saveButton.disabled = true;
+            reloadButton.disabled = true;
+            setStatus(appStatus, 'Guardando temporadas...', 'warning');
+            try {
+                await database.ref(AUTO_SEASONS_NODE).set(seasons.join(','));
+                seasonsInput.value = seasons.join(',');
+                renderPreview(seasons);
+                setStatus(appStatus, 'Temporadas guardadas correctamente.', 'success');
+            } catch (error) {
+                setStatus(appStatus, `No se pudo guardar AutoSeasons: ${error.message}`, 'error');
+            } finally {
+                saveButton.disabled = false;
+                reloadButton.disabled = false;
+            }
+        }
+
+        loginForm.addEventListener('submit', async event => {
+            event.preventDefault();
+            loginButton.disabled = true;
+            setStatus(loginStatus, 'Iniciando sesión...', 'warning');
+            try {
+                await auth.signInWithEmailAndPassword(
+                    document.getElementById('email').value.trim(),
+                    document.getElementById('password').value
+                );
+            } catch (error) {
+                setStatus(loginStatus, `No se pudo iniciar sesión: ${error.message}`, 'error');
+            } finally {
+                loginButton.disabled = false;
+            }
+        });
+
+        logoutButton.addEventListener('click', () => auth.signOut());
+        saveButton.addEventListener('click', saveSeasons);
+        reloadButton.addEventListener('click', loadSeasons);
+        seasonsInput.addEventListener('input', updatePreview);
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                loginCard.classList.add('hidden');
+                appCard.classList.remove('hidden');
+                currentUser.textContent = user.email || 'Sesión iniciada';
+                loadSeasons();
+            } else {
+                appCard.classList.add('hidden');
+                loginCard.classList.remove('hidden');
+                currentUser.textContent = '';
+                seasonsInput.value = '';
+                renderPreview([]);
+            }
+        });
+    </script>
+</body>
+</html>
