@@ -829,6 +829,9 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
         inputStyle = 'border-red-500 bg-red-50 focus:ring-red-500/20';
     }
 
+    // Misma condición que decide si la fila muestra checkbox o la etiqueta roja de inhabilitado
+    const canSelect = !(isDisabled && !unrestrictedMode);
+
     const tr = document.createElement('tr');
     tr.className = `player-row border-b border-gray-50 ${rosterEntry.seleccionado ? 'selected-row' : ''}`;
     tr.dataset.seleccionado = rosterEntry.seleccionado;
@@ -843,7 +846,8 @@ function createPlayerRow(p, duplicateNumbers = [], coachRole = "") {
                 </div>
                 <div class="flex-shrink-0 min-w-[5.5rem] font-semibold tabular-nums text-black whitespace-nowrap" title="DNI">${dni || '—'}</div>
                 <div>
-                    <div class="font-semibold text-gray-800">${p.NOMBRE || 'N/N'}</div>
+                    <div class="font-semibold text-gray-800 ${canSelect ? 'cursor-pointer select-none hover:text-blue-700 transition-colors' : ''}"
+                        ${canSelect ? 'onclick="toggleFromName(this)"' : ''}>${p.NOMBRE || 'N/N'}</div>
                     ${isFUBBInvalid ? `<div class="text-[10px] text-red-500 font-bold uppercase mt-0.5">${estadoLicencia || 'SIN LICENCIA'}</div>` : ''}
                 </div>
             </div>
@@ -907,6 +911,14 @@ window.toggleCoachesList = function () {
         coachesList.classList.add('hidden');
         coachesChevron.classList.remove('rotate-180');
     }
+};
+
+// Click sobre el nombre: equivale a hacer click en el checkbox de esa misma fila
+window.toggleFromName = function (el) {
+    const row = el.closest('tr');
+    const cb = row ? row.querySelector('input[type="checkbox"]') : null;
+    if (!cb) return; // fila inhabilitada (sin checkbox): no hace nada
+    cb.click();      // marca/desmarca y dispara el onchange -> toggleSelection(...)
 };
 
 window.toggleSelection = function (dni, isChecked, nombre) {
