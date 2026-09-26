@@ -193,8 +193,9 @@
                 </button>
 
                 <div id="coachesList"
-                    class="hidden mt-6 overflow-hidden bg-white rounded-2xl border border-gray-100 shadow-sm">
-                    <table class="w-full text-left border-collapse">
+                    class="hidden mt-6 overflow-x-auto bg-white rounded-2xl border border-gray-100 shadow-sm"
+                    style="overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;">
+                    <table class="w-full text-left border-collapse" style="min-width: 600px;">
                         <tbody id="coachesTableBody">
                             <!-- Se rellena vía JS -->
                         </tbody>
