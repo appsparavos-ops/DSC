@@ -2288,6 +2288,36 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // Inyecta la opción "No enmascarar DNI" una sola vez dentro del modal de
+    // opciones de PDF (por si no está ya definida en index.html).
+    function ensureNoMaskDniOption() {
+        if (document.getElementById('noMaskDniCheckbox')) return;
+        const modal = document.getElementById('pdfOptionsModal');
+        if (!modal) return;
+
+        const potentialsChk = document.getElementById('includePotentialsCheckbox');
+        const label = document.createElement('label');
+        label.className = 'inline-flex items-center space-x-2 text-sm text-gray-700 cursor-pointer mt-2';
+
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.id = 'noMaskDniCheckbox';
+        if (potentialsChk) chk.className = potentialsChk.className;
+
+        const span = document.createElement('span');
+        span.textContent = 'No enmascarar DNI';
+
+        label.appendChild(chk);
+        label.appendChild(span);
+
+        if (potentialsChk) {
+            const anchor = potentialsChk.closest('label') || potentialsChk.parentElement;
+            anchor.parentElement.insertBefore(label, anchor.nextSibling);
+        } else {
+            modal.appendChild(label);
+        }
+    }
+
     function showPDFOptionsModal(selectedCategory, selectedEquipo = null) {
         const modal = document.getElementById('pdfOptionsModal');
         const btnYes = document.getElementById('pdfOptionYes');
@@ -2298,48 +2328,60 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (!modal || !btnYes || !btnNo || !btnCancel) return;
 
+        ensureNoMaskDniOption();
+
         // Mostrar/ocultar botones según contexto (solo equipo tiene anómalos y potenciales)
         if (btnAnomalos) btnAnomalos.style.display = selectedEquipo ? '' : 'none';
         if (btnPotenciales) btnPotenciales.style.display = selectedEquipo ? '' : 'none';
 
         modal.classList.remove('hidden');
 
+        // Leer las opciones disponibles en el modal
+        const getModalOptions = () => ({
+            includePotentials: document.getElementById('includePotentialsCheckbox') ? document.getElementById('includePotentialsCheckbox').checked : false,
+            noMaskDni: document.getElementById('noMaskDniCheckbox') ? document.getElementById('noMaskDniCheckbox').checked : false
+        });
+
         // Handlers temporales
         const handleYes = async () => {
-            const includePotentials = document.getElementById('includePotentialsCheckbox') ? document.getElementById('includePotentialsCheckbox').checked : false;
+            const { includePotentials, noMaskDni } = getModalOptions();
             closeModal();
             if (selectedEquipo) {
-                await generateTeamPDF(selectedEquipo, true, includePotentials);
+                await generateTeamPDF(selectedEquipo, true, includePotentials, noMaskDni);
             } else {
-                await generateCategoryPDF(selectedCategory, true, includePotentials);
+                await generateCategoryPDF(selectedCategory, true, includePotentials, noMaskDni);
             }
         };
         const handleNo = async () => {
-            const includePotentials = document.getElementById('includePotentialsCheckbox') ? document.getElementById('includePotentialsCheckbox').checked : false;
+            const { includePotentials, noMaskDni } = getModalOptions();
             closeModal();
             if (selectedEquipo) {
-                await generateTeamPDF(selectedEquipo, false, includePotentials);
+                await generateTeamPDF(selectedEquipo, false, includePotentials, noMaskDni);
             } else {
-                await generateCategoryPDF(selectedCategory, false, includePotentials);
+                await generateCategoryPDF(selectedCategory, false, includePotentials, noMaskDni);
             }
         };
         const handleAnomalos = async () => {
+            const { noMaskDni } = getModalOptions();
             closeModal();
             if (selectedEquipo) {
-                await generateTeamAnomalousPDF(selectedEquipo);
+                await generateTeamAnomalousPDF(selectedEquipo, noMaskDni);
             }
         };
         const handlePotenciales = async () => {
+            const { noMaskDni } = getModalOptions();
             closeModal();
             if (selectedEquipo) {
-                await generateTeamPotentialPDF(selectedEquipo);
+                await generateTeamPotentialPDF(selectedEquipo, noMaskDni);
             }
         };
         const closeModal = () => {
             modal.classList.add('hidden');
-            // Limpiar checkbox para la próxima vez
+            // Limpiar checkboxes para la próxima vez
             const chk = document.getElementById('includePotentialsCheckbox');
             if (chk) chk.checked = false;
+            const chkNoMask = document.getElementById('noMaskDniCheckbox');
+            if (chkNoMask) chkNoMask.checked = false;
 
             btnYes.removeEventListener('click', handleYes);
             btnNo.removeEventListener('click', handleNo);
@@ -2358,7 +2400,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // ─────────────────────────────────────────────────────────────────────────────
     // PDF: ANÓMALOS (jugadores con ESTADO LICENCIA ≠ DILIGENCIADO) por equipo
     // ─────────────────────────────────────────────────────────────────────────────
-    async function generateTeamAnomalousPDF(selectedEquipo) {
+    async function generateTeamAnomalousPDF(selectedEquipo, noMaskDni = false) {
         if (typeof window.jspdf === 'undefined') {
             return showToast("Librería PDF no disponible.", "error");
         }
@@ -2384,7 +2426,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const pageMargin = 15;
         let yPosition = pageMargin;
 
-        const maskDNI = dni => { const s = String(dni || ''); return s.length > 4 ? '****' + s.substring(4) : s; };
+        const maskDNI = dni => { const s = String(dni || ''); if (noMaskDni) return s; return s.length > 4 ? '****' + s.substring(4) : s; };
 
         // Cargar logo
         let logoImage = null;
@@ -2495,7 +2537,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // ─────────────────────────────────────────────────────────────────────────────
     // PDF: POTENCIALES (jugadores que pueden subir de categoría) por equipo
     // ─────────────────────────────────────────────────────────────────────────────
-    async function generateTeamPotentialPDF(selectedEquipo) {
+    async function generateTeamPotentialPDF(selectedEquipo, noMaskDni = false) {
         if (typeof window.jspdf === 'undefined') {
             return showToast("Librería PDF no disponible.", "error");
         }
@@ -2556,7 +2598,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const pageMargin = 15;
         let yPosition = pageMargin;
 
-        const maskDNI = dni => { const s = String(dni || ''); return s.length > 4 ? '****' + s.substring(4) : s; };
+        const maskDNI = dni => { const s = String(dni || ''); if (noMaskDni) return s; return s.length > 4 ? '****' + s.substring(4) : s; };
 
         // Cargar logo
         let logoImage = null;
@@ -2866,7 +2908,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // This is the full implementation of generateCategoryPDF, including the nested helpers.
-    async function generateTeamPDF(selectedEquipo, includeLicense = false, includePotentials = false) {
+    async function generateTeamPDF(selectedEquipo, includeLicense = false, includePotentials = false, noMaskDni = false) {
         if (typeof window.jspdf === 'undefined') {
             return showToast("Librería PDF no disponible.", "error");
         }
@@ -2885,7 +2927,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const pageMargin = 15;
         let yPosition = pageMargin;
 
-        const maskDNI = dni => { const s = String(dni || ''); return s.length > 4 ? '****' + s.substring(4) : s; };
+        const maskDNI = dni => { const s = String(dni || ''); if (noMaskDni) return s; return s.length > 4 ? '****' + s.substring(4) : s; };
 
         const drawSectionHeader = (text, y, fontSize = 12) => {
             if (y > pageHeight - pageMargin - 20) { doc.addPage(); y = pageMargin; }
@@ -3084,7 +3126,7 @@ document.addEventListener('DOMContentLoaded', function () {
         showToast("PDF de equipo generado.", "success");
     }
 
-    async function generateCategoryPDF(selectedCategory, includeLicense = false, includePotentials = false) {
+    async function generateCategoryPDF(selectedCategory, includeLicense = false, includePotentials = false, noMaskDni = false) {
         if (typeof window.jspdf === 'undefined') {
             return showToast("Librería PDF no disponible.", "error");
         }
@@ -3184,7 +3226,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 doc.setDrawColor(0, 0, 0);
             };
 
-            const maskDNI = dni => { const s = String(dni || ''); return s.length > 4 ? '****' + s.substring(4) : s; };
+            const maskDNI = dni => { const s = String(dni || ''); if (noMaskDni) return s; return s.length > 4 ? '****' + s.substring(4) : s; };
 
             drawHeader();
 
