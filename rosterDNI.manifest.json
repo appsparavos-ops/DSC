@@ -5,7 +5,7 @@
     "description": "Planilla de partido con DNI de los jugadores - Defensor Sporting Club",
     "lang": "es",
     "start_url": "rosterDNI.html",
-    "scope": "./",
+    "scope": "rosterDNI",
     "display": "standalone",
     "background_color": "#1e3a8a",
     "theme_color": "#1e3a8a",
