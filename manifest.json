@@ -1,0 +1,32 @@
+{
+    "id": "gestion-dsc",
+    "name": "Gestión DSC - Defensor Sporting Club",
+    "short_name": "Gestión DSC",
+    "description": "Gestión de jugadores, rosters, fichas médicas, pases y sanciones - Defensor Sporting Club",
+    "lang": "es",
+    "start_url": "index.html",
+    "scope": "./",
+    "display": "standalone",
+    "background_color": "#1e3a8a",
+    "theme_color": "#1e3a8a",
+    "icons": [
+        {
+            "src": "dsc-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "dsc-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "dsc-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}
