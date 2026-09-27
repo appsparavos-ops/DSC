@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const IMG_BASE_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/';
     const LOGO_URL = 'https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png';
     const PLACEHOLDER_SVG_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2EwYTBhMCI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OS00IDQgNHptMCAyYy0yLjY3IDAtOCA0IDQgNHYyYzAgMS4xLjkgMiAyIDJoMTRjMS4xIDAgMi0uOSAyLTJ2LTJjMC0yLjY2LTUuMzMtNC04LTR6Ii8+PC9zdmc+';
+    const PDF_TEXT_BLUE = [25, 50, 100]; // Color azul para el texto de los PDF (reemplaza al negro)
     const COLUMN_ORDER = ['DNI', 'NOMBRE', 'FM Hasta', 'Numero', 'CATEGORIA', 'EQUIPO',];
     const PROGRESSION_RULES = {
         'U11 Femenino': ['U12 Femenino', 'U11 Mixta', 'U12 Mixta'],
@@ -2450,14 +2451,14 @@ document.addEventListener('DOMContentLoaded', function () {
             doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
         }
 
-        doc.setFontSize(16); doc.setFont(undefined, 'bold');
+        doc.setFontSize(16); doc.setFont(undefined, 'bold'); doc.setTextColor(...PDF_TEXT_BLUE);
         doc.text(title, pageWidth / 2, pageMargin + 10, { align: 'center' });
         yPosition = pageMargin + 22;
 
         // Subtítulo explicativo
         doc.setFontSize(9); doc.setFont(undefined, 'italic'); doc.setTextColor(120, 60, 0);
         doc.text('Jugadores con Estado de Licencia distinto de DILIGENCIADO', pageWidth / 2, yPosition, { align: 'center' });
-        doc.setTextColor(0, 0, 0);
+        doc.setTextColor(...PDF_TEXT_BLUE);
         yPosition += 8;
 
         const columns = ['DNI', 'NOMBRE', 'ESTADO LICENCIA', 'FM Hasta'];
@@ -2501,7 +2502,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     x += w;
                 });
                 doc.setFont(undefined, 'normal'); doc.setFontSize(fontSize);
-                doc.setTextColor(0, 0, 0); doc.setDrawColor(0, 0, 0);
+                doc.setTextColor(...PDF_TEXT_BLUE); doc.setDrawColor(0, 0, 0);
                 return y + headerHeight;
             };
 
@@ -2514,7 +2515,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const estado = String(player['ESTADO LICENCIA'] || '-').toUpperCase();
                 // Color por tipo de anomalía
                 let fillColor = [255, 243, 205]; // amarillo suave por defecto
-                let textColor = [0, 0, 0];
+                let textColor = [...PDF_TEXT_BLUE];
                 if (estado === 'SIN INSCRIBIR') { fillColor = [254, 226, 226]; textColor = [153, 27, 27]; }
                 else if (estado === 'BAJA') { fillColor = [153, 27, 27]; textColor = [255, 255, 255]; }
 
@@ -2622,14 +2623,14 @@ document.addEventListener('DOMContentLoaded', function () {
             doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
         }
 
-        doc.setFontSize(16); doc.setFont(undefined, 'bold');
+        doc.setFontSize(16); doc.setFont(undefined, 'bold'); doc.setTextColor(...PDF_TEXT_BLUE);
         doc.text(title, pageWidth / 2, pageMargin + 10, { align: 'center' });
         yPosition = pageMargin + 22;
 
         // Subtítulo
         doc.setFontSize(9); doc.setFont(undefined, 'italic'); doc.setTextColor(5, 80, 40);
         doc.text('Jugadores que cumplen reglas de progresión y aún no han sido autorizados', pageWidth / 2, yPosition, { align: 'center' });
-        doc.setTextColor(0, 0, 0);
+        doc.setTextColor(...PDF_TEXT_BLUE);
         yPosition += 8;
 
         const columns = ['DNI', 'NOMBRE', 'CAT. ORIGEN', 'FM Hasta'];
@@ -2664,7 +2665,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     x += w;
                 });
                 doc.setFont(undefined, 'normal'); doc.setFontSize(fontSize);
-                doc.setTextColor(0, 0, 0); doc.setDrawColor(0, 0, 0);
+                doc.setTextColor(...PDF_TEXT_BLUE); doc.setDrawColor(0, 0, 0);
                 return y + headerHeight;
             };
 
@@ -2688,7 +2689,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const today = new Date(); today.setHours(0, 0, 0, 0);
                 const expDate = parseDateDDMMYYYY(player['FM Hasta']);
                 let fillColor = [220, 252, 231]; // verde suave
-                let textColor = [0, 0, 0];
+                let textColor = [...PDF_TEXT_BLUE];
                 if (!expDate || expDate < today) { fillColor = [254, 226, 226]; }
                 else {
                     const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
@@ -2752,7 +2753,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 doc.addImage(logoImage, 'PNG', pageMargin, pageMargin, logoWidth, logoSize);
                 doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
             }
-            doc.setFontSize(16);
+            doc.setFontSize(16); doc.setTextColor(...PDF_TEXT_BLUE);
             doc.text(titleText, pageWidth / 2, pageMargin + logoSize / 2, { align: 'center' });
             return pageMargin + logoSize + 10;
         };
@@ -2804,7 +2805,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 doc.setFontSize(11);
                 doc.setFont(undefined, 'bold');
-                doc.setTextColor(60, 60, 60);
+                doc.setTextColor(...PDF_TEXT_BLUE);
                 doc.text(`Categoría: ${catName}`, pageMargin + 5, yPosition);
                 yPosition += 6;
 
@@ -2834,6 +2835,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     margin: { left: pageMargin + 10 },
                     theme: 'grid',
                     headStyles: { fillColor: [25, 50, 100], textColor: 255 },
+                    bodyStyles: { textColor: PDF_TEXT_BLUE },
                     columnStyles: {
                         0: { cellWidth: colWidths["DNI"] },
                         1: { cellWidth: colWidths["NOMBRE"] },
@@ -2866,10 +2868,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
                                 if (expDate <= thirtyDays) {
                                     data.cell.styles.fillColor = [249, 115, 22]; // Orange-500
-                                    data.cell.styles.textColor = [0, 0, 0];
+                                    data.cell.styles.textColor = [...PDF_TEXT_BLUE];
                                 } else if (expDate <= sixtyDays) {
                                     data.cell.styles.fillColor = [254, 240, 138]; // Yellow-200
-                                    data.cell.styles.textColor = [0, 0, 0];
+                                    data.cell.styles.textColor = [...PDF_TEXT_BLUE];
                                 }
                             }
                         }
@@ -2938,7 +2940,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const drawSectionHeader = (text, y, fontSize = 12) => {
             if (y > pageHeight - pageMargin - 20) { doc.addPage(); y = pageMargin; }
             doc.setFontSize(fontSize); doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0);
+            doc.setTextColor(...PDF_TEXT_BLUE);
             doc.text(text, pageMargin, y);
             doc.setFont(undefined, 'normal');
             return y + 8;
@@ -2974,7 +2976,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     x += colWidth;
                 });
                 y += headerHeight;
-                doc.setFont(undefined, 'normal'); doc.setFontSize(fontSize); doc.setTextColor(0, 0, 0); doc.setDrawColor(0, 0, 0);
+                doc.setFont(undefined, 'normal'); doc.setFontSize(fontSize); doc.setTextColor(...PDF_TEXT_BLUE); doc.setDrawColor(0, 0, 0);
             };
 
             drawHeader();
@@ -2982,7 +2984,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (y > pageHeight - pageMargin - rowHeight) { doc.addPage(); y = pageMargin; drawHeader(); }
                 const isBaja = player['ESTADO LICENCIA'] === 'Baja';
                 const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
-                let fillColor = [255, 255, 255], textColor = [0, 0, 0];
+                let fillColor = [255, 255, 255], textColor = [...PDF_TEXT_BLUE];
 
                 if (isBaja) { fillColor = [153, 27, 27]; textColor = [255, 255, 255]; }
                 else if (player['TIPO'] === 'ENTRENADOR/A') { fillColor = [219, 234, 254]; textColor = [30, 58, 138]; }
@@ -3000,8 +3002,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     else {
                         const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
                         const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 65);
-                        if (expirationDate <= thirtyDays) { fillColor = [249, 115, 22]; textColor = [0, 0, 0]; }
-                        else if (expirationDate <= sixtyDays) { fillColor = [254, 240, 138]; textColor = [0, 0, 0]; }
+                        if (expirationDate <= thirtyDays) { fillColor = [249, 115, 22]; textColor = [...PDF_TEXT_BLUE]; }
+                        else if (expirationDate <= sixtyDays) { fillColor = [254, 240, 138]; textColor = [...PDF_TEXT_BLUE]; }
                     }
                 }
 
@@ -3039,7 +3041,7 @@ document.addEventListener('DOMContentLoaded', function () {
             doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
         }
 
-        doc.setFontSize(18); doc.setFont(undefined, 'bold');
+        doc.setFontSize(18); doc.setFont(undefined, 'bold'); doc.setTextColor(...PDF_TEXT_BLUE);
         doc.text(title, pageWidth / 2, pageMargin + 10, { align: 'center' });
         yPosition = pageMargin + 20;
 
@@ -3165,14 +3167,14 @@ document.addEventListener('DOMContentLoaded', function () {
             doc.addImage(logoImage, 'PNG', pageWidth - pageMargin - logoWidth, pageMargin, logoWidth, logoSize);
         }
 
-        doc.setFontSize(18);
+        doc.setFontSize(18); doc.setTextColor(...PDF_TEXT_BLUE);
         doc.text(title, pageWidth / 2, pageMargin + 10, { align: 'center' });
         yPosition = pageMargin + 20;
 
         const drawSectionHeader = (text, y) => {
             if (y > pageHeight - pageMargin - 20) { doc.addPage(); y = pageMargin; }
             doc.setFontSize(12); doc.setFont(undefined, 'bold');
-            doc.setTextColor(0, 0, 0); // Asegurar color negro
+            doc.setTextColor(...PDF_TEXT_BLUE); // Color azul institucional
             doc.text(text, pageMargin, y);
             doc.setFont(undefined, 'normal');
             return y + 8;
@@ -3228,7 +3230,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
                 y += headerHeight;
                 doc.setFont(undefined, 'normal'); doc.setFontSize(fontSize);
-                doc.setTextColor(0, 0, 0);
+                doc.setTextColor(...PDF_TEXT_BLUE);
                 doc.setDrawColor(0, 0, 0);
             };
 
@@ -3242,7 +3244,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const isBaja = player['ESTADO LICENCIA'] === 'Baja';
                 const expirationDate = parseDateDDMMYYYY(player['FM Hasta']);
                 let fillColor = [255, 255, 255];
-                let textColor = [0, 0, 0];
+                let textColor = [...PDF_TEXT_BLUE];
 
                 if (isBaja) {
                     fillColor = [153, 27, 27]; // Red-800
@@ -3274,10 +3276,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
                         if (expirationDate <= thirtyDays) {
                             fillColor = [249, 115, 22]; // Orange-500
-                            textColor = [0, 0, 0];
+                            textColor = [...PDF_TEXT_BLUE];
                         } else if (expirationDate <= sixtyDays) {
                             fillColor = [254, 240, 138]; // Yellow-200
-                            textColor = [0, 0, 0];
+                            textColor = [...PDF_TEXT_BLUE];
                         }
                     }
                 }
@@ -3289,7 +3291,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     doc.setFillColor(...fillColor);
                     doc.setDrawColor(0, 0, 0);
-                    doc.setTextColor(0, 0, 0);
+                    doc.setTextColor(...PDF_TEXT_BLUE);
                     doc.setTextColor(...textColor);
 
                     let cellValue = player[colName] || '-';
