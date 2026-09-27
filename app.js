@@ -552,6 +552,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
         if (playerToUpdate.esAutorizado) {
+            // En modo autorizado no se permite cambiar el DNI (el registro está vinculado al jugador original)
+            const dniInputAutorizado = playerDetailView ? playerDetailView.querySelector('input[data-key="DNI"]') : null;
+            if (dniInputAutorizado && dniInputAutorizado.value.trim() !== '' && dniInputAutorizado.value.trim() !== String(playerToUpdate.DNI)) {
+                showToast("No se puede cambiar el DNI de un jugador en modo autorizado.", "error");
+                return;
+            }
             // --- LÓGICA PARA JUGADORES AUTORIZADOS ---
             // Solo se actualiza el número, no se tocan otros datos para mantener el estado 'autorizado'.
             updates[`/${dbNode}/${dni}/temporadas/${season}/${pushId}/Numero`] = newPrimaryNumber;
@@ -595,8 +601,37 @@ document.addEventListener('DOMContentLoaded', function () {
                 finalData.Numero = newPrimaryNumber;
             }
 
-            if (playerToUpdate.DNI !== finalData.DNI || playerToUpdate.TEMPORADA !== finalData.TEMPORADA) {
-                showToast("No se puede cambiar el DNI ni la TEMPORADA.", "error");
+            if (playerToUpdate.TEMPORADA !== finalData.TEMPORADA) {
+                showToast("No se puede cambiar la TEMPORADA.", "error");
+                return;
+            }
+
+            // --- DETECCIÓN DE CAMBIO DE DNI (nuevo formato de pasaporte) ---
+            // El DNI es el ID en Firebase: cambiarlo implica migrar el registro
+            // completo. El DNI viejo queda guardado como DNI_ANTERIOR.
+            const nuevoDni = String(finalData.DNI || '').trim();
+            const dniActual = String(playerToUpdate.DNI || '').trim();
+
+            if (nuevoDni !== dniActual) {
+                if (!nuevoDni) {
+                    showToast("El DNI no puede quedar vacío.", "error");
+                    return;
+                }
+                if (/[.#$\[\]\/]/.test(nuevoDni)) {
+                    showToast("El DNI contiene caracteres no válidos (. # $ [ ] /).", "error");
+                    return;
+                }
+                const confirmaCambioDni = confirm(
+                    "ATENCIÓN: Cambio de DNI\n\n" +
+                    `Jugador: ${playerToUpdate.NOMBRE || 'Sin nombre'}\n` +
+                    `DNI actual: ${dniActual}\n` +
+                    `DNI nuevo: ${nuevoDni}\n\n` +
+                    "El jugador se migrará al nuevo DNI en TODAS las temporadas, pases y registros.\n" +
+                    "El DNI actual quedará guardado en la ficha como DNI_ANTERIOR.\n\n" +
+                    "¿Confirma el cambio?"
+                );
+                if (!confirmaCambioDni) return;
+                cambiarDniJugador(playerToUpdate, nuevoDni, finalData);
                 return;
             }
 
@@ -640,6 +675,132 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.error("Error al guardar en Firebase:", error);
                 alert(`Error al guardar: ${error.message}`);
             });
+    }
+
+    // =====================================================================
+    // CAMBIO DE DNI (nuevo formato de pasaporte)
+    // El DNI es el ID en Firebase, por lo que cambiarlo implica migrar el
+    // registro completo a la nueva clave. Quedan registrados ambos DNI:
+    //  - datosPersonales conserva DNI_ANTERIOR e historialDNI (fecha y usuario).
+    //  - Los registrosPorTemporada de TODAS las temporadas reciben DNI_ANTERIOR.
+    //  - Los pases se migran al nuevo DNI.
+    //  - El cambio queda en la bitácora (AuditLogger, evento CAMBIO_DNI).
+    // =====================================================================
+    async function cambiarDniJugador(playerToUpdate, nuevoDni, finalData) {
+        const { _tipo: tipoValor, _dni: dniViejo, TEMPORADA: season, _pushId: pushId } = playerToUpdate;
+        const dbNode = (tipoValor === 'JUGADOR/A' || tipoValor === 'jugadores') ? 'jugadores' : 'entrenadores';
+        const otroNode = dbNode === 'jugadores' ? 'entrenadores' : 'jugadores';
+
+        try {
+            // 1) El DNI nuevo no debe existir ya (ni como jugador ni como entrenador)
+            const snapNuevo = await database.ref(`/${dbNode}/${nuevoDni}`).once('value');
+            if (snapNuevo.exists()) {
+                showToast(`Ya existe un registro con el DNI ${nuevoDni}. Verifique antes de cambiar.`, "error");
+                return;
+            }
+            const snapNuevoOtro = await database.ref(`/${otroNode}/${nuevoDni}`).once('value');
+            if (snapNuevoOtro.exists()) {
+                showToast(`El DNI ${nuevoDni} ya existe como ${otroNode}. No se puede cambiar.`, "error");
+                return;
+            }
+
+            // 2) Leer el nodo completo actual del jugador
+            const snapViejo = await database.ref(`/${dbNode}/${dniViejo}`).once('value');
+            const nodoViejo = snapViejo.val();
+            if (!nodoViejo) {
+                showToast("No se encontró el registro original del jugador.", "error");
+                return;
+            }
+
+            // 3) Construir el nodo nuevo: clon del viejo + ediciones del formulario
+            const nodoNuevo = JSON.parse(JSON.stringify(nodoViejo));
+            if (!nodoNuevo.datosPersonales) nodoNuevo.datosPersonales = {};
+
+            const personalKeys = ['NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD', 'TELEFONO', 'EMAIL', 'FM Desde', 'FM Hasta', 'genero'];
+            personalKeys.forEach(k => { if (finalData[k] !== undefined) nodoNuevo.datosPersonales[k] = finalData[k]; });
+
+            // Dejar registrado el DNI anterior y el nuevo en la ficha
+            nodoNuevo.datosPersonales.DNI = nuevoDni;
+            nodoNuevo.datosPersonales.DNI_ANTERIOR = dniViejo;
+            if (!nodoNuevo.datosPersonales.historialDNI) nodoNuevo.datosPersonales.historialDNI = {};
+            nodoNuevo.datosPersonales.historialDNI[database.ref().push().key] = {
+                dni: dniViejo,
+                reemplazadoPor: nuevoDni,
+                fecha: new Date().toISOString(),
+                usuario: (auth.currentUser && auth.currentUser.email) || 'desconocido'
+            };
+
+            // Ediciones de temporada realizadas en el formulario (temporada actual)
+            const seasonalKeys = ['COMPETICION', 'CATEGORIA', 'EQUIPO', 'ESTADO LICENCIA', 'FECHA_ALTA', 'BAJA', 'TIPO', 'Numero', 'categoriasAutorizadas', 'equipoAutorizado', 'Numeros', 'TEMPORADA'];
+            const seasonalDataToUpdate = {};
+            seasonalKeys.forEach(k => { if (finalData[k] !== undefined) seasonalDataToUpdate[k] = finalData[k]; });
+
+            if (nodoNuevo.temporadas && nodoNuevo.temporadas[season] && nodoNuevo.temporadas[season][pushId]) {
+                Object.assign(nodoNuevo.temporadas[season][pushId], seasonalDataToUpdate);
+            }
+
+            // 4) Actualización atómica multi-ruta: nodo nuevo creado, nodo viejo eliminado
+            const updates = {};
+            updates[`/${dbNode}/${nuevoDni}`] = nodoNuevo;
+            updates[`/${dbNode}/${dniViejo}`] = null;
+
+            // Actualizar los índices por temporada (registrosPorTemporada) de TODAS sus temporadas
+            const pathsRegistros = [];
+            Object.keys(nodoNuevo.temporadas || {}).forEach(s => {
+                Object.keys(nodoNuevo.temporadas[s] || {}).forEach(pid => {
+                    pathsRegistros.push({ s, pid });
+                });
+            });
+
+            const snapsRegistros = await Promise.all(
+                pathsRegistros.map(({ s, pid }) => database.ref(`/registrosPorTemporada/${s}/${pid}`).once('value'))
+            );
+
+            pathsRegistros.forEach(({ s, pid }, idx) => {
+                if (!snapsRegistros[idx].exists()) return; // solo actualizar índices que existen
+                updates[`/registrosPorTemporada/${s}/${pid}/DNI`] = nuevoDni;
+                updates[`/registrosPorTemporada/${s}/${pid}/_dni`] = nuevoDni;
+                updates[`/registrosPorTemporada/${s}/${pid}/DNI_ANTERIOR`] = dniViejo;
+                if (nodoNuevo.datosPersonales.NOMBRE) {
+                    updates[`/registrosPorTemporada/${s}/${pid}/NOMBRE`] = nodoNuevo.datosPersonales.NOMBRE;
+                }
+                if (s === season && pid === pushId) {
+                    Object.keys(seasonalDataToUpdate).forEach(k => {
+                        updates[`/registrosPorTemporada/${s}/${pid}/${k}`] = seasonalDataToUpdate[k];
+                    });
+                }
+            });
+
+            // 5) Migrar pases si existen
+            const snapPases = await database.ref(`/pases/${dniViejo}`).once('value');
+            if (snapPases.exists()) {
+                updates[`/pases/${nuevoDni}`] = snapPases.val();
+                updates[`/pases/${dniViejo}`] = null;
+                if (allGlobalPases[dniViejo]) {
+                    allGlobalPases[dniNuevo] = allGlobalPases[dniViejo];
+                    delete allGlobalPases[dniViejo];
+                }
+            }
+
+            // 6) Guardar todo atómicamente
+            await database.ref().update(updates);
+
+            // 7) Registrar el cambio en la bitácora
+            AuditLogger.log('CAMBIO_DNI', {
+                entidad: dbNode,
+                registroId: nuevoDni,
+                nombre: nodoNuevo.datosPersonales.NOMBRE,
+                dniAnterior: dniViejo,
+                dniNuevo: nuevoDni
+            });
+            AuditLogger.logUpdate('jugador', nuevoDni, playerToUpdate, { ...finalData, DNI: nuevoDni, DNI_ANTERIOR: dniViejo });
+
+            showToast(`DNI actualizado: ${dniViejo} → ${nuevoDni}. El DNI anterior quedó registrado en la ficha.`, "success");
+            hidePlayerDetails();
+        } catch (error) {
+            console.error("Error al cambiar el DNI:", error);
+            showToast(`Error al cambiar el DNI: ${error.message}`, "error");
+        }
     }
 
     if (toggleSearchButton) toggleSearchButton.addEventListener('click', (e) => { e.preventDefault(); searchBar.classList.toggle('hidden'); });
@@ -703,7 +864,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         let filteredPlayers = allPlayers.filter(p => {
             const matchesName = !nameTerm || (p.NOMBRE && p.NOMBRE.toLowerCase().includes(nameTerm));
-            const matchesDni = !dniTerm || (p.DNI && String(p.DNI).toLowerCase().includes(dniTerm));
+            const matchesDni = !dniTerm || (p.DNI && String(p.DNI).toLowerCase().includes(dniTerm)) || (p.DNI_ANTERIOR && String(p.DNI_ANTERIOR).toLowerCase().includes(dniTerm));
             if (isGlobalMode) {
                 // En modo global solo importa nombre y DNI
                 return matchesName && matchesDni;
@@ -1373,6 +1534,8 @@ document.addEventListener('DOMContentLoaded', function () {
         playerDetailView.innerHTML = '';
 
         const photoUrl = `${IMG_BASE_URL}${encodeURIComponent(player.DNI)}.jpg`;
+        // Si aún no existe foto con el DNI nuevo, se usa como respaldo la foto del DNI anterior (reempadronamiento)
+        const photoUrlAnterior = player['DNI_ANTERIOR'] ? `${IMG_BASE_URL}${encodeURIComponent(player['DNI_ANTERIOR'])}.jpg` : '';
         const { bg, badge } = getFMStatusStyles(player);
 
         const backgroundColor = 'bg-white';
@@ -1402,12 +1565,16 @@ document.addEventListener('DOMContentLoaded', function () {
             ['DNI', 'NOMBRE', 'FECHA NACIMIENTO', 'NACIONALIDAD'],
             ['FM Hasta', 'FM Desde', 'ESTADO LICENCIA', 'BAJA']
         ];
+        // Si hubo cambio de documento, mostrar el DNI anterior en la ficha (solo modo vista)
+        if (!isEditing && player['DNI_ANTERIOR']) {
+            detailRows.push(['DNI_ANTERIOR']);
+        }
 
         let detailsHtml = `
             <div class="${backgroundColor} p-6 rounded-xl shadow-md relative">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div class="md:col-span-1 flex flex-col items-center text-center">
-                        <img src="${photoUrl}" alt="Foto de ${player.NOMBRE}" class="h-48 w-36 sm:h-64 sm:w-48 object-cover shadow-lg border-4 ${borderColor}" style="border-width: 4px;" onerror="this.onerror=null;this.src='${PLACEHOLDER_SVG_URL}';">
+                        <img src="${photoUrl}" alt="Foto de ${player.NOMBRE}" class="h-48 w-36 sm:h-64 sm:w-48 object-cover shadow-lg border-4 ${borderColor}" style="border-width: 4px;" onerror="${photoUrlAnterior ? `if(!this.dataset.fbc){this.dataset.fbc='1';this.src='${photoUrlAnterior}';}else{this.onerror=null;this.src='${PLACEHOLDER_SVG_URL}';}` : `this.onerror=null;this.src='${PLACEHOLDER_SVG_URL}';`}">
                         <h2 class="text-2xl font-bold text-gray-900 mt-4 min-h-[4rem] flex items-center justify-center leading-tight text-center">${player.NOMBRE || 'Sin Nombre'}</h2>
                         <p class="text-lg text-gray-600">${(player.esAutorizado && player.categoriaOrigen) ? player.categoriaOrigen : (player.CATEGORIA || 'Sin Categoría')}</p>
                         <p class="text-lg text-gray-600">Número: ${primaryNumberForHeader}</p>
@@ -1435,7 +1602,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 val = player.categoriaOrigen || val;
             }
             return isEditing ?
-                `<div><label for="edit-${key}" class="block text-sm font-medium text-gray-600">${key}</label><input type="text" id="edit-${key}" data-key="${key}" value="${val}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm"></div>` :
+                `<div><label for="edit-${key}" class="block text-sm font-medium text-gray-600">${key}</label><input type="text" id="edit-${key}" data-key="${key}" value="${val}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">${key === 'DNI' ? '<p class="mt-1 text-xs text-gray-500">Si cambia el DNI (nuevo formato de pasaporte), al guardar el jugador se migrará al nuevo documento y este quedará registrado como DNI anterior.</p>' : ''}</div>` :
                 createDetailHtml(key, val, fmHastaFrameClass)
         }).join('')}
                                 </div>
