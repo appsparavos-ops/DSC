@@ -1,0 +1,32 @@
+{
+    "id": "rosterDNI",
+    "name": "Roster de Partido (DNI) - Defensor Sporting Club",
+    "short_name": "Roster DNI",
+    "description": "Planilla de partido con DNI de los jugadores - Defensor Sporting Club",
+    "lang": "es",
+    "start_url": "rosterDNI.html",
+    "scope": "./",
+    "display": "standalone",
+    "background_color": "#1e3a8a",
+    "theme_color": "#1e3a8a",
+    "icons": [
+        {
+            "src": "rosterDNI-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "rosterDNI-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "rosterDNI-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

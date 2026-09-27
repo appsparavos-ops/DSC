@@ -1063,3 +1063,41 @@ function parseDateDDMMYYYY(dateStr) {
 }
 
 // Eliminamos la llamada directa a signInGuest() al final porque ahora usamos onAuthStateChanged
+
+// ================= PWA: botón "Instalar en el celular" =================
+// Chrome/Edge (Android y escritorio) disparan 'beforeinstallprompt' cuando la app es instalable.
+// iPhone/iPad no lo disparan: ahí el botón solo muestra cómo hacerlo (Compartir -> Agregar a inicio).
+const installPwaBtn = document.getElementById('installPwaBtn');
+let deferredInstallPrompt = null;
+
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); // evitamos el aviso automático de Chrome y lo manejamos con nuestro botón
+    deferredInstallPrompt = e;
+    if (installPwaBtn) installPwaBtn.classList.remove('hidden');
+});
+
+if (installPwaBtn) {
+    installPwaBtn.addEventListener('click', async () => {
+        if (deferredInstallPrompt) {
+            deferredInstallPrompt.prompt();
+            const { outcome } = await deferredInstallPrompt.userChoice;
+            deferredInstallPrompt = null;
+            installPwaBtn.classList.add('hidden');
+            if (outcome !== 'accepted') showToast('Instalación cancelada');
+        } else if (isIOS) {
+            showToast('En iPhone: botón Compartir → "Agregar a inicio"');
+        }
+    });
+
+    // En iOS no existe el prompt: mostramos el botón igual (si no está ya instalada) para dar la pista
+    if (isIOS && !isStandalone) installPwaBtn.classList.remove('hidden');
+}
+
+window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    if (installPwaBtn) installPwaBtn.classList.add('hidden');
+    showToast('Roster DNI instalado en el dispositivo', 'success');
+});
