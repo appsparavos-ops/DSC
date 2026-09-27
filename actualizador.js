@@ -482,6 +482,25 @@ seasonFilter.addEventListener('change', () => {
     }
 });
 
+// Cargar el logo antes de generar el PDF (con CORS para permitir su inserción).
+function loadReportLogo(url) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        const timeout = setTimeout(() => finish(new Error('Tiempo de espera agotado')), 10000);
+        function finish(error) {
+            clearTimeout(timeout);
+            image.onload = null;
+            image.onerror = null;
+            if (error) reject(error);
+            else resolve(image);
+        }
+        image.crossOrigin = 'anonymous';
+        image.onload = () => finish();
+        image.onerror = () => finish(new Error('No se pudo cargar la imagen'));
+        image.src = url;
+    });
+}
+
 // Generación de Reporte PDF
 async function generatePDFReport() {
     if (!window.jspdf) {
@@ -492,6 +511,26 @@ async function generatePDFReport() {
     log('Generando reporte PDF de actualización...', 'info');
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
+    const reportBlue = [0, 70, 140];
+    const reportWhite = [255, 255, 255];
+    const margin = 14;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const logoBoxSize = 26;
+    const logoX = pageWidth - margin - logoBoxSize;
+    const logoY = 12;
+
+    try {
+        const logo = await loadReportLogo('https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png');
+        const scale = Math.min(logoBoxSize / logo.naturalWidth, logoBoxSize / logo.naturalHeight);
+        const width = logo.naturalWidth * scale;
+        const height = logo.naturalHeight * scale;
+        doc.addImage(logo, 'PNG', logoX + (logoBoxSize - width) / 2,
+            logoY + (logoBoxSize - height) / 2, width, height);
+    } catch (error) {
+        // Una falla de red no debe impedir la descarga del reporte.
+        log(`No se pudo incluir el logo en el PDF: ${error.message}`, 'warning');
+    }
+    doc.setTextColor(...reportBlue);
 
     // Título y Fecha
     const today = new Date();
@@ -505,17 +544,22 @@ async function generatePDFReport() {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
-    doc.text("Reporte de Actualización de Fichas Médicas", 14, 20);
+    // Reservar espacio para el logo y ajustar el título sin superponerlo.
+    const headerTextWidth = logoX - margin - 8;
+    const titleLines = doc.splitTextToSize("Reporte de Actualización de Fichas Médicas", headerTextWidth);
+    doc.text(titleLines, margin, 20);
+    const dateY = 20 + (titleLines.length - 1) * (18 * 1.15 / doc.internal.scaleFactor) + 8;
 
     doc.setFontSize(12);
     doc.setFont("helvetica", "normal");
-    doc.text(`Fecha de generación: ${dateStr} ${timeStr}`, 14, 28);
-    doc.text(`Temporada: ${selectedSeasonText}`, 14, 34);
+    doc.text(`Fecha de generación: ${dateStr} ${timeStr}`, margin, dateY);
+    const seasonLines = doc.splitTextToSize(`Temporada: ${selectedSeasonText}`, headerTextWidth);
+    doc.text(seasonLines, margin, dateY + 6);
 
     const actualizados = playersToUpdate.filter(p => p.status === 'success');
     const noActualizados = playersToUpdate.filter(p => p.status !== 'success');
 
-    let currentY = 42;
+    let currentY = Math.max(dateY + 6 + (seasonLines.length - 1) * (12 * 1.15 / doc.internal.scaleFactor), logoY + logoBoxSize) + 10;
 
     // Tabla de Actualizados
     doc.setFont("helvetica", "bold");
@@ -529,7 +573,8 @@ async function generatePDFReport() {
             head: [['Nombre', 'FM Hasta']],
             body: actualizados.map(p => [p.nombre, p.vencimiento]),
             theme: 'grid',
-            headStyles: { fillColor: [76, 175, 80] },
+            styles: { textColor: reportBlue },
+            headStyles: { fillColor: [76, 175, 80], textColor: reportWhite },
             margin: { left: 14 }
         });
         currentY = doc.lastAutoTable.finalY + 15;
@@ -547,6 +592,7 @@ async function generatePDFReport() {
     }
 
     // Tabla de No Actualizados
+    doc.setTextColor(...reportBlue);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     doc.text(`Jugadores Sin Actualizar (${noActualizados.length})`, 14, currentY);
@@ -563,7 +609,8 @@ async function generatePDFReport() {
                 return [p.nombre, p.vencimiento, statusText];
             }),
             theme: 'grid',
-            headStyles: { fillColor: [244, 67, 54] },
+            styles: { textColor: reportBlue },
+            headStyles: { fillColor: reportBlue, textColor: reportWhite },
             margin: { left: 14 }
         });
     } else {
