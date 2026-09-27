@@ -1601,8 +1601,14 @@ document.addEventListener('DOMContentLoaded', function () {
             if (key === 'CATEGORIA' && player.esAutorizado) {
                 val = player.categoriaOrigen || val;
             }
+            // Icono "!" circulado con tooltip: advertencia sobre el cambio de DNI
+            const dniInfoIcon = key === 'DNI' ? `
+                    <span tabindex="0" class="dni-info group relative inline-block ml-1 align-middle cursor-help outline-none">
+                        <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-xs font-bold select-none">!</span>
+                        <span class="pointer-events-none absolute z-30 hidden group-hover:block group-focus:block bottom-full left-0 mb-2 w-64 p-2 bg-gray-900 text-white text-xs font-normal rounded-lg shadow-lg">Si cambia el DNI (nuevo formato de pasaporte), al guardar el jugador se migrará al nuevo documento y este quedará registrado como DNI anterior.</span>
+                    </span>` : '';
             return isEditing ?
-                `<div><label for="edit-${key}" class="block text-sm font-medium text-gray-600">${key}</label><input type="text" id="edit-${key}" data-key="${key}" value="${val}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm">${key === 'DNI' ? '<p class="mt-1 text-xs text-gray-500">Si cambia el DNI (nuevo formato de pasaporte), al guardar el jugador se migrará al nuevo documento y este quedará registrado como DNI anterior.</p>' : ''}</div>` :
+                `<div><label for="edit-${key}" class="block text-sm font-medium text-gray-600">${key}${dniInfoIcon}</label><input type="text" id="edit-${key}" data-key="${key}" value="${val}" class="mt-1 block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-sm"></div>` :
                 createDetailHtml(key, val, fmHastaFrameClass)
         }).join('')}
                                 </div>
