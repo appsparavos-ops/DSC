@@ -1,0 +1,21 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "competencias": { ".read": true },
+    "resultados": { ".read": true },
+    "tabla": { ".read": true },
+    "plantel": { ".read": "auth != null" },
+    "sanciones": { ".read": "auth != null" },
+    "admins": { ".read": "auth != null" },
+    "users": { ".read": "auth != null" },
+    "bitacora": {
+      ".read": "root.child('admins').child(auth.uid).exists()",
+      ".write": false
+    },
+    "fichas": { ".read": false, ".write": false },
+    "jugadores": { ".read": false, ".write": false },
+    "emailMapping": { ".read": false, ".write": false },
+    "preferenciasUsuarios": { ".read": false, ".write": false }
+  }
+}

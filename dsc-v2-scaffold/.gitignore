@@ -1,0 +1,35 @@
+# --- Secretos: NUNCA commitear ---
+.env
+.env.*
+!.env.example
+*serviceAccountKey.json
+*serviceAccount*.json
+firebase-adminsdk*.json
+*-sdk.json
+secrets/
+*.pem
+*.p12
+*.key
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# --- Node ---
+node_modules/
+
+# --- Salida de migraciones/export (datos personales) ---
+*.csv
+exports/
+tmp/
+
+# --- Sistema / IDE ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

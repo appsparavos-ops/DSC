@@ -1,0 +1,8 @@
+Flask==3.0.3
+gunicorn==22.0.0
+firebase-admin==6.5.0
+google-auth==2.29.0
+cryptography==42.0.8
+flask-limiter==3.5.0
+requests==2.32.3
+python-dotenv==1.0.1

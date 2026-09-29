@@ -1,0 +1,15 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Fotos: solo sesión iniciada para leer; escritura solo backend (Admin SDK)
+    match /fotos/{file=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    // Todo lo demás: cerrado por defecto
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
