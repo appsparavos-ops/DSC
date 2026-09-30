@@ -815,7 +815,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (navToTabla) navToTabla.addEventListener('click', (e) => { 
         e.preventDefault(); 
         sessionStorage.setItem('fromIndex', 'true');
-        window.location.href = 'tabla.html'; 
+        window.location.href = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1'; 
     });
     if (seasonFilter) seasonFilter.addEventListener('change', () => {
         if (nameSearchInput) nameSearchInput.value = '';
