@@ -424,21 +424,11 @@ sanctionForm.addEventListener('submit', (e) => {
         });
 });
 
-// Inicialización
-auth.onAuthStateChanged(user => {
-    if (user) {
-        // Primero cargamos jugadores, y cuando terminan, cargamos sanciones
-        loadAllPlayers().then(() => {
-            loadSanctions();
-        });
+// Inicialización: esta aplicación es exclusiva para administradores.
+DSCAuth.require({
+    admin: true,
+    onReady: () => {
+        loadAllPlayers().then(() => loadSanctions());
         loadSeasons();
-    } else {
-        // Redirigir si no está logueado o manejar sesión de invitado
-        auth.signInWithEmailAndPassword("invitado@dsc.com", "invitado123").then(() => {
-            loadAllPlayers().then(() => {
-                loadSanctions();
-            });
-            loadSeasons();
-        });
     }
 });

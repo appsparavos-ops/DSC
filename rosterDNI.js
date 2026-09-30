@@ -160,19 +160,11 @@ function loadTeamHistory() {
     });
 }
 
-function signInGuest() {
-    auth.signInWithEmailAndPassword(GUEST_EMAIL, GUEST_PW)
-        .catch(err => {
-            console.error("Error Auth:", err);
-            showToast("Error de conexión con el servidor", "error");
-        });
-}
-
 function handlePostLogin(user) {
     if (!user) return;
 
     const uid = user.uid;
-    const isGuest = user.email === GUEST_EMAIL;
+    const isGuest = false;
 
     // Mostrar botón de regreso si no es invitado
     const backBtn = document.getElementById('backToMaintenance');
@@ -213,20 +205,6 @@ function handlePostLogin(user) {
         });
     }
 
-    if (guestExitBtn && isGuest) {
-        guestExitBtn.classList.remove('hidden');
-        guestExitBtn.onclick = () => {
-            auth.signOut().then(() => {
-                // Truco para forzar el cierre de la pestaña
-                window.open('', '_self', '');
-                window.close();
-                setTimeout(() => {
-                    window.location.href = 'about:blank';
-                }, 500);
-            });
-        };
-    }
-
     // Buscar última temporada seleccionada
     database.ref(`preferenciasUsuarios/${uid}/ultimaTemporadaSeleccionada`).once('value')
         .then(snapshot => {
@@ -239,16 +217,8 @@ function handlePostLogin(user) {
     loadSanctions();
 }
 
-// Inicialización de sesión
-auth.onAuthStateChanged((user) => {
-    if (user) {
-        // Si ya hay usuario, verificamos si es el invitado o uno real
-        handlePostLogin(user);
-    } else {
-        // Si no hay nada, logueamos como invitado por defecto
-        signInGuest();
-    }
-});
+// Inicialización de sesión: cualquier usuario autenticado puede usar el roster.
+DSCAuth.require({ admin: true, onReady: handlePostLogin });
 
 // Cargar Temporadas
 function loadSeasons(lastSeason = null) {
