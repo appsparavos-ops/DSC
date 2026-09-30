@@ -24,71 +24,35 @@ document.addEventListener('DOMContentLoaded', () => {
     autoLogin();
 });
 
-// Step 1: Automatic Guest Login
+// Step 1: Carta privada para usuarios y administradores.
+// La autenticación la gestiona el modal común; no se usa la cuenta invitada.
 function autoLogin() {
     updateStatus("Verificando sesión...", "info");
+    DSCAuth.require({
+        admin: false,
+        onReady: (user) => {
+            isGuest = false;
+            updateStatus(`Sesión: ${user.email || 'usuario autenticado'}`, "success");
 
-    // Check if there's already a user (no automatic login if so)
-    auth.onAuthStateChanged((user) => {
-        if (user) {
-            isGuest = user.email === GUEST_EMAIL;
-            updateStatus(`Sesión: ${user.email}`, "success");
-            
-            // Configurar botón de regreso y verificar rol
             const backBtn = document.getElementById('backToMaintenance');
-            if (backBtn && !isGuest) {
+            if (backBtn) {
                 database.ref('admins/' + user.uid).once('value').then(snapshot => {
                     isAdmin = snapshot.exists();
-                    if (isAdmin) {
-                        backBtn.href = "mantenimiento.html";
-                        backBtn.innerHTML = `
-                           <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                           </svg>
-                           Regresar a Mantenimiento
-                        `;
-                    } else {
-                        backBtn.href = "index.html";
-                        backBtn.innerHTML = `
-                           <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                           </svg>
-                           Regresar al Inicio
-                        `;
-                    }
-                    backBtn.classList.remove('hidden');
-                }).catch(() => {
-                    isAdmin = false;
-                    backBtn.href = "index.html";
+                    backBtn.href = isAdmin ? "mantenimiento.html" : "index.html";
                     backBtn.innerHTML = `
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>
-                        Regresar al Inicio
+                        ${isAdmin ? 'Regresar a Mantenimiento' : 'Regresar al Inicio'}
                     `;
                     backBtn.classList.remove('hidden');
-                });
+                }).catch(() => {});
             }
-            
+
             if (typeof AuditLogger !== 'undefined') {
                 AuditLogger.logNavigation('entró al Generador de Constancias');
             }
-
             fetchPreferencesAndLoad(user.uid);
-        } else {
-            updateStatus("Iniciando sesión como invitado...", "info");
-            auth.signInWithEmailAndPassword(GUEST_EMAIL, GUEST_PW)
-                .then((result) => {
-                    isGuest = true;
-                    updateStatus("Conectado como invitado", "success");
-                    fetchPreferencesAndLoad(result.user.uid);
-                })
-                .catch(err => {
-                    console.error("Auth Error:", err);
-                    updateStatus("Error de conexión", "error");
-                    // Fallback to load seasons without preferences
-                    loadSeasons();
-                });
         }
     });
 }
@@ -163,7 +127,9 @@ seasonSelect.addEventListener('change', () => {
                     const data = res.snap.val();
                     return {
                         nombre: data.NOMBRE,
-                        dni: res.dni
+                        dni: res.dni,
+                        categoria: records.find(r => String(r._dni || r.DNI) === String(res.dni))?.CATEGORIA || '',
+                        equipo: records.find(r => String(r._dni || r.DNI) === String(res.dni))?.EQUIPO || ''
                     };
                 })
                 .sort((a, b) => a.nombre.localeCompare(b.nombre));
@@ -185,6 +151,39 @@ seasonSelect.addEventListener('change', () => {
     }
 });
 
+// Normaliza acentos, mayúsculas, puntuación y espacios.
+function normalizeName(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function scoreNameMatch(query, candidate) {
+    const q = normalizeName(query);
+    const c = normalizeName(candidate);
+    if (!q || !c) return 0;
+    if (q === c) return 1000;
+    if (c.startsWith(q)) return 800;
+    const queryTokens = q.split(' ');
+    const candidateTokens = c.split(' ');
+    const allTokensPresent = queryTokens.every(token => candidateTokens.some(candidateToken =>
+        candidateToken === token || candidateToken.startsWith(token)
+    ));
+    if (allTokensPresent) return 600 + queryTokens.length;
+    if (c.includes(q)) return 300;
+    return 0;
+}
+
+function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
+}
+
 // Search Logic
 nameSearch.addEventListener('input', (e) => {
     const term = e.target.value.toLowerCase().trim();
@@ -195,13 +194,27 @@ nameSearch.addEventListener('input', (e) => {
         return;
     }
 
-    const matches = playersList.filter(p => p.nombre.toLowerCase().includes(term));
+    const matches = playersList
+        .map(p => ({ player: p, score: scoreNameMatch(term, p.nombre) }))
+        .filter(item => item.score > 0)
+        .sort((a, b) => b.score - a.score || a.player.nombre.localeCompare(b.player.nombre))
+        .slice(0, 10)
+        .map(item => item.player);
 
     if (matches.length > 0) {
-        matches.slice(0, 10).forEach(p => {
+        matches.forEach(p => {
             const div = document.createElement('div');
             div.className = 'search-item';
-            div.textContent = p.nombre;
+            const name = document.createElement('strong');
+            name.textContent = p.nombre;
+            div.appendChild(name);
+            if (p.categoria || p.equipo) {
+                const details = document.createElement('small');
+                details.textContent = [p.categoria, p.equipo].filter(Boolean).join(' · ');
+                details.style.display = 'block';
+                details.style.opacity = '0.7';
+                div.appendChild(details);
+            }
             div.onclick = () => selectPlayer(p);
             searchResults.appendChild(div);
         });
@@ -267,7 +280,7 @@ function generatePDF() {
     // Fill Template
     document.getElementById('docDate').textContent = `Montevideo, ${fechaLarga}`;
     document.getElementById('docBody').innerHTML = `
-Por intermedio de la presente dejo constancia que <strong>${nombre}</strong> C.I. <strong>${dni}</strong>, forma parte del plantel de básquetbol de nuestro club, concurriendo a prácticas, y participando en las competencias correspondientes.
+Por intermedio de la presente dejo constancia que <strong>${escapeHtml(nombre)}</strong> C.I. <strong>${escapeHtml(dni)}</strong>, forma parte del plantel de básquetbol de nuestro club, concurriendo a prácticas, y participando en las competencias correspondientes.
     `;
 
     // PDF Options
@@ -276,7 +289,7 @@ Por intermedio de la presente dejo constancia que <strong>${nombre}</strong> C.I
 
     const opt = {
         margin: 0,
-        filename: `Constancia_${nombre.replace(/\s+/g, '_')}.pdf`,
+        filename: `Constancia_${normalizeName(nombre).replace(/\s+/g, '_')}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
@@ -288,7 +301,6 @@ Por intermedio de la presente dejo constancia que <strong>${nombre}</strong> C.I
     html2pdf().set(opt).from(element).save().then(() => {
         element.style.display = 'none'; 
         updateStatus("Descargado con éxito", "success");
-        saveToHistory(nombre, dni);
         
         if (typeof AuditLogger !== 'undefined') {
             AuditLogger.log(`generó con éxito la constancia PDF de ${nombre}`, { 
