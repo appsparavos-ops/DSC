@@ -812,10 +812,10 @@ document.addEventListener('DOMContentLoaded', function () {
     if (navToGestionNumeros) navToGestionNumeros.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'mantenimiento.html'; });
     if (navToRoster) navToRoster.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'roster.html'; });
     if (navToConstancias) navToConstancias.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'carta.html'; });
-    if (navToTabla) navToTabla.addEventListener('click', (e) => { 
-        e.preventDefault(); 
-        sessionStorage.setItem('fromIndex', 'true');
-        window.location.href = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1'; 
+    if (navToTabla) navToTabla.addEventListener('click', (e) => {
+        e.preventDefault();
+        const tablaUrl = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
+        window.open(tablaUrl, '_blank', 'noopener,noreferrer');
     });
     if (seasonFilter) seasonFilter.addEventListener('change', () => {
         if (nameSearchInput) nameSearchInput.value = '';
