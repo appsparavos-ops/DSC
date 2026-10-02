@@ -50,7 +50,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const logoutButton = document.getElementById('logout-button');
     const navToGestionNumeros = document.getElementById('navToGestionNumeros');
     const navToRoster = document.getElementById('navToRoster');
-    const navToConstancias = document.getElementById('navToConstancias');
     const navToTabla = document.getElementById('navToTabla');
     const forgotPasswordLink = document.getElementById('forgot-password-link');
     const toggleSearchButton = document.getElementById('toggleSearchButton');
@@ -193,14 +192,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 navToRoster.classList.remove('hidden');
             } else {
                 navToRoster.classList.add('hidden');
-            }
-        }
-
-        if (navToConstancias) {
-            if (currentUserRole === 'admin') {
-                navToConstancias.classList.remove('hidden');
-            } else {
-                navToConstancias.classList.add('hidden');
             }
         }
 
@@ -811,7 +802,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (equipoFilter) equipoFilter.addEventListener('change', applyFilters);
     if (navToGestionNumeros) navToGestionNumeros.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'mantenimiento.html'; });
     if (navToRoster) navToRoster.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'roster.html'; });
-    if (navToConstancias) navToConstancias.addEventListener('click', (e) => { e.preventDefault(); window.location.href = 'carta.html'; });
     if (navToTabla) navToTabla.addEventListener('click', (e) => {
         e.preventDefault();
         const tablaUrl = 'https://competicionesfubb.gesdeportiva.es/competicion.aspx?delegacion=1';
