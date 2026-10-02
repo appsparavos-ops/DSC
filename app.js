@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (navToConstancias) {
-            if (currentUserRole !== 'admin') {
+            if (currentUserRole === 'admin') {
                 navToConstancias.classList.remove('hidden');
             } else {
                 navToConstancias.classList.add('hidden');

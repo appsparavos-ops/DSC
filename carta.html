@@ -30,14 +30,14 @@
 
 <body>
 
-    <!-- Segundo Login Modal -->
+    <!-- Formulario del Generador; el acceso requiere una sesión de administrador. -->
     <div id="loginModal">
         <div class="modal-content glass-card p-8">
             <div class="text-center mb-8">
                 <img src="https://raw.githubusercontent.com/appsparavos-ops/DSC/fotos/Defensor_Sporting.png"
                     alt="Logo DSC" class="h-20 mx-auto mb-4 drop-shadow-lg">
                 <h1 class="text-2xl font-outfit font-extrabold text-[#1e3a8a]">Generador de Constancias</h1>
-                <p class="text-gray-500 text-sm mt-1">Completa los datos para generar el PDF</p>
+                <p class="text-gray-500 text-sm mt-1">Selecciona una temporada y un jugador para generar el PDF</p>
                 <!-- Botón de regreso para administradores -->
                 <a href="mantenimiento.html" id="backToMaintenance" 
                    class="hidden mt-4 text-[#1e3a8a] hover:underline text-xs font-bold uppercase tracking-widest transition-all inline-flex items-center gap-1">
@@ -62,12 +62,6 @@
                     <label for="nameSearch">Nombre del Jugador</label>
                     <input type="text" id="nameSearch" placeholder="Escribe para buscar..." autocomplete="off" disabled>
                     <div id="searchResults" class="search-results"></div>
-                </div>
-
-                <!-- DNI -->
-                <div>
-                    <label for="dniInput">Cédula de Identidad (DNI)</label>
-                    <input type="text" id="dniInput" placeholder="Sin puntos ni guiones" disabled>
                 </div>
 
                 <!-- Botón Generar -->
