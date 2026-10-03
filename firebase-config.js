@@ -9,4 +9,3 @@ const firebaseConfig = {
 };
 
 const GUEST_EMAIL = "invitado@dsc.com";
-const GUEST_PW = "invitado123";

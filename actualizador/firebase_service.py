@@ -35,7 +35,6 @@ def initialize_firebase():
                 
                 if 'private_key' in info:
                     pk = info['private_key']
-                    print(f">>> Repr de llave original (primeros 60): {repr(pk[:60])}")
                     
                     # Limpieza profunda de la llave
                     # 1. Quitar posibles espacios accidentales al inicio/final del string
@@ -182,6 +181,33 @@ def get_players(db_ref):
     except Exception as e:
         print(f"Error al obtener los jugadores: {e}")
         return None
+
+def parse_auto_seasons(value):
+    """Convierte el valor de /AutoSeasons en una lista de temporadas activas.
+
+    AutoSeasons.html guarda este nodo como texto separado por comas. Se conserva
+    el orden escrito allí y se eliminan espacios, entradas vacías y duplicados.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, str):
+        raise ValueError("El nodo /AutoSeasons debe contener texto separado por comas.")
+
+    seasons = []
+    seen = set()
+    for item in value.split(','):
+        season = item.strip()
+        if season and season not in seen:
+            seasons.append(season)
+            seen.add(season)
+    return seasons
+
+
+def get_auto_seasons(db_ref):
+    """Lee las temporadas activas del nodo /AutoSeasons de Firebase."""
+    value = db_ref.child('AutoSeasons').get()
+    return parse_auto_seasons(value)
+
 
 def get_seasons(db_ref):
     """
