@@ -1,18 +1,44 @@
-const { chromium } = require('playwright');
 const nodemailer = require('nodemailer');
 
-// --- CONFIGURACIÓN ---
-const FICHAS_URL     = process.env.FICHAS_URL;
-const GMAIL_USER     = process.env.GMAIL_USER;
+// La URL es pública; la clave de acceso nunca se guarda en el código.
+const API_BASE_URL = (process.env.RENDER_API_URL || 'https://dsc-vh8j.onrender.com').replace(/\/+$/, '');
+const AUTOMATION_TOKEN = process.env.FICHAS_AUTOMATION_TOKEN;
+const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_PASSWORD = process.env.GMAIL_APP_PASSWORD;
-const REPORT_EMAIL   = process.env.REPORT_EMAIL;
+const REPORT_EMAIL = process.env.REPORT_EMAIL;
 
-// Tiempo máximo de espera del proceso (30 min)
-const TIMEOUT_MS = 30 * 60 * 1000;
+const DAYS_THRESHOLD = 60;
+const REQUEST_TIMEOUT_MS = 3 * 60 * 1000;
+const IS_DRY_RUN = /^(1|true|yes|si|sí)$/i.test(process.env.DRY_RUN || '');
 
-// ─────────────────────────────────────────────
-//  UTILIDAD: Transportador de email (Nodemailer)
-// ─────────────────────────────────────────────
+const logLines = [];
+
+function log(message) {
+    const line = `[${new Date().toLocaleTimeString('es-UY', { timeZone: 'America/Montevideo' })}] ${message}`;
+    console.log(line);
+    logLines.push(line);
+}
+
+function horaUY() {
+    return new Date().toLocaleString('es-UY', { timeZone: 'America/Montevideo' });
+}
+
+function parseDate(dateString) {
+    if (!dateString) return null;
+
+    const parts = String(dateString).split('/');
+    if (parts.length !== 3) return null;
+
+    const day = Number(parts[0]);
+    const month = Number(parts[1]);
+    const year = Number(parts[2]);
+    if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) return null;
+
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+    return date;
+}
+
 function crearTransporte() {
     return nodemailer.createTransport({
         service: 'gmail',
@@ -23,222 +49,213 @@ function crearTransporte() {
     });
 }
 
-async function sendEmail(subject, bodyText, attachments = []) {
+async function sendEmail(subject, bodyText) {
     if (!GMAIL_USER || !GMAIL_PASSWORD || !REPORT_EMAIL) {
-        console.warn('[EMAIL] Variables de entorno faltantes — email omitido.');
+        console.warn('[EMAIL] Faltan variables de correo; no se envió el informe.');
         return;
     }
-    const transporter = crearTransporte();
-    const mailOptions = {
-        from: `"Fichas Médicas DSC" <${GMAIL_USER}>`,
-        to: REPORT_EMAIL,
-        subject,
-        text: bodyText,
-        attachments,
+
+    try {
+        const info = await crearTransporte().sendMail({
+            from: `"Fichas Médicas DSC" <${GMAIL_USER}>`,
+            to: REPORT_EMAIL,
+            subject,
+            text: bodyText,
+        });
+        console.log(`[EMAIL] Informe enviado (${info.messageId}).`);
+    } catch (error) {
+        console.error(`[EMAIL] No se pudo enviar el informe: ${error.message}`);
+    }
+}
+
+async function apiRequest(path, { method = 'GET', body } = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const headers = {
+        Accept: 'application/json',
+        Authorization: `Bearer ${AUTOMATION_TOKEN}`,
     };
-    try {
-        const info = await transporter.sendMail(mailOptions);
-        console.log(`[EMAIL] Enviado OK → ${info.messageId}`);
-    } catch (err) {
-        // El email falla → solo loguear, no interrumpir el flujo
-        console.error(`[EMAIL] Error al enviar: ${err.message}`);
+
+    const options = { method, headers, signal: controller.signal };
+    if (body !== undefined) {
+        headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(body);
     }
-}
-
-// ─────────────────────────────────────────────
-//  UTILIDAD: Hora Uruguay (GMT-3)
-// ─────────────────────────────────────────────
-function horaUY() {
-    return new Date().toLocaleString('es-UY', { timeZone: 'America/Montevideo' });
-}
-
-// ─────────────────────────────────────────────
-//  FLUJO PRINCIPAL
-// ─────────────────────────────────────────────
-(async () => {
-    // Validación básica de configuración
-    if (!FICHAS_URL) {
-        const msg = `[${horaUY()}] ERROR CRÍTICO: La variable FICHAS_URL no está configurada.`;
-        console.error(msg);
-        await sendEmail('❌ Error de Configuración — Fichas Médicas DSC', msg);
-        process.exit(1);
-    }
-
-    const startTime = Date.now();
-    const logBuffer = []; // Acumula todas las líneas del proceso para el reporte final
-
-    function capturarLog(linea) {
-        console.log(linea);
-        logBuffer.push(linea);
-    }
-
-    // ── 1. EMAIL DE INICIO ───────────────────────────────────────────
-    const mensajeInicio =
-        `🚀 El automatismo de Fichas Médicas DSC ha comenzado.\n` +
-        `\n` +
-        `📅 Hora de inicio : ${horaUY()}\n` +
-        `🌐 URL            : ${FICHAS_URL}\n` +
-        `⏳ Tiempo máx.    : 30 minutos\n` +
-        `\n` +
-        `Recibirás un segundo email cuando el proceso finalice (con éxito o error).`;
-
-    //await sendEmail('🚀 Inicio — Actualizador de Fichas Médicas DSC', mensajeInicio);
-    //capturarLog(`[${horaUY()}] Email de inicio enviado.`);
-
-    // Construir la URL con ?auto=1 para que fichasmedicas.js sepa que corre
-    // en modo automático y no envíe emails duplicados via EmailJS
-    const targetUrl = FICHAS_URL.includes('?')
-        ? `${FICHAS_URL}&auto=1`
-        : `${FICHAS_URL}?auto=1`;
-
-    capturarLog(`[${horaUY()}] Abriendo: ${targetUrl}`);
-
-    // ── 2. PLAYWRIGHT ────────────────────────────────────────────────
-    const browser = await chromium.launch({ headless: true });
-    const page    = await browser.newPage();
-
-    // Capturar consola del browser → acumular en buffer
-    page.on('console', msg => capturarLog(`[BROWSER] ${msg.text()}`));
-    page.on('pageerror', err => capturarLog(`[BROWSER ERROR] ${err.message}`));
-
-    // Timeout global del page
-    page.setDefaultTimeout(TIMEOUT_MS);
-
-    let screenshotBuffer = null;
 
     try {
-        await page.goto(targetUrl, { waitUntil: 'load', timeout: 120000 });
-        capturarLog(`[${horaUY()}] Página cargada. Esperando marca [FINISH] o [ERROR]...`);
+        const response = await fetch(`${API_BASE_URL}${path}`, options);
+        const responseText = await response.text();
+        let result = null;
 
-        // Esperar hasta que aparezca [FINISH] o [ERROR] en el DOM
-        await page.waitForFunction(
-            () => {
-                const txt = document.body.innerText || '';
-                return txt.includes('[FINISH]') || txt.includes('[ERROR]');
-            },
-            { timeout: TIMEOUT_MS }
-        );
-
-        // Leer el texto final del DOM para extraer el resumen
-        const textoFinal = await page.evaluate(() => document.body.innerText || '');
-        const esError = textoFinal.includes('[ERROR]');
-
-        // Extraer líneas relevantes del resumen (últimas 40 líneas del log del browser)
-        const lineasResumen = textoFinal
-            .split('\n')
-            .map(l => l.trim())
-            .filter(l => l.length > 0)
-            .slice(-40)
-            .join('\n');
-
-        const duracionMin = ((Date.now() - startTime) / 60000).toFixed(1);
-
-        if (esError) {
-            // ── Proceso terminó con [ERROR] detectado en el DOM ──
-            capturarLog(`[${horaUY()}] ❌ Proceso terminó con ERROR.`);
-            screenshotBuffer = await page.screenshot({ fullPage: true });
-
-            const cuerpoError =
-                `❌ El automatismo de Fichas Médicas DSC terminó con ERROR.\n` +
-                `\n` +
-                `⏰ Hora fin     : ${horaUY()}\n` +
-                `⏱️  Duración     : ${duracionMin} minutos\n` +
-                `\n` +
-                `━━━━━━━━━━ RESUMEN DEL LOG ━━━━━━━━━━\n` +
-                `${lineasResumen}\n` +
-                `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-                `\n` +
-                `Se adjunta captura de pantalla del estado final.`;
-
-            await sendEmail(
-                '❌ Error — Fichas Médicas DSC',
-                cuerpoError,
-                [{ filename: 'error-screenshot.png', content: screenshotBuffer }]
-            );
-        } else {
-            // ── Proceso terminó exitosamente ──
-            capturarLog(`[${horaUY()}] ✅ Proceso completado exitosamente.`);
-
-            // Parsear el log del DOM para extraer datos estructurados
-            const lineas = textoFinal
-                .split('\n')
-                .map(l => l.trim())
-                .filter(l => l.length > 0);
-
-            // Extraer contadores del marcador [FINISH]
-            const finishMatch = textoFinal.match(/\[FINISH\] Proceso completado\. Actualizados: (\d+) \/ Procesados: (\d+)/);
-            const totalProcesados  = finishMatch ? finishMatch[2] : '?';
-            const totalActualizados = finishMatch ? finishMatch[1] : '?';
-
-            // Extraer pares nombre → nueva fecha de cada jugador actualizado
-            const jugadoresActualizados = [];
-            for (let i = 0; i < lineas.length; i++) {
-                const matchNombre = lineas[i].match(/Scrapping \(\d+\/\d+\): (.+?)\.\.\./);
-                if (matchNombre) {
-                    const nombre = matchNombre[1];
-                    // La línea siguiente con la nueva fecha (puede no existir si no hubo cambio)
-                    if (i + 1 < lineas.length) {
-                        const matchFecha = lineas[i + 1].match(/-> Nueva fecha encontrada: ([0-9/]+)/);
-                        if (matchFecha) {
-                            jugadoresActualizados.push({ nombre, fecha: matchFecha[1] });
-                        }
-                    }
-                }
+        if (responseText) {
+            try {
+                result = JSON.parse(responseText);
+            } catch (_) {
+                throw new Error(`Render respondió con un formato inesperado en ${path}.`);
             }
-
-            // Armar sección de jugadores actualizados
-            let seccionJugadores = '';
-            if (jugadoresActualizados.length > 0) {
-                seccionJugadores = '\n👥 Jugadores actualizados:\n' +
-                    jugadoresActualizados.map(j => `   • ${j.nombre} → FM Hasta: ${j.fecha}`).join('\n');
-            }
-
-            const cuerpoExito =
-                `✅ El automatismo de Fichas Médicas DSC finalizó con éxito.\n` +
-                `\n` +
-                `⏰ Hora fin  : ${horaUY()}\n` +
-                `⏱️  Duración  : ${duracionMin} minutos\n` +
-                `\n` +
-                `📊 Registros procesados  : ${totalProcesados}\n` +
-                `✨ Registros actualizados: ${totalActualizados}` +
-                seccionJugadores;
-
-            await sendEmail('✅ Completado — Fichas Médicas DSC', cuerpoExito);
         }
 
-    } catch (err) {
-        // ── Timeout u error de Playwright (nunca llegó a [FINISH]) ──
-        capturarLog(`[${horaUY()}] ❌ Timeout o fallo de Playwright: ${err.message}`);
+        if (!response.ok) {
+            const detail = result && result.error ? result.error : `HTTP ${response.status}`;
+            throw new Error(`${path}: ${detail}`);
+        }
+
+        return result;
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error(`Se agotó el tiempo de espera al consultar ${path}.`);
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function ejecutarActualizacion() {
+    log(`Iniciando automatización. Umbral: ${DAYS_THRESHOLD} días.`);
+    if (IS_DRY_RUN) log('MODO DE PRUEBA: no se guardarán cambios en Firebase.');
+
+    // La lista activa se administra desde AutoSeasons.html y se guarda en Firebase.
+    const seasons = await apiRequest('/auto_seasons');
+    if (!Array.isArray(seasons) || seasons.length === 0) {
+        throw new Error('AutoSeasons no contiene temporadas. Se detiene el proceso sin cambios.');
+    }
+    log(`Temporadas activas leídas de Firebase: ${seasons.join(', ')}.`);
+
+    const thresholdDate = new Date();
+    thresholdDate.setDate(thresholdDate.getDate() + DAYS_THRESHOLD);
+
+    const playersToScrape = [];
+    for (const season of seasons) {
+        log(`Revisando jugadores de la temporada ${season}...`);
+        const players = await apiRequest(`/players?season=${encodeURIComponent(season)}`);
+        if (!players || typeof players !== 'object' || Array.isArray(players)) {
+            throw new Error(`Render devolvió una lista de jugadores inválida para ${season}.`);
+        }
+
+        for (const [dni, player] of Object.entries(players)) {
+            const personalData = player && player.datosPersonales;
+            if (!personalData) continue;
+
+            const currentExpiration = personalData['FM Hasta'];
+            const expirationDate = parseDate(currentExpiration);
+            if (!currentExpiration || (expirationDate && expirationDate < thresholdDate)) {
+                playersToScrape.push({
+                    dni,
+                    season,
+                    name: personalData.NOMBRE || dni,
+                    currentExpiration,
+                });
+            }
+        }
+    }
+
+    log(`Jugadores que cumplen el criterio: ${playersToScrape.length}.`);
+    const resultsToUpdate = [];
+    const scrapeErrors = [];
+
+    for (let index = 0; index < playersToScrape.length; index++) {
+        const player = playersToScrape[index];
+        log(`Consultando ${index + 1}/${playersToScrape.length}: ${player.name} (${player.season})...`);
 
         try {
-            screenshotBuffer = await page.screenshot({ fullPage: true });
-        } catch (_) {
-            capturarLog(`[${horaUY()}] No se pudo tomar screenshot.`);
+            const result = await apiRequest('/scrape', {
+                method: 'POST',
+                body: { dni: player.dni },
+            });
+
+            const newExpiration = parseDate(result && result.hasta);
+            const oldExpiration = parseDate(player.currentExpiration);
+            if (result && result.success && newExpiration && (!oldExpiration || newExpiration > oldExpiration)) {
+                resultsToUpdate.push({
+                    dni: player.dni,
+                    season: player.season,
+                    name: player.name,
+                    desde: result.desde,
+                    hasta: result.hasta,
+                });
+                log(`  Nueva fecha encontrada para ${player.name}: ${result.hasta}.`);
+            } else {
+                log(`  Sin cambios para ${player.name}.`);
+            }
+        } catch (error) {
+            scrapeErrors.push({ name: player.name, message: error.message });
+            log(`  Error consultando ${player.name}: ${error.message}`);
         }
-
-        const duracionMin = ((Date.now() - startTime) / 60000).toFixed(1);
-        const logCompleto = logBuffer.slice(-50).join('\n');
-
-        const cuerpoFallo =
-            `❌ El automatismo de Fichas Médicas DSC falló inesperadamente.\n` +
-            `\n` +
-            `⏰ Hora fin     : ${horaUY()}\n` +
-            `⏱️  Duración     : ${duracionMin} minutos\n` +
-            `🔴 Error        : ${err.message}\n` +
-            `\n` +
-            `━━━━━━━━━━ ÚLTIMAS LÍNEAS DEL LOG ━━━━━━\n` +
-            `${logCompleto}\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
-
-        const attachments = screenshotBuffer
-            ? [{ filename: 'error-screenshot.png', content: screenshotBuffer }]
-            : [];
-
-        await sendEmail('❌ Fallo Crítico — Fichas Médicas DSC', cuerpoFallo, attachments);
-
-        await browser.close();
-        process.exit(1);
     }
 
-    await browser.close();
+    let updatedCount = 0;
+    const successfullyUpdated = [];
+    const updateErrors = [];
+    if (IS_DRY_RUN) {
+        log(`Prueba finalizada: ${resultsToUpdate.length} cambio(s) posibles; ninguno fue guardado.`);
+    } else {
+        for (const result of resultsToUpdate) {
+            try {
+                const updateResult = await apiRequest('/update_player', {
+                    method: 'POST',
+                    body: { dni: result.dni, desde: result.desde, hasta: result.hasta },
+                });
+                if (!updateResult || !updateResult.success) {
+                    throw new Error('Render no confirmó el guardado en Firebase.');
+                }
+                updatedCount++;
+                successfullyUpdated.push(result);
+                log(`Actualizado ${result.name} hasta ${result.hasta}.`);
+            } catch (error) {
+                updateErrors.push({ name: result.name, message: error.message });
+                log(`Error guardando ${result.name}: ${error.message}`);
+            }
+        }
+    }
+
+    const durationMinutes = ((Date.now() - runStartedAt) / 60000).toFixed(1);
+    const reportedPlayers = IS_DRY_RUN ? resultsToUpdate : successfullyUpdated;
+    const updatedPlayers = reportedPlayers.map(
+        player => `• ${player.name} (${player.season}) → ${player.hasta}`,
+    );
+
+    let report = `${IS_DRY_RUN ? '🧪 Prueba' : '✅ Automatización'} de Fichas Médicas\n`;
+    report += `⏰ Finalizó: ${horaUY()}\n`;
+    report += `⏱️ Duración: ${durationMinutes} minutos\n`;
+    report += `📅 Temporadas: ${seasons.join(', ')}\n`;
+    report += `📝 Jugadores revisados: ${playersToScrape.length}\n`;
+    report += `✨ Guardados en Firebase: ${IS_DRY_RUN ? 0 : updatedCount}\n`;
+    if (IS_DRY_RUN) report += `🔎 Cambios posibles (sin guardar): ${resultsToUpdate.length}\n`;
+    if (scrapeErrors.length) report += `⚠️ Errores de consulta: ${scrapeErrors.length}\n`;
+    if (updateErrors.length) report += `⚠️ Errores al guardar: ${updateErrors.length}\n`;
+    if (updatedPlayers.length) report += `\nJugadores con nueva fecha:\n${updatedPlayers.join('\n')}`;
+
+    const hasErrors = scrapeErrors.length > 0 || updateErrors.length > 0;
+    await sendEmail(
+        hasErrors ? '⚠️ Fichas Médicas — revisar errores' : '✅ Fichas Médicas — proceso completado',
+        report,
+    );
+
+    log(`Proceso terminado. Guardados: ${IS_DRY_RUN ? 0 : updatedCount}; revisados: ${playersToScrape.length}.`);
+    return hasErrors;
+}
+
+const runStartedAt = Date.now();
+
+(async () => {
+    try {
+        if (!AUTOMATION_TOKEN || AUTOMATION_TOKEN.trim().length < 32) {
+            throw new Error('Falta configurar FICHAS_AUTOMATION_TOKEN con una clave larga en GitHub Actions.');
+        }
+        if (!API_BASE_URL.startsWith('https://')) {
+            throw new Error('RENDER_API_URL debe comenzar con https://.');
+        }
+
+        const hasErrors = await ejecutarActualizacion();
+        if (hasErrors) process.exitCode = 1;
+    } catch (error) {
+        log(`ERROR: ${error.message}`);
+        const logSummary = logLines.slice(-30).join('\n');
+        await sendEmail(
+            '❌ Error — Actualizador de Fichas Médicas DSC',
+            `El automatismo se detuvo sin hacer más cambios.\n\nHora: ${horaUY()}\nError: ${error.message}\n\nÚltimos registros:\n${logSummary}`,
+        );
+        process.exitCode = 1;
+    }
 })();
