@@ -44,7 +44,6 @@ jobs:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          REPORT_EMAIL: ${{ secrets.REPORT_EMAIL }}
 
       # Fallback si el job falla antes de que el script pueda enviar el informe.
       - name: Notificación de fallo de pipeline (fallback)
