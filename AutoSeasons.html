@@ -160,6 +160,12 @@
             font-weight: 700;
         }
 
+        .email-settings {
+            margin-top: 28px;
+            padding-top: 26px;
+            border-top: 1px solid var(--border);
+        }
+
         .empty { color: var(--muted); font-size: 14px; }
 
         .login-note {
@@ -184,7 +190,7 @@
     <main>
         <section id="loginCard" class="card">
             <h1>Temporadas activas</h1>
-            <p class="subtitle">Iniciá sesión para administrar el nodo <strong>AutoSeasons</strong> de Firebase.</p>
+            <p class="subtitle">Iniciá sesión para administrar las temporadas y los destinatarios de informes en Firebase.</p>
 
             <form id="loginForm">
                 <label for="email">Email</label>
@@ -200,8 +206,8 @@
             </form>
 
             <div class="login-note">
-                El usuario debe tener permisos de autenticación y escritura sobre el nodo
-                <strong>AutoSeasons</strong> en Firebase Realtime Database.
+                El usuario debe tener permisos de lectura y escritura sobre los nodos
+                <strong>AutoSeasons</strong> y <strong>REPORT_EMAIL</strong> en Firebase Realtime Database.
             </div>
         </section>
 
@@ -238,6 +244,29 @@
                 <button id="reloadButton" class="secondary" type="button">Recargar</button>
             </div>
             <div id="appStatus" class="status" role="status"></div>
+
+            <section class="email-settings" aria-labelledby="reportEmailsTitle">
+                <h2 id="reportEmailsTitle">Destinatarios del informe</h2>
+                <p class="help">Cada destinatario recibirá un correo individual con el informe de fichas médicas.</p>
+                <label for="reportEmailsInput">Emails de destino</label>
+                <textarea
+                    id="reportEmailsInput"
+                    spellcheck="false"
+                    autocapitalize="none"
+                    placeholder="correo1@ejemplo.com, correo2@ejemplo.com"
+                    aria-describedby="reportEmailsHelp"
+                    disabled
+                ></textarea>
+                <p id="reportEmailsHelp" class="help">
+                    Separá las direcciones con comas, sin nombres ni saltos de línea.
+                    Se guardan en el nodo raíz REPORT_EMAIL. Este botón no modifica las temporadas.
+                </p>
+                <div class="actions">
+                    <button id="saveReportEmailsButton" class="primary" type="button" disabled>Guardar emails</button>
+                    <button id="reloadReportEmailsButton" class="secondary" type="button" disabled>Recargar emails</button>
+                </div>
+                <div id="reportEmailsStatus" class="status" role="status" aria-live="polite"></div>
+            </section>
         </section>
     </main>
 
@@ -250,6 +279,7 @@
 
     <script>
         const AUTO_SEASONS_NODE = 'AutoSeasons';
+        const REPORT_EMAIL_NODE = 'REPORT_EMAIL';
         const firebaseApp = firebase.initializeApp(firebaseConfig);
         const auth = firebaseApp.auth();
         const database = firebaseApp.database();
@@ -266,6 +296,112 @@
         const reloadButton = document.getElementById('reloadButton');
         const logoutButton = document.getElementById('logoutButton');
         const appStatus = document.getElementById('appStatus');
+        const reportEmailsInput = document.getElementById('reportEmailsInput');
+        const saveReportEmailsButton = document.getElementById('saveReportEmailsButton');
+        const reloadReportEmailsButton = document.getElementById('reloadReportEmailsButton');
+        const reportEmailsStatus = document.getElementById('reportEmailsStatus');
+        let emailSessionVersion = 0;
+        let emailBusy = false;
+
+        // Mismo formato básico admitido por el backend: direcciones simples.
+        function parseReportEmails(value) {
+            if (value == null) return [];
+            if (typeof value !== 'string') {
+                throw new Error('REPORT_EMAIL debe contener texto separado por comas.');
+            }
+            if (/[\x00-\x1f\x7f]/.test(value)) {
+                throw new Error('Ingresá los emails separados por comas, sin saltos de línea ni caracteres de control.');
+            }
+            const emails = [];
+            const seen = new Set();
+            const localPattern = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+$/;
+            const labelPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/;
+            value.split(',').forEach((item, index) => {
+                const email = item.trim();
+                if (!email) return;
+                const parts = email.split('@');
+                let valid = parts.length === 2 && email.length <= 254;
+                if (valid) {
+                    const [local, domain] = parts;
+                    const labels = domain.split('.');
+                    valid = local.length <= 64 && localPattern.test(local)
+                        && !local.startsWith('.') && !local.endsWith('.') && !local.includes('..')
+                        && labels.length >= 2 && labels.every(label => labelPattern.test(label));
+                }
+                if (!valid) throw new Error(`Revisá el email en la posición ${index + 1}: formato inválido.`);
+                const key = email.toLowerCase();
+                if (!seen.has(key)) {
+                    emails.push(email);
+                    seen.add(key);
+                }
+            });
+            return emails;
+        }
+
+        function setEmailBusy(busy) {
+            emailBusy = busy;
+            const disabled = busy || !auth.currentUser;
+            reportEmailsInput.disabled = disabled;
+            saveReportEmailsButton.disabled = disabled;
+            reloadReportEmailsButton.disabled = disabled;
+        }
+
+        async function loadReportEmails() {
+            if (!auth.currentUser || emailBusy) return;
+            const session = emailSessionVersion;
+            setEmailBusy(true);
+            setStatus(reportEmailsStatus, 'Cargando emails...', 'warning');
+            try {
+                const snapshot = await database.ref(REPORT_EMAIL_NODE).once('value');
+                if (session !== emailSessionVersion) return;
+                const value = snapshot.val();
+                // Conservar el texto para permitir corregir una configuración inválida.
+                reportEmailsInput.value = typeof value === 'string' ? value : '';
+                const emails = parseReportEmails(value);
+                reportEmailsInput.value = emails.join(',');
+                setStatus(reportEmailsStatus,
+                    emails.length ? `Destinatarios cargados: ${emails.length}.` : 'Todavía no hay destinatarios. Ingresá al menos un email y guardá.',
+                    emails.length ? 'success' : 'warning');
+            } catch (error) {
+                if (session === emailSessionVersion) {
+                    setStatus(reportEmailsStatus, `No se pudo cargar REPORT_EMAIL: ${error.message}`, 'error');
+                }
+            } finally {
+                if (session === emailSessionVersion) setEmailBusy(false);
+            }
+        }
+
+        async function saveReportEmails() {
+            if (emailBusy) return;
+            if (!auth.currentUser) {
+                setStatus(reportEmailsStatus, 'Iniciá sesión para guardar los emails.', 'error');
+                return;
+            }
+            let emails;
+            try {
+                emails = parseReportEmails(reportEmailsInput.value);
+                if (!emails.length) throw new Error('Ingresá al menos un email.');
+            } catch (error) {
+                setStatus(reportEmailsStatus, error.message, 'error');
+                return;
+            }
+            const session = emailSessionVersion;
+            setEmailBusy(true);
+            setStatus(reportEmailsStatus, 'Guardando emails...', 'warning');
+            try {
+                // Escribir solo este nodo: nunca reemplazar la raíz ni AutoSeasons.
+                await database.ref(REPORT_EMAIL_NODE).set(emails.join(','));
+                if (session !== emailSessionVersion) return;
+                reportEmailsInput.value = emails.join(',');
+                setStatus(reportEmailsStatus, `Emails guardados correctamente: ${emails.length} destinatario(s).`, 'success');
+            } catch (error) {
+                if (session === emailSessionVersion) {
+                    setStatus(reportEmailsStatus, `No se pudo guardar REPORT_EMAIL: ${error.message}`, 'error');
+                }
+            } finally {
+                if (session === emailSessionVersion) setEmailBusy(false);
+            }
+        }
 
         function setStatus(element, message, type = '') {
             element.textContent = message;
@@ -362,13 +498,23 @@
         saveButton.addEventListener('click', saveSeasons);
         reloadButton.addEventListener('click', loadSeasons);
         seasonsInput.addEventListener('input', updatePreview);
+        saveReportEmailsButton.addEventListener('click', saveReportEmails);
+        reloadReportEmailsButton.addEventListener('click', loadReportEmails);
+        reportEmailsInput.addEventListener('input', () => {
+            setStatus(reportEmailsStatus, 'Cambios sin guardar. Pulsá Guardar emails para aplicarlos.', 'warning');
+        });
 
         auth.onAuthStateChanged(user => {
+            emailSessionVersion++;
+            reportEmailsInput.value = '';
+            setStatus(reportEmailsStatus, '');
+            setEmailBusy(false);
             if (user) {
                 loginCard.classList.add('hidden');
                 appCard.classList.remove('hidden');
                 currentUser.textContent = user.email || 'Sesión iniciada';
                 loadSeasons();
+                loadReportEmails();
             } else {
                 appCard.classList.add('hidden');
                 loginCard.classList.remove('hidden');
