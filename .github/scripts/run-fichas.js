@@ -5,7 +5,8 @@ const API_BASE_URL = (process.env.RENDER_API_URL || 'https://dsc-vh8j.onrender.c
 const AUTOMATION_TOKEN = process.env.FICHAS_AUTOMATION_TOKEN;
 const GMAIL_USER = process.env.GMAIL_USER;
 const GMAIL_PASSWORD = process.env.GMAIL_APP_PASSWORD;
-const REPORT_EMAIL = process.env.REPORT_EMAIL;
+// Se cargan desde el nodo raíz /REPORT_EMAIL antes de actualizar fichas.
+let reportRecipients = [];
 
 const DAYS_THRESHOLD = 60;
 const REQUEST_TIMEOUT_MS = 3 * 60 * 1000;
@@ -49,23 +50,42 @@ function crearTransporte() {
     });
 }
 
+async function loadReportRecipients() {
+    const recipients = await apiRequest('/report_emails');
+    if (!Array.isArray(recipients) || recipients.length === 0 ||
+        recipients.some(email => typeof email !== 'string' || !email.trim() || /[\r\n,]/.test(email))) {
+        throw new Error('Render devolvió una lista de destinatarios REPORT_EMAIL inválida o vacía.');
+    }
+    reportRecipients = recipients;
+    log(`Destinatarios del informe leídos de Firebase: ${reportRecipients.length}.`);
+}
+
 async function sendEmail(subject, bodyText) {
-    if (!GMAIL_USER || !GMAIL_PASSWORD || !REPORT_EMAIL) {
-        console.warn('[EMAIL] Faltan variables de correo; no se envió el informe.');
+    if (!GMAIL_USER || !GMAIL_PASSWORD || reportRecipients.length === 0) {
+        console.error('[EMAIL] Faltan credenciales de correo o destinatarios de Firebase; no se envió el informe.');
+        process.exitCode = 1;
         return;
     }
 
-    try {
-        const info = await crearTransporte().sendMail({
-            from: `"Fichas Médicas DSC" <${GMAIL_USER}>`,
-            to: REPORT_EMAIL,
-            subject,
-            text: bodyText,
-        });
-        console.log(`[EMAIL] Informe enviado (${info.messageId}).`);
-    } catch (error) {
-        console.error(`[EMAIL] No se pudo enviar el informe: ${error.message}`);
+    const transport = crearTransporte();
+    let sentCount = 0;
+    for (const [index, recipient] of reportRecipients.entries()) {
+        try {
+            const info = await transport.sendMail({
+                from: `"Fichas Médicas DSC" <${GMAIL_USER}>`,
+                to: recipient,
+                subject,
+                text: bodyText,
+            });
+            sentCount++;
+            console.log(`[EMAIL] Informe enviado al destinatario ${index + 1}/${reportRecipients.length} (${info.messageId}).`);
+        } catch (error) {
+            // Un fallo no impide intentar el envío a los demás destinatarios.
+            console.error(`[EMAIL] Falló el destinatario ${index + 1}/${reportRecipients.length}: ${error.message}`);
+            process.exitCode = 1;
+        }
     }
+    console.log(`[EMAIL] Envíos completados: ${sentCount}/${reportRecipients.length}.`);
 }
 
 async function apiRequest(path, { method = 'GET', body } = {}) {
@@ -211,8 +231,13 @@ async function ejecutarActualizacion() {
 
     const durationMinutes = ((Date.now() - runStartedAt) / 60000).toFixed(1);
     const reportedPlayers = IS_DRY_RUN ? resultsToUpdate : successfullyUpdated;
-    const updatedPlayers = reportedPlayers.map(
-        player => `• ${player.name} (${player.season}) → ${player.hasta}`,
+    const playersBySeason = new Map();
+    for (const player of reportedPlayers) {
+        if (!playersBySeason.has(player.season)) playersBySeason.set(player.season, []);
+        playersBySeason.get(player.season).push(player);
+    }
+    const updatedPlayers = Array.from(playersBySeason, ([season, players]) =>
+        `📅 Temporada ${season}\n${players.map(player => `• ${player.name} → ${player.hasta}`).join('\n')}`,
     );
 
     let report = `${IS_DRY_RUN ? '🧪 Prueba' : '✅ Automatización'} de Fichas Médicas\n`;
@@ -224,7 +249,7 @@ async function ejecutarActualizacion() {
     if (IS_DRY_RUN) report += `🔎 Cambios posibles (sin guardar): ${resultsToUpdate.length}\n`;
     if (scrapeErrors.length) report += `⚠️ Errores de consulta: ${scrapeErrors.length}\n`;
     if (updateErrors.length) report += `⚠️ Errores al guardar: ${updateErrors.length}\n`;
-    if (updatedPlayers.length) report += `\nJugadores con nueva fecha:\n${updatedPlayers.join('\n')}`;
+    if (updatedPlayers.length) report += `\nJugadores con nueva fecha:\n\n${updatedPlayers.join('\n\n')}`;
 
     const hasErrors = scrapeErrors.length > 0 || updateErrors.length > 0;
     await sendEmail(
@@ -247,6 +272,9 @@ const runStartedAt = Date.now();
             throw new Error('RENDER_API_URL debe comenzar con https://.');
         }
 
+        // Conservar los destinatarios para poder informar también fallos posteriores.
+        // Si no pueden leerse, se detiene aquí sin modificar fichas.
+        await loadReportRecipients();
         const hasErrors = await ejecutarActualizacion();
         if (hasErrors) process.exitCode = 1;
     } catch (error) {
