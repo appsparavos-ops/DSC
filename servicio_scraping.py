@@ -101,6 +101,27 @@ def get_auto_seasons():
 
     return jsonify(seasons)
 
+@app.route('/report_emails', methods=['GET'])
+@require_automation_token
+def get_report_emails():
+    """Destinatarios del informe; accesibles solo al automatismo autenticado."""
+    try:
+        db = get_db()
+        if db is None:
+            return jsonify({'error': 'Firebase no inicializado'}), 503
+        recipients = firebase_service.get_report_emails(db)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 422
+    except Exception:
+        return jsonify({'error': 'No se pudo leer la configuración REPORT_EMAIL.'}), 503
+
+    if not recipients:
+        return jsonify({'error': 'El nodo REPORT_EMAIL no existe o está vacío.'}), 422
+
+    response = jsonify(recipients)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
 @app.route('/scrape', methods=['POST'])
 @require_automation_token
 def scrape():
