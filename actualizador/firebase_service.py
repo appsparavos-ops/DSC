@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import random
 import string
@@ -207,6 +208,54 @@ def get_auto_seasons(db_ref):
     """Lee las temporadas activas del nodo /AutoSeasons de Firebase."""
     value = db_ref.child('AutoSeasons').get()
     return parse_auto_seasons(value)
+
+
+def parse_report_emails(value):
+    """Lee direcciones simples separadas por comas; sin nombres ni cabeceras.
+
+    Valida el formato básico (no la existencia del buzón), conserva el orden
+    y elimina espacios, entradas vacías y duplicados sin distinguir mayúsculas.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, str):
+        raise ValueError("El nodo /REPORT_EMAIL debe contener texto separado por comas.")
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        raise ValueError("REPORT_EMAIL no admite caracteres de control ni saltos de línea.")
+
+    recipients = []
+    seen = set()
+    local_pattern = r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+"
+    label_pattern = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    for index, item in enumerate(value.split(','), start=1):
+        email = item.strip()
+        if not email:
+            continue
+        parts = email.split('@')
+        valid = len(parts) == 2 and len(email) <= 254
+        if valid:
+            local, domain = parts
+            labels = domain.split('.')
+            valid = (
+                len(local) <= 64
+                and re.fullmatch(local_pattern, local) is not None
+                and not local.startswith('.') and not local.endswith('.')
+                and '..' not in local
+                and len(labels) >= 2
+                and all(re.fullmatch(label_pattern, label) for label in labels)
+            )
+        if not valid:
+            raise ValueError(f"Dirección con formato inválido en la posición {index} de REPORT_EMAIL.")
+        key = email.lower()
+        if key not in seen:
+            recipients.append(email)
+            seen.add(key)
+    return recipients
+
+
+def get_report_emails(db_ref):
+    """Lee exclusivamente el nodo raíz /REPORT_EMAIL de Firebase."""
+    return parse_report_emails(db_ref.child('REPORT_EMAIL').get())
 
 
 def get_seasons(db_ref):
