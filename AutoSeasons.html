@@ -160,6 +160,11 @@
             font-weight: 700;
         }
 
+        #reportEmailsPreview .badge {
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+
         .email-settings {
             margin-top: 28px;
             padding-top: 26px;
@@ -248,6 +253,9 @@
             <section class="email-settings" aria-labelledby="reportEmailsTitle">
                 <h2 id="reportEmailsTitle">Destinatarios del informe</h2>
                 <p class="help">Cada destinatario recibirá un correo individual con el informe de fichas médicas.</p>
+                <div id="reportEmailsPreview" class="preview" aria-live="polite" aria-label="Vista previa de destinatarios" style="margin-top: 14px;">
+                    <span class="empty">No hay destinatarios cargados.</span>
+                </div>
                 <label for="reportEmailsInput">Emails de destino</label>
                 <textarea
                     id="reportEmailsInput"
@@ -297,6 +305,7 @@
         const logoutButton = document.getElementById('logoutButton');
         const appStatus = document.getElementById('appStatus');
         const reportEmailsInput = document.getElementById('reportEmailsInput');
+        const reportEmailsPreview = document.getElementById('reportEmailsPreview');
         const saveReportEmailsButton = document.getElementById('saveReportEmailsButton');
         const reloadReportEmailsButton = document.getElementById('reloadReportEmailsButton');
         const reportEmailsStatus = document.getElementById('reportEmailsStatus');
@@ -338,6 +347,33 @@
             return emails;
         }
 
+        function updateReportEmailsPreview() {
+            // La vista previa refleja el texto en edición; se valida al guardar.
+            const seen = new Set();
+            const emails = reportEmailsInput.value.split(',')
+                .map(email => email.trim())
+                .filter(email => {
+                    const key = email.toLowerCase();
+                    if (!email || seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+            reportEmailsPreview.replaceChildren();
+            if (!emails.length) {
+                const empty = document.createElement('span');
+                empty.className = 'empty';
+                empty.textContent = 'No hay destinatarios cargados.';
+                reportEmailsPreview.appendChild(empty);
+                return;
+            }
+            emails.forEach((email, index) => {
+                const badge = document.createElement('span');
+                badge.className = 'badge';
+                badge.textContent = `${index + 1}. ${email}`;
+                reportEmailsPreview.appendChild(badge);
+            });
+        }
+
         function setEmailBusy(busy) {
             emailBusy = busy;
             const disabled = busy || !auth.currentUser;
@@ -357,8 +393,10 @@
                 const value = snapshot.val();
                 // Conservar el texto para permitir corregir una configuración inválida.
                 reportEmailsInput.value = typeof value === 'string' ? value : '';
+                updateReportEmailsPreview();
                 const emails = parseReportEmails(value);
                 reportEmailsInput.value = emails.join(',');
+                updateReportEmailsPreview();
                 setStatus(reportEmailsStatus,
                     emails.length ? `Destinatarios cargados: ${emails.length}.` : 'Todavía no hay destinatarios. Ingresá al menos un email y guardá.',
                     emails.length ? 'success' : 'warning');
@@ -393,6 +431,7 @@
                 await database.ref(REPORT_EMAIL_NODE).set(emails.join(','));
                 if (session !== emailSessionVersion) return;
                 reportEmailsInput.value = emails.join(',');
+                updateReportEmailsPreview();
                 setStatus(reportEmailsStatus, `Emails guardados correctamente: ${emails.length} destinatario(s).`, 'success');
             } catch (error) {
                 if (session === emailSessionVersion) {
@@ -501,12 +540,14 @@
         saveReportEmailsButton.addEventListener('click', saveReportEmails);
         reloadReportEmailsButton.addEventListener('click', loadReportEmails);
         reportEmailsInput.addEventListener('input', () => {
+            updateReportEmailsPreview();
             setStatus(reportEmailsStatus, 'Cambios sin guardar. Pulsá Guardar emails para aplicarlos.', 'warning');
         });
 
         auth.onAuthStateChanged(user => {
             emailSessionVersion++;
             reportEmailsInput.value = '';
+            updateReportEmailsPreview();
             setStatus(reportEmailsStatus, '');
             setEmailBusy(false);
             if (user) {
