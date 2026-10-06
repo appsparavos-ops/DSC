@@ -2,7 +2,7 @@ name: Actualizar Fichas Médicas
 
 on:
   schedule:
-    # 18:00 Uruguay (21:00 UTC) - Lunes a Viernes
+    # 18:00 Uruguay (15:00 UTC) - Lunes a Viernes
     - cron: '0 21 * * 1-5'
   workflow_dispatch:
     inputs:
