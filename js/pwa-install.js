@@ -7,8 +7,10 @@
 (function () {
     'use strict';
 
-    var APP_NAME = 'Gestión DSC';
-    var DISMISS_KEY = 'gestionDSC.pwaInstallDismissedAt';
+    var script = document.currentScript;
+    var isRoster = script && script.getAttribute('data-pwa-app') === 'rosterDNI';
+    var APP_NAME = isRoster ? 'Roster DNI' : 'Gestión DSC';
+    var DISMISS_KEY = (isRoster ? 'rosterDNI' : 'gestionDSC') + '.pwaInstallDismissedAt';
     var DISMISS_DAYS = 7;
 
     var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
@@ -34,8 +36,40 @@
     var deferredPrompt = null;
     var bar = null;
     var help = null;
+    var installButton = null;
+    var installing = false;
+
+    function showInstall(onInstall) {
+        installButton = isRoster ? document.getElementById('installPwaBtn') : null;
+        if (installButton) {
+            installButton.classList.remove('hidden');
+            installButton.onclick = onInstall;
+        } else {
+            showBar(onInstall);
+        }
+    }
+
+    async function install() {
+        if (!deferredPrompt || installing) return;
+        var prompt = deferredPrompt;
+        deferredPrompt = null; // Cada evento puede usarse una sola vez.
+        installing = true;
+        if (installButton) installButton.disabled = true;
+        try {
+            await prompt.prompt();
+            await prompt.userChoice;
+        } catch (error) {
+            console.warn('No se pudo abrir el diálogo de instalación PWA:', error);
+            window.alert('No se pudo iniciar la instalación. Probá desde el menú del navegador: Instalar aplicación o Añadir a pantalla de inicio.');
+        } finally {
+            installing = false;
+            if (installButton) installButton.disabled = false;
+            hideBar();
+        }
+    }
 
     function hideBar() {
+        if (installButton) installButton.classList.add('hidden');
         if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
         bar = null;
         hideHelp();
@@ -95,11 +129,7 @@
         deferredPrompt = e;
         if (dismissedRecently()) return;
         onBodyReady(function () {
-            showBar(function () {
-                if (!deferredPrompt) return;
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then(function () { deferredPrompt = null; hideBar(); });
-            });
+            if (deferredPrompt) showInstall(install);
         });
     });
 
@@ -110,6 +140,6 @@
 
     // iPhone / iPad: sin prompt nativo, mostramos la ayuda
     if (isIOS && !dismissedRecently()) {
-        onBodyReady(function () { showBar(showIOSHelp); });
+        onBodyReady(function () { showInstall(showIOSHelp); });
     }
 })();
