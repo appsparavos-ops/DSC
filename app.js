@@ -457,6 +457,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     const dni = String(record._dni || record.DNI || "");
                     const personalData = datosPersonalesMap.get(dni) || {};
                     const combined = { ...record, ...personalData };
+                    combined._estadoLicenciaOriginal = record['ESTADO LICENCIA'];
                     // Fuente de la verdad ÚNICA: estrictamente de datosPersonales si existe
                     if (personalData['FM Hasta'] !== undefined) combined['FM Hasta'] = personalData['FM Hasta'];
                     if (personalData['FM Desde'] !== undefined) combined['FM Desde'] = personalData['FM Desde'];
@@ -879,11 +880,180 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function parseDateDDMMYYYY(dateString) {
         if (!dateString || typeof dateString !== 'string') return null;
-        const parts = dateString.split('/');
+        const trimmed = dateString.trim();
+        if (!trimmed || trimmed === '-' || trimmed === '1/1/1900' || trimmed === '01/01/1900') return null;
+        const parts = trimmed.split('/');
         if (parts.length !== 3) return null;
         const [day, month, year] = parts.map(p => parseInt(p, 10));
-        if (isNaN(day) || isNaN(month) || isNaN(year) || year < 1900) return null;
-        return new Date(year, month - 1, day);
+        if (isNaN(day) || isNaN(month) || isNaN(year) || year <= 1900) return null;
+        const parsed = new Date(year, month - 1, day);
+        if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return null;
+        return parsed;
+    }
+
+    function hasMissingFM(player) {
+        return !parseDateDDMMYYYY(player ? String(player['FM Hasta'] || '') : '');
+    }
+
+    function subtractMonthsClamped(baseDate, months) {
+        const targetMonth = baseDate.getMonth() - months;
+        const targetYear = baseDate.getFullYear() + Math.floor(targetMonth / 12);
+        const normalizedMonth = ((targetMonth % 12) + 12) % 12;
+        const maxDay = new Date(targetYear, normalizedMonth + 1, 0).getDate();
+        return new Date(targetYear, normalizedMonth, Math.min(baseDate.getDate(), maxDay));
+    }
+
+    // Fuente única de verdad para la fecha de finalización de cada campeonato:
+    // - Formativas / Temporadas comunes: 24/12
+    // - LUB / LDD (o temporadas AAAA-AAAA): 30/06
+    // - LFB (Liga Femenina de Basquet): 15/10
+    function getTournamentEndDate(player, seasonOverride = null, categoryOverride = null) {
+        const rawSeason = String(seasonOverride || (seasonFilter && seasonFilter.value) || (player && player.TEMPORADA) || '').trim();
+        const playerCat = String((player && player.CATEGORIA) || '').trim();
+        const effectiveCat = String(categoryOverride || playerCat).trim().toLowerCase();
+        const sameCategoryAsPlayer = !categoryOverride || categoryOverride.trim().toLowerCase() === playerCat.toLowerCase();
+        const effectiveComp = sameCategoryAsPlayer ? String((player && player.COMPETICION) || '').trim().toUpperCase() : '';
+
+        let endYear = NaN;
+        if (rawSeason && rawSeason !== 'Todas') {
+            const yearMatches = rawSeason.match(/\d{4}/g);
+            if (yearMatches && yearMatches.length > 0) {
+                endYear = parseInt(yearMatches[yearMatches.length - 1], 10);
+            }
+        }
+        if (isNaN(endYear)) {
+            endYear = new Date().getFullYear();
+        }
+
+        const isLFB = effectiveCat.includes('liga femenina') || effectiveCat === 'lfb' || effectiveComp === 'LFB';
+        const isLUBorLDD = effectiveCat.includes('liga uruguaya') || effectiveCat.includes('liga de desarrollo') ||
+            effectiveCat === 'lub' || effectiveCat === 'ldd' ||
+            effectiveComp === 'LUB' || effectiveComp === 'LDD' ||
+            (!isLFB && rawSeason.includes('-'));
+
+        if (isLFB) {
+            return new Date(endYear, 9, 15); // 15/10
+        }
+        if (isLUBorLDD) {
+            return new Date(endYear, 5, 30); // 30/06
+        }
+        return new Date(endYear, 11, 24); // 24/12
+    }
+
+    function getFMSemaphorePDFColors(player, categoryOverride = null) {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const expDate = parseDateDDMMYYYY(player['FM Hasta']);
+        const tournamentEndDate = getTournamentEndDate(player, null, categoryOverride);
+
+        if (!expDate || expDate < today) {
+            return { fillColor: [153, 27, 27], textColor: [255, 255, 255] }; // Red-800
+        }
+        if (tournamentEndDate && expDate > tournamentEndDate) {
+            return { fillColor: [22, 163, 74], textColor: [255, 255, 255] }; // Green-600
+        }
+        const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
+        const sixtyFiveDays = new Date(today); sixtyFiveDays.setDate(today.getDate() + 65);
+
+        if (expDate <= thirtyDays) {
+            return { fillColor: [249, 115, 22], textColor: [...PDF_TEXT_BLUE] }; // Orange-500
+        }
+        if (expDate <= sixtyFiveDays) {
+            return { fillColor: [254, 240, 138], textColor: [...PDF_TEXT_BLUE] }; // Yellow-200
+        }
+        return { fillColor: [255, 255, 255], textColor: [...PDF_TEXT_BLUE] };
+    }
+
+    // Clasifica el vínculo del jugador diferenciando Pase Definitivo, Préstamo (Pase Temporal)
+    // y Baja. Contempla tanto pases vigentes como préstamos finalizados en la temporada actual
+    // donde el jugador aún figura como 'Baja' en FUBB previo a su regreso.
+    function classifyPlayerLinkStatus(player, seasonOverride = null) {
+        const estadoLic = String(player['ESTADO LICENCIA'] || '').trim().toUpperCase();
+        const bajaRaw = String(player.BAJA || '').trim();
+        const bajaUpper = bajaRaw.toUpperCase();
+        const dni = String(player._dni || player.DNI || '').trim();
+
+        let isPaseDefinitivo = (player._tipoCedido === 'definitivo') ||
+            estadoLic.includes('PASE DEFINITIVO') || estadoLic === 'DEFINITIVO';
+
+        let isPrestamo = (player._tipoCedido === 'temporal') ||
+            estadoLic.includes('PASE TEMPORAL') ||
+            estadoLic.includes('PRESTAMO') || estadoLic.includes('PRÉSTAMO') ||
+            bajaUpper.includes('PASE TEMPORAL') ||
+            bajaUpper.includes('PRESTAMO') || bajaUpper.includes('PRÉSTAMO');
+
+        const isBaja = estadoLic === 'BAJA' ||
+            (!estadoLic && Boolean(bajaRaw) && bajaRaw !== '-' && bajaRaw !== '1/1/1900');
+
+        if (!isPaseDefinitivo && !isPrestamo && isBaja && dni && allGlobalPases[dni]) {
+            const rawSeason = String(seasonOverride || (seasonFilter && seasonFilter.value) || player.TEMPORADA || '').trim();
+            const seasonYears = (rawSeason.match(/\d{4}/g) || []).map(y => parseInt(y, 10));
+            const bajaDate = parseDateDDMMYYYY(bajaRaw);
+            const pasesValue = allGlobalPases[dni];
+            const pasesArray = pasesValue['FECHA FEDERACION ACEPTA'] ? [pasesValue] : Object.values(pasesValue);
+
+            pasesArray.forEach(pase => {
+                if (!pase || typeof pase !== 'object') return;
+                const status = classifyPaseLogic(pase);
+                const origen = String(pase['CLUB ORIGEN'] || '').toUpperCase();
+                const destino = String(pase['CLUB DESTINO'] || '').toUpperCase();
+                const tipoPase = String(pase['TIPO PASE'] || '').toUpperCase();
+
+                const esDeDefensor = origen.includes('DEFENSOR');
+                const esAFuera = !destino.includes('DEFENSOR');
+                const esTemporal = tipoPase.includes('TEMPORAL') || tipoPase.includes('PRÉSTAMO') || tipoPase.includes('PRESTAMO') || tipoPase === 'T' || tipoPase === 'P';
+
+                if (esDeDefensor && esAFuera && esTemporal && status === 'finalizado') {
+                    const vtoDate = parseDateDDMMYYYY(String(pase['VALIDO HASTA'] || ''));
+                    const aceptaDate = parseDateDDMMYYYY(String(pase['FECHA FEDERACION ACEPTA'] || ''));
+                    const matchesSeasonYear = seasonYears.length === 0 ||
+                        (vtoDate && seasonYears.includes(vtoDate.getFullYear())) ||
+                        (aceptaDate && seasonYears.includes(aceptaDate.getFullYear()));
+                    const hasSubsequentBaja = Boolean(bajaDate && vtoDate && bajaDate > vtoDate);
+
+                    if (matchesSeasonYear && !hasSubsequentBaja) {
+                        isPrestamo = true;
+                    }
+                }
+            });
+        }
+
+        return { isPaseDefinitivo, isPrestamo, isBaja };
+    }
+
+    function filterExpiringPlayersForPDF(players, options = {}, referenceDate = null) {
+        const today = referenceDate ? new Date(referenceDate) : new Date();
+        today.setHours(0, 0, 0, 0);
+        const sixMonthsAgo = subtractMonthsClamped(today, 6);
+
+        return (players || []).filter(p => {
+            const { isPaseDefinitivo, isPrestamo, isBaja } = classifyPlayerLinkStatus(p);
+
+            // Regla de prioridad: Pase Definitivo -> Cedido a Préstamo (prima sobre Baja) -> Baja
+            if (isPaseDefinitivo) {
+                if (!options.includeDefinitivos) return false;
+            } else if (isPrestamo) {
+                if (!options.includePrestamos) return false;
+            } else if (isBaja) {
+                if (!options.includeBajas) return false;
+            }
+
+            // Reglas sobre FM Hasta
+            const expDate = parseDateDDMMYYYY(p['FM Hasta']);
+            if (!expDate) {
+                // Jugadores Sin Ficha (vacío, '-', '1/1/1900')
+                if (!options.includeSinFicha) return false;
+            } else {
+                const tournamentEndDate = getTournamentEndDate(p);
+                if (tournamentEndDate && expDate > tournamentEndDate && !options.includePostTorneo) {
+                    return false;
+                }
+                if (expDate < sixMonthsAgo && !options.includeVencidasMas6Meses) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
     }
 
     // --- FUNCIONES AUXILIARES DE ORDENamiento ---
@@ -949,22 +1119,11 @@ document.addEventListener('DOMContentLoaded', function () {
         return catA.localeCompare(catB);
     }
 
-    function getFMStatusStyles(player) {
+    function getFMStatusStyles(player, categoryContext = null) {
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const expDate = parseDateDDMMYYYY(player['FM Hasta']);
         const isExpired = !expDate || expDate < today;
-        const season = seasonFilter ? seasonFilter.value : player.TEMPORADA;
-
-        // Determinar fin del torneo según tipo de temporada
-        let tournamentEndDate = null;
-        if (season && season.includes('-')) {
-            const years = season.split('-').map(y => y.trim());
-            const lastYear = years[years.length - 1];
-            tournamentEndDate = new Date(parseInt(lastYear), 5, 30); // 30/06
-        } else if (season) {
-            const year = parseInt(season);
-            tournamentEndDate = new Date(year, 11, 25); // 25/12
-        }
+        const tournamentEndDate = getTournamentEndDate(player, null, categoryContext);
 
         let bgClass = 'hover:bg-gray-100';
         let textClass = 'text-gray-900';
@@ -1002,12 +1161,12 @@ document.addEventListener('DOMContentLoaded', function () {
             text: textClass,
             badge: `${bgClass.split(' ')[0]} ${textClass} font-bold px-2 py-1 rounded-lg shadow-sm`,
             frame: bgClass.replace('hover:', '').split(' ')[0] + ' border-gray-400',
-            isGreen: (tournamentEndDate && expDate > tournamentEndDate)
+            isGreen: Boolean(tournamentEndDate && expDate && expDate > tournamentEndDate)
         };
     }
 
     function showExpiring() {
-        if (printButton) printButton.classList.remove('hidden');
+        if (printButton) printButton.classList.add('hidden');
         const selectedSeason = seasonFilter ? seasonFilter.value : null;
         if (!selectedSeason) {
             showToast("Por favor, selecciona una temporada para ver los vencimientos.");
@@ -1018,15 +1177,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const selectedCategory = categoryFilter ? categoryFilter.value : '';
 
         const today = new Date(); today.setHours(0, 0, 0, 0);
-        const limitDate = new Date(); limitDate.setDate(today.getDate() + 65);
+        const limitDate = new Date(today); limitDate.setDate(today.getDate() + 65);
 
-        // Incluimos jugadores sin ficha ("", nulo, undefined o solo espacios) además de los que vencen pronto
+        // Incluimos jugadores sin ficha ("", nulo, undefined, '-', '1/1/1900') además de los que vencen hasta +65 días
         let expiringPlayers = allPlayers.filter(p => {
             if (p.TIPO === 'ENTRENADOR/A') return false;
-            const fmHasta = p['FM Hasta'];
-            // Si no tiene FM registrada o ha vencido
-            if (!fmHasta || fmHasta.toString().trim() === "" || fmHasta === "1/1/1900") return true;
-            const expDate = parseDateDDMMYYYY(fmHasta);
+            if (hasMissingFM(p)) return true;
+            const expDate = parseDateDDMMYYYY(p['FM Hasta']);
             return !expDate || expDate <= limitDate;
         });
 
@@ -1040,6 +1197,8 @@ document.addEventListener('DOMContentLoaded', function () {
         messageEl.style.display = 'none';
 
         if (expiringPlayers.length === 0) {
+            currentlyDisplayedPlayers = [];
+            currentColumnsForPDF = [];
             messageEl.style.display = 'block';
             messageEl.textContent = 'No hay vencimientos o fichas faltantes para los filtros seleccionados.';
             return;
@@ -1145,7 +1304,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const originalIndex = currentlyDisplayedPlayers.findIndex(p => p._firebaseKey === player._firebaseKey);
         row.addEventListener('click', () => showPlayerDetails(player, isEditModeActive, originalIndex, false));
 
-        const { bg, text } = getFMStatusStyles(player);
+        const { bg, text } = getFMStatusStyles(player, categoryContext);
         row.className = `clickable-row ${bg} ${text} transition-colors`;
 
         columns.forEach(colName => {
@@ -2274,15 +2433,180 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Priorizar el reporte de Vencimientos si es el que se generó específicamente
         if (currentColumnsForPDF.length === 3 && currentColumnsForPDF.includes('FM Hasta') && currentlyDisplayedPlayers.length > 0) {
-            await generateExpiringPDF();
+            showExpiringPDFModal();
         } else if (selectedCategory || (equipoFilter && equipoFilter.value)) {
             // Mostrar modal de opciones para el PDF de categoría o equipo
             showPDFOptionsModal(selectedCategory, !selectedCategory ? equipoFilter.value : null);
         } else if (currentlyDisplayedPlayers.length > 0 && currentColumnsForPDF.length > 0) {
-            await generateExpiringPDF();
+            showExpiringPDFModal();
         } else {
             showToast("No hay datos para generar el PDF.", "error");
         }
+    }
+
+    // Garantiza que el modal de filtros de PDF de Vencimientos exista en el DOM
+    // (incluso si el navegador conserva en caché una versión anterior de index.html).
+    function ensureExpiringPdfModal() {
+        let modal = document.getElementById('expiringPdfModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'expiringPdfModal';
+            modal.className = 'hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4';
+            modal.innerHTML = `
+                <div class="relative p-6 sm:p-8 border w-full max-w-md shadow-xl rounded-xl bg-white">
+                    <div class="text-center">
+                        <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-amber-100 mb-3">
+                            <svg class="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16v13H4V7z M12 10.5v6 M9 13.5h6 M8 7V4h8v3"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl leading-6 font-bold text-gray-900">Filtros PDF de Vencimientos</h3>
+                        <p class="mt-2 text-sm text-gray-500">Marque los grupos adicionales que desea <strong>incluir</strong> en el informe PDF:</p>
+                    </div>
+                    <div class="mt-4 space-y-2.5 text-left">
+                        <label for="expPdfIncludeBajas" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
+                            <input type="checkbox" id="expPdfIncludeBajas" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Jugadores dados de Baja</span>
+                                <span class="text-xs text-gray-500">Incluir registros con estado de licencia en Baja</span>
+                            </span>
+                        </label>
+                        <label for="expPdfIncludePrestamos" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
+                            <input type="checkbox" id="expPdfIncludePrestamos" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Jugadores cedidos a préstamo</span>
+                                <span class="text-xs text-gray-500">Pase temporal a otra divisional (prima sobre Baja)</span>
+                            </span>
+                        </label>
+                        <label for="expPdfIncludeDefinitivos" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
+                            <input type="checkbox" id="expPdfIncludeDefinitivos" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Jugadores con pase definitivo</span>
+                                <span class="text-xs text-gray-500">Incluir pases definitivos hacia otros clubes</span>
+                            </span>
+                        </label>
+                        <label for="expPdfIncludePostTorneo" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
+                            <input type="checkbox" id="expPdfIncludePostTorneo" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Vencen después del fin de campeonato</span>
+                                <span class="text-xs text-gray-500">Formativas: 24/12 · LUB/LDD: 30/06 · LFB: 15/10</span>
+                            </span>
+                        </label>
+                        <label for="expPdfIncludeMas6Meses" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
+                            <input type="checkbox" id="expPdfIncludeMas6Meses" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Ficha vencida anterior a 6 meses</span>
+                                <span class="text-xs text-gray-500">Vencimiento previo a los últimos 6 meses</span>
+                            </span>
+                        </label>
+                        <label for="expPdfIncludeSinFicha" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
+                            <input type="checkbox" id="expPdfIncludeSinFicha" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Jugadores Sin Ficha</span>
+                                <span class="text-xs text-gray-500">Sin fecha de ficha médica registrada</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div id="expPdfPreviewCount" class="mt-4 py-2 px-3 rounded-lg bg-blue-50 text-blue-900 text-xs font-semibold text-center"></div>
+                    <div class="flex flex-col gap-2.5 mt-4">
+                        <button id="expPdfConfirmBtn" type="button" class="px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                            GENERAR PDF
+                        </button>
+                        <button id="expPdfCancelBtn" type="button" class="px-4 py-2 bg-white text-red-600 text-base font-medium rounded-lg border border-red-200 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors">
+                            CANCELAR
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        return modal;
+    }
+
+    function showExpiringPDFModal() {
+        const modal = ensureExpiringPdfModal();
+        const checkboxIds = [
+            'expPdfIncludeBajas',
+            'expPdfIncludePrestamos',
+            'expPdfIncludeDefinitivos',
+            'expPdfIncludePostTorneo',
+            'expPdfIncludeMas6Meses',
+            'expPdfIncludeSinFicha'
+        ];
+
+        const getOptions = () => ({
+            includeBajas: Boolean(document.getElementById('expPdfIncludeBajas')?.checked),
+            includePrestamos: Boolean(document.getElementById('expPdfIncludePrestamos')?.checked),
+            includeDefinitivos: Boolean(document.getElementById('expPdfIncludeDefinitivos')?.checked),
+            includePostTorneo: Boolean(document.getElementById('expPdfIncludePostTorneo')?.checked),
+            includeVencidasMas6Meses: Boolean(document.getElementById('expPdfIncludeMas6Meses')?.checked),
+            includeSinFicha: Boolean(document.getElementById('expPdfIncludeSinFicha')?.checked)
+        });
+
+        const updatePreviewCount = () => {
+            const countEl = document.getElementById('expPdfPreviewCount');
+            if (!countEl) return;
+            const total = currentlyDisplayedPlayers.length;
+            const filtered = filterExpiringPlayersForPDF(currentlyDisplayedPlayers, getOptions());
+            if (filtered.length === 0) {
+                countEl.className = 'mt-4 py-2 px-3 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold text-center';
+                countEl.textContent = `0 de ${total} jugadores cumplen los filtros actuales`;
+            } else {
+                countEl.className = 'mt-4 py-2 px-3 rounded-lg bg-blue-50 text-blue-900 text-xs font-semibold text-center';
+                countEl.textContent = `Se incluirán ${filtered.length} de ${total} jugadores en el PDF`;
+            }
+        };
+
+        // Desmarcados por defecto cada vez que se abre el modal
+        checkboxIds.forEach(id => {
+            const chk = document.getElementById(id);
+            if (chk) chk.checked = false;
+        });
+
+        if (!modal.dataset.bound) {
+            modal.dataset.bound = '1';
+
+            const closeModal = () => {
+                modal.classList.add('hidden');
+            };
+
+            checkboxIds.forEach(id => {
+                const chk = document.getElementById(id);
+                if (chk) chk.addEventListener('change', updatePreviewCount);
+            });
+
+            const btnConfirm = document.getElementById('expPdfConfirmBtn');
+            const btnCancel = document.getElementById('expPdfCancelBtn');
+
+            if (btnConfirm) {
+                btnConfirm.addEventListener('click', async () => {
+                    const filteredPlayers = filterExpiringPlayersForPDF(currentlyDisplayedPlayers, getOptions());
+                    if (filteredPlayers.length === 0) {
+                        showToast("No hay jugadores que cumplan los filtros seleccionados.", "error");
+                        return;
+                    }
+                    closeModal();
+                    await generateExpiringPDF(filteredPlayers);
+                });
+            }
+
+            if (btnCancel) {
+                btnCancel.addEventListener('click', closeModal);
+            }
+
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal();
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                    closeModal();
+                }
+            });
+        }
+
+        updatePreviewCount();
+        modal.classList.remove('hidden');
     }
 
     // Inyecta la opción "No enmascarar DNI" una sola vez dentro del modal de
@@ -2675,16 +2999,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     'FM Hasta': fmHasta
                 };
 
-                // Colorear según estado FM
-                const today = new Date(); today.setHours(0, 0, 0, 0);
-                const expDate = parseDateDDMMYYYY(player['FM Hasta']);
-                let fillColor = [220, 252, 231]; // verde suave
-                let textColor = [...PDF_TEXT_BLUE];
-                if (!expDate || expDate < today) { fillColor = [254, 226, 226]; }
-                else {
-                    const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-                    if (expDate <= thirtyDays) fillColor = [255, 237, 213];
-                }
+                // Colorear según estado FM (semáforo unificado con el resto de la app)
+                const { fillColor, textColor } = getFMSemaphorePDFColors(player, destCat);
 
                 let x = pageMargin;
                 columns.forEach(colName => {
@@ -2705,8 +3021,8 @@ document.addEventListener('DOMContentLoaded', function () {
         showToast("PDF de potenciales generado.", "success");
     }
 
-    async function generateExpiringPDF() {
-        if (currentlyDisplayedPlayers.length === 0) {
+    async function generateExpiringPDF(playersToExport = currentlyDisplayedPlayers) {
+        if (!playersToExport || playersToExport.length === 0) {
             return showToast("No hay datos para generar el PDF.", "error");
         }
         if (typeof window.jspdf === 'undefined') {
@@ -2760,7 +3076,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Agrupar igual que en la vista
         const playersByEquipo = {};
-        currentlyDisplayedPlayers.forEach(p => {
+        playersToExport.forEach(p => {
             const eq = p.EQUIPO || 'SIN EQUIPO';
             if (!playersByEquipo[eq]) playersByEquipo[eq] = [];
             playersByEquipo[eq].push(p);
@@ -2834,36 +3150,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     didParseCell: (data) => {
                         if (data.section === 'body') {
                             const player = sortedCategoryPlayers[data.row.index];
-                            const expDate = parseDateDDMMYYYY(player['FM Hasta']);
-                            const today = new Date(); today.setHours(0, 0, 0, 0);
-                            const season = seasonFilter ? seasonFilter.value : player.TEMPORADA;
-
-                            let tournamentEndDate = null;
-                            if (season && season.includes('-')) {
-                                const years = season.split('-').map(y => y.trim());
-                                tournamentEndDate = new Date(parseInt(years[years.length - 1]), 5, 30);
-                            } else if (season) {
-                                tournamentEndDate = new Date(parseInt(season), 11, 25);
-                            }
-
-                            if (!expDate || expDate < today) {
-                                data.cell.styles.fillColor = [153, 27, 27]; // Red-800
-                                data.cell.styles.textColor = [255, 255, 255];
-                            } else if (tournamentEndDate && expDate > tournamentEndDate) {
-                                data.cell.styles.fillColor = [22, 163, 74]; // Green-600
-                                data.cell.styles.textColor = [255, 255, 255];
-                            } else {
-                                const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-                                const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 65);
-
-                                if (expDate <= thirtyDays) {
-                                    data.cell.styles.fillColor = [249, 115, 22]; // Orange-500
-                                    data.cell.styles.textColor = [...PDF_TEXT_BLUE];
-                                } else if (expDate <= sixtyDays) {
-                                    data.cell.styles.fillColor = [254, 240, 138]; // Yellow-200
-                                    data.cell.styles.textColor = [...PDF_TEXT_BLUE];
-                                }
-                            }
+                            const { fillColor, textColor } = getFMSemaphorePDFColors(player);
+                            data.cell.styles.fillColor = fillColor;
+                            data.cell.styles.textColor = textColor;
                         }
                     },
                     didDrawPage: (data) => {
@@ -2979,22 +3268,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (isBaja) { fillColor = [153, 27, 27]; textColor = [255, 255, 255]; }
                 else if (player['TIPO'] === 'ENTRENADOR/A') { fillColor = [219, 234, 254]; textColor = [30, 58, 138]; }
                 else {
-                    const today = new Date(); today.setHours(0, 0, 0, 0);
-                    const season = seasonFilter ? seasonFilter.value : player.TEMPORADA;
-                    let tournamentEndDate = null;
-                    if (season && season.includes('-')) {
-                        const years = season.split('-').map(y => y.trim());
-                        tournamentEndDate = new Date(parseInt(years[years.length - 1]), 5, 30);
-                    } else if (season) { tournamentEndDate = new Date(parseInt(season), 11, 25); }
-
-                    if (!expirationDate || expirationDate < today) { fillColor = [153, 27, 27]; textColor = [255, 255, 255]; }
-                    else if (tournamentEndDate && expirationDate > tournamentEndDate) { fillColor = [22, 163, 74]; textColor = [255, 255, 255]; }
-                    else {
-                        const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-                        const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 65);
-                        if (expirationDate <= thirtyDays) { fillColor = [249, 115, 22]; textColor = [...PDF_TEXT_BLUE]; }
-                        else if (expirationDate <= sixtyDays) { fillColor = [254, 240, 138]; textColor = [...PDF_TEXT_BLUE]; }
-                    }
+                    ({ fillColor, textColor } = getFMSemaphorePDFColors(player, categoryContext));
                 }
 
                 let x = pageMargin;
@@ -3243,35 +3517,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     fillColor = [219, 234, 254]; // Blue-100
                     textColor = [30, 58, 138]; // Blue-900
                 } else {
-                    const today = new Date(); today.setHours(0, 0, 0, 0);
-                    const season = seasonFilter ? seasonFilter.value : player.TEMPORADA;
-
-                    let tournamentEndDate = null;
-                    if (season && season.includes('-')) {
-                        const years = season.split('-').map(y => y.trim());
-                        tournamentEndDate = new Date(parseInt(years[years.length - 1]), 5, 30);
-                    } else if (season) {
-                        tournamentEndDate = new Date(parseInt(season), 11, 25);
-                    }
-
-                    if (!expirationDate || expirationDate < today) {
-                        fillColor = [153, 27, 27]; // Red-800
-                        textColor = [255, 255, 255];
-                    } else if (tournamentEndDate && expirationDate > tournamentEndDate) {
-                        fillColor = [22, 163, 74]; // Green-600
-                        textColor = [255, 255, 255];
-                    } else {
-                        const thirtyDays = new Date(today); thirtyDays.setDate(today.getDate() + 30);
-                        const sixtyDays = new Date(today); sixtyDays.setDate(today.getDate() + 65);
-
-                        if (expirationDate <= thirtyDays) {
-                            fillColor = [249, 115, 22]; // Orange-500
-                            textColor = [...PDF_TEXT_BLUE];
-                        } else if (expirationDate <= sixtyDays) {
-                            fillColor = [254, 240, 138]; // Yellow-200
-                            textColor = [...PDF_TEXT_BLUE];
-                        }
-                    }
+                    ({ fillColor, textColor } = getFMSemaphorePDFColors(player, selectedCategory));
                 }
 
                 let x = pageMargin;
