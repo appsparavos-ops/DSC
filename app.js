@@ -2444,10 +2444,87 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function escapeHtmlText(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    // Agrupa los jugadores de la vista de Vencimientos según cada una de las 6 condiciones del modal
+    function getExpiringFilterBuckets(players, referenceDate = null) {
+        const today = referenceDate ? new Date(referenceDate) : new Date();
+        today.setHours(0, 0, 0, 0);
+        const sixMonthsAgo = subtractMonthsClamped(today, 6);
+
+        const buckets = {
+            bajas: { title: 'Jugadores dados de Baja', items: [] },
+            prestamos: { title: 'Jugadores cedidos a préstamo', items: [] },
+            definitivos: { title: 'Jugadores con pase definitivo', items: [] },
+            postTorneo: { title: 'Vencen después del fin de campeonato', items: [] },
+            mas6Meses: { title: 'Ficha vencida anterior a 6 meses', items: [] },
+            sinFicha: { title: 'Jugadores Sin Ficha', items: [] }
+        };
+
+        (players || []).forEach(p => {
+            const { isPaseDefinitivo, isPrestamo, isBaja } = classifyPlayerLinkStatus(p);
+            const linkTag = isPaseDefinitivo ? 'Pase Def.' : (isPrestamo ? 'Préstamo' : (isBaja ? 'Baja' : ''));
+            const rawFm = String(p['FM Hasta'] || '').trim();
+            const expDate = parseDateDDMMYYYY(rawFm);
+            const fmLabel = expDate ? rawFm : 'Sin Ficha';
+
+            if (isPaseDefinitivo) {
+                buckets.definitivos.items.push({ player: p, extra: fmLabel });
+            } else if (isPrestamo) {
+                buckets.prestamos.items.push({ player: p, extra: fmLabel });
+            } else if (isBaja) {
+                buckets.bajas.items.push({ player: p, extra: fmLabel });
+            }
+
+            if (!expDate) {
+                buckets.sinFicha.items.push({ player: p, extra: linkTag });
+            } else {
+                const tournamentEndDate = getTournamentEndDate(p);
+                if (tournamentEndDate && expDate > tournamentEndDate) {
+                    buckets.postTorneo.items.push({ player: p, extra: linkTag ? `${fmLabel} · ${linkTag}` : fmLabel });
+                }
+                if (expDate < sixMonthsAgo) {
+                    buckets.mas6Meses.items.push({ player: p, extra: linkTag ? `${fmLabel} · ${linkTag}` : fmLabel });
+                }
+            }
+        });
+
+        Object.values(buckets).forEach(bucket => {
+            bucket.items.sort((a, b) => (a.player.NOMBRE || '').localeCompare(b.player.NOMBRE || '', 'es'));
+        });
+
+        return buckets;
+    }
+
+    function ensureExpiringTooltipPopover() {
+        let pop = document.getElementById('expPdfTooltipPopover');
+        if (!pop) {
+            pop = document.createElement('div');
+            pop.id = 'expPdfTooltipPopover';
+            pop.className = 'hidden fixed z-[60] bg-gray-900 text-white text-xs rounded-xl shadow-2xl border border-gray-700 p-3';
+            pop.style.maxWidth = 'calc(100vw - 24px)';
+            pop.style.width = '300px';
+            document.body.appendChild(pop);
+        }
+        return pop;
+    }
+
     // Garantiza que el modal de filtros de PDF de Vencimientos exista en el DOM
     // (incluso si el navegador conserva en caché una versión anterior de index.html).
     function ensureExpiringPdfModal() {
+        const infoBtnSvg = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>';
         let modal = document.getElementById('expiringPdfModal');
+        if (modal && !modal.querySelector('.exp-pdf-info-btn')) {
+            modal.remove();
+            modal = null;
+        }
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'expiringPdfModal';
@@ -2464,48 +2541,66 @@ document.addEventListener('DOMContentLoaded', function () {
                         <p class="mt-2 text-sm text-gray-500">Marque los grupos adicionales que desea <strong>incluir</strong> en el informe PDF:</p>
                     </div>
                     <div class="mt-4 space-y-2.5 text-left">
-                        <label for="expPdfIncludeBajas" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                            <input type="checkbox" id="expPdfIncludeBajas" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                            <span class="text-sm leading-tight">
-                                <span class="font-medium text-gray-800 block">Jugadores dados de Baja</span>
-                                <span class="text-xs text-gray-500">Incluir registros con estado de licencia en Baja</span>
-                            </span>
-                        </label>
-                        <label for="expPdfIncludePrestamos" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                            <input type="checkbox" id="expPdfIncludePrestamos" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                            <span class="text-sm leading-tight">
-                                <span class="font-medium text-gray-800 block">Jugadores cedidos a préstamo</span>
-                                <span class="text-xs text-gray-500">Pase temporal a otra divisional (prima sobre Baja)</span>
-                            </span>
-                        </label>
-                        <label for="expPdfIncludeDefinitivos" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                            <input type="checkbox" id="expPdfIncludeDefinitivos" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                            <span class="text-sm leading-tight">
-                                <span class="font-medium text-gray-800 block">Jugadores con pase definitivo</span>
-                                <span class="text-xs text-gray-500">Incluir pases definitivos hacia otros clubes</span>
-                            </span>
-                        </label>
-                        <label for="expPdfIncludePostTorneo" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                            <input type="checkbox" id="expPdfIncludePostTorneo" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                            <span class="text-sm leading-tight">
-                                <span class="font-medium text-gray-800 block">Vencen después del fin de campeonato</span>
-                                <span class="text-xs text-gray-500">Formativas: 24/12 · LUB/LDD: 30/06 · LFB: 15/10</span>
-                            </span>
-                        </label>
-                        <label for="expPdfIncludeMas6Meses" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                            <input type="checkbox" id="expPdfIncludeMas6Meses" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                            <span class="text-sm leading-tight">
-                                <span class="font-medium text-gray-800 block">Ficha vencida anterior a 6 meses</span>
-                                <span class="text-xs text-gray-500">Vencimiento previo a los últimos 6 meses</span>
-                            </span>
-                        </label>
-                        <label for="expPdfIncludeSinFicha" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                            <input type="checkbox" id="expPdfIncludeSinFicha" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                            <span class="text-sm leading-tight">
-                                <span class="font-medium text-gray-800 block">Jugadores Sin Ficha</span>
-                                <span class="text-xs text-gray-500">Sin fecha de ficha médica registrada</span>
-                            </span>
-                        </label>
+                        <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                            <label for="expPdfIncludeBajas" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                                <input type="checkbox" id="expPdfIncludeBajas" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                                <span class="text-sm leading-tight">
+                                    <span class="font-medium text-gray-800 block">Jugadores dados de Baja</span>
+                                    <span class="text-xs text-gray-500">Incluir registros con estado de licencia en Baja</span>
+                                </span>
+                            </label>
+                            <button type="button" data-exp-info="bajas" aria-label="Ver jugadores dados de Baja" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">${infoBtnSvg}<span class="exp-pdf-info-count">0</span></button>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                            <label for="expPdfIncludePrestamos" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                                <input type="checkbox" id="expPdfIncludePrestamos" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                                <span class="text-sm leading-tight">
+                                    <span class="font-medium text-gray-800 block">Jugadores cedidos a préstamo</span>
+                                    <span class="text-xs text-gray-500">Pase temporal a otra divisional (prima sobre Baja)</span>
+                                </span>
+                            </label>
+                            <button type="button" data-exp-info="prestamos" aria-label="Ver jugadores cedidos a préstamo" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">${infoBtnSvg}<span class="exp-pdf-info-count">0</span></button>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                            <label for="expPdfIncludeDefinitivos" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                                <input type="checkbox" id="expPdfIncludeDefinitivos" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                                <span class="text-sm leading-tight">
+                                    <span class="font-medium text-gray-800 block">Jugadores con pase definitivo</span>
+                                    <span class="text-xs text-gray-500">Incluir pases definitivos hacia otros clubes</span>
+                                </span>
+                            </label>
+                            <button type="button" data-exp-info="definitivos" aria-label="Ver jugadores con pase definitivo" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">${infoBtnSvg}<span class="exp-pdf-info-count">0</span></button>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                            <label for="expPdfIncludePostTorneo" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                                <input type="checkbox" id="expPdfIncludePostTorneo" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                                <span class="text-sm leading-tight">
+                                    <span class="font-medium text-gray-800 block">Vencen después del fin de campeonato</span>
+                                    <span class="text-xs text-gray-500">Formativas: 24/12 · LUB/LDD: 30/06 · LFB: 15/10</span>
+                                </span>
+                            </label>
+                            <button type="button" data-exp-info="postTorneo" aria-label="Ver jugadores que vencen después del fin de campeonato" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">${infoBtnSvg}<span class="exp-pdf-info-count">0</span></button>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                            <label for="expPdfIncludeMas6Meses" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                                <input type="checkbox" id="expPdfIncludeMas6Meses" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                                <span class="text-sm leading-tight">
+                                    <span class="font-medium text-gray-800 block">Ficha vencida anterior a 6 meses</span>
+                                    <span class="text-xs text-gray-500">Vencimiento previo a los últimos 6 meses</span>
+                                </span>
+                            </label>
+                            <button type="button" data-exp-info="mas6Meses" aria-label="Ver jugadores con ficha vencida anterior a 6 meses" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">${infoBtnSvg}<span class="exp-pdf-info-count">0</span></button>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                            <label for="expPdfIncludeSinFicha" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                                <input type="checkbox" id="expPdfIncludeSinFicha" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                                <span class="text-sm leading-tight">
+                                    <span class="font-medium text-gray-800 block">Jugadores Sin Ficha</span>
+                                    <span class="text-xs text-gray-500">Sin fecha de ficha médica registrada</span>
+                                </span>
+                            </label>
+                            <button type="button" data-exp-info="sinFicha" aria-label="Ver jugadores Sin Ficha" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">${infoBtnSvg}<span class="exp-pdf-info-count">0</span></button>
+                        </div>
                     </div>
                     <div id="expPdfPreviewCount" class="mt-4 py-2 px-3 rounded-lg bg-blue-50 text-blue-900 text-xs font-semibold text-center"></div>
                     <div class="flex flex-col gap-2.5 mt-4">
@@ -2523,8 +2618,14 @@ document.addEventListener('DOMContentLoaded', function () {
         return modal;
     }
 
+    let currentExpiringBuckets = {};
+    let activeTooltipKey = null;
+    let tooltipPinned = false;
+    let tooltipHideTimer = null;
+
     function showExpiringPDFModal() {
         const modal = ensureExpiringPdfModal();
+        const popover = ensureExpiringTooltipPopover();
         const checkboxIds = [
             'expPdfIncludeBajas',
             'expPdfIncludePrestamos',
@@ -2533,6 +2634,92 @@ document.addEventListener('DOMContentLoaded', function () {
             'expPdfIncludeMas6Meses',
             'expPdfIncludeSinFicha'
         ];
+
+        const hideTooltip = () => {
+            if (tooltipHideTimer) {
+                clearTimeout(tooltipHideTimer);
+                tooltipHideTimer = null;
+            }
+            activeTooltipKey = null;
+            tooltipPinned = false;
+            popover.classList.add('hidden');
+        };
+
+        const openTooltipForButton = (btn, pin = false) => {
+            if (tooltipHideTimer) {
+                clearTimeout(tooltipHideTimer);
+                tooltipHideTimer = null;
+            }
+            const key = btn.dataset.expInfo;
+            const bucket = currentExpiringBuckets[key];
+            if (!bucket) return;
+
+            activeTooltipKey = key;
+            if (pin) tooltipPinned = true;
+
+            const headerHtml = `<div class="font-bold text-amber-300 border-b border-gray-700 pb-1.5 mb-2 flex items-center justify-between gap-2"><span>${escapeHtmlText(bucket.title)}</span><span class="bg-gray-800 text-gray-200 px-1.5 py-0.5 rounded-full text-[11px]">${bucket.items.length}</span></div>`;
+            const bodyHtml = bucket.items.length === 0
+                ? '<p class="text-gray-400 italic py-1">Ningún jugador en esta condición.</p>'
+                : `<ul class="max-h-52 overflow-y-auto space-y-1.5 pr-1">${bucket.items.map(({ player, extra }) => {
+                    const name = escapeHtmlText(player.NOMBRE || 'Sin nombre');
+                    const cat = player.CATEGORIA ? escapeHtmlText(player.CATEGORIA) : '';
+                    const detail = [cat, extra ? escapeHtmlText(extra) : ''].filter(Boolean).join(' · ');
+                    return `<li class="leading-snug border-b border-gray-800 pb-1 last:border-b-0 last:pb-0"><span class="font-medium text-white block">${name}</span>${detail ? `<span class="text-[11px] text-gray-400">${detail}</span>` : ''}</li>`;
+                }).join('')}</ul>`;
+
+            popover.innerHTML = headerHtml + bodyHtml;
+            popover.style.top = '0px';
+            popover.style.left = '0px';
+            popover.style.bottom = 'auto';
+            popover.classList.remove('hidden');
+
+            // Posicionamiento adaptable dentro del viewport (escritorio y móvil)
+            const rect = btn.getBoundingClientRect ? btn.getBoundingClientRect() : { top: 100, bottom: 130, left: 100, right: 200 };
+            const vw = window.innerWidth || 800;
+            const vh = window.innerHeight || 600;
+            const popRect = popover.getBoundingClientRect ? popover.getBoundingClientRect() : { width: 300, height: 180 };
+            const popW = popRect.width || 300;
+            const popH = popRect.height || 180;
+
+            let left = rect.right - popW;
+            if (left < 12) left = 12;
+            if (left + popW > vw - 12) left = Math.max(12, vw - popW - 12);
+            popover.style.left = `${left}px`;
+
+            const spaceBelow = vh - rect.bottom - 12;
+            const spaceAbove = rect.top - 12;
+            if (spaceBelow >= popH || spaceBelow >= spaceAbove) {
+                popover.style.top = `${rect.bottom + 6}px`;
+                popover.style.bottom = 'auto';
+            } else {
+                popover.style.top = 'auto';
+                popover.style.bottom = `${vh - rect.top + 6}px`;
+            }
+        };
+
+        const scheduleHideTooltip = () => {
+            if (tooltipPinned) return;
+            if (tooltipHideTimer) clearTimeout(tooltipHideTimer);
+            tooltipHideTimer = setTimeout(() => {
+                if (!tooltipPinned) hideTooltip();
+            }, 130);
+        };
+
+        currentExpiringBuckets = getExpiringFilterBuckets(currentlyDisplayedPlayers);
+
+        modal.querySelectorAll('.exp-pdf-info-btn').forEach(btn => {
+            const key = btn.dataset.expInfo;
+            const count = currentExpiringBuckets[key] ? currentExpiringBuckets[key].items.length : 0;
+            const countSpan = btn.querySelector('.exp-pdf-info-count');
+            if (countSpan) countSpan.textContent = String(count);
+
+            btn.classList.remove('bg-blue-50', 'text-blue-700', 'border-blue-200', 'hover:bg-blue-100', 'bg-gray-100', 'text-gray-400', 'border-gray-200', 'hover:bg-gray-200');
+            if (count > 0) {
+                btn.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-200', 'hover:bg-blue-100');
+            } else {
+                btn.classList.add('bg-gray-100', 'text-gray-400', 'border-gray-200', 'hover:bg-gray-200');
+            }
+        });
 
         const getOptions = () => ({
             includeBajas: Boolean(document.getElementById('expPdfIncludeBajas')?.checked),
@@ -2562,17 +2749,57 @@ document.addEventListener('DOMContentLoaded', function () {
             const chk = document.getElementById(id);
             if (chk) chk.checked = false;
         });
+        hideTooltip();
 
         if (!modal.dataset.bound) {
             modal.dataset.bound = '1';
 
             const closeModal = () => {
+                hideTooltip();
                 modal.classList.add('hidden');
             };
 
             checkboxIds.forEach(id => {
                 const chk = document.getElementById(id);
                 if (chk) chk.addEventListener('change', updatePreviewCount);
+            });
+
+            modal.querySelectorAll('.exp-pdf-info-btn').forEach(btn => {
+                // Escritorio (hover)
+                btn.addEventListener('mouseenter', () => {
+                    if (!tooltipPinned) openTooltipForButton(btn, false);
+                });
+                btn.addEventListener('mouseleave', scheduleHideTooltip);
+
+                // Táctil y clic (abre/cierra sin alterar el checkbox)
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const key = btn.dataset.expInfo;
+                    if (!popover.classList.contains('hidden') && activeTooltipKey === key && tooltipPinned) {
+                        hideTooltip();
+                    } else {
+                        tooltipPinned = false;
+                        openTooltipForButton(btn, true);
+                    }
+                });
+            });
+
+            popover.addEventListener('mouseenter', () => {
+                if (tooltipHideTimer) {
+                    clearTimeout(tooltipHideTimer);
+                    tooltipHideTimer = null;
+                }
+            });
+            popover.addEventListener('mouseleave', scheduleHideTooltip);
+
+            document.addEventListener('click', (e) => {
+                if (popover.classList.contains('hidden')) return;
+                const clickedInsidePop = popover.contains && popover.contains(e.target);
+                const clickedBtn = e.target && e.target.closest && e.target.closest('.exp-pdf-info-btn');
+                if (!clickedInsidePop && !clickedBtn) {
+                    hideTooltip();
+                }
             });
 
             const btnConfirm = document.getElementById('expPdfConfirmBtn');
@@ -2600,7 +2827,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-                    closeModal();
+                    if (!popover.classList.contains('hidden')) {
+                        hideTooltip();
+                    } else {
+                        closeModal();
+                    }
                 }
             });
         }

@@ -256,53 +256,89 @@
                 </div>
 
                 <div class="mt-4 space-y-2.5 text-left">
-                    <label for="expPdfIncludeBajas" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                        <input type="checkbox" id="expPdfIncludeBajas" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                        <span class="text-sm leading-tight">
-                            <span class="font-medium text-gray-800 block">Jugadores dados de Baja</span>
-                            <span class="text-xs text-gray-500">Incluir registros con estado de licencia en Baja</span>
-                        </span>
-                    </label>
+                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <label for="expPdfIncludeBajas" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                            <input type="checkbox" id="expPdfIncludeBajas" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Jugadores dados de Baja</span>
+                                <span class="text-xs text-gray-500">Incluir registros con estado de licencia en Baja</span>
+                            </span>
+                        </label>
+                        <button type="button" data-exp-info="bajas" aria-label="Ver jugadores dados de Baja" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                            <span class="exp-pdf-info-count">0</span>
+                        </button>
+                    </div>
 
-                    <label for="expPdfIncludePrestamos" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                        <input type="checkbox" id="expPdfIncludePrestamos" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                        <span class="text-sm leading-tight">
-                            <span class="font-medium text-gray-800 block">Jugadores cedidos a préstamo</span>
-                            <span class="text-xs text-gray-500">Pase temporal a otra divisional (prima sobre Baja)</span>
-                        </span>
-                    </label>
+                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <label for="expPdfIncludePrestamos" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                            <input type="checkbox" id="expPdfIncludePrestamos" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Jugadores cedidos a préstamo</span>
+                                <span class="text-xs text-gray-500">Pase temporal a otra divisional (prima sobre Baja)</span>
+                            </span>
+                        </label>
+                        <button type="button" data-exp-info="prestamos" aria-label="Ver jugadores cedidos a préstamo" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                            <span class="exp-pdf-info-count">0</span>
+                        </button>
+                    </div>
 
-                    <label for="expPdfIncludeDefinitivos" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                        <input type="checkbox" id="expPdfIncludeDefinitivos" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                        <span class="text-sm leading-tight">
-                            <span class="font-medium text-gray-800 block">Jugadores con pase definitivo</span>
-                            <span class="text-xs text-gray-500">Incluir pases definitivos hacia otros clubes</span>
-                        </span>
-                    </label>
+                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <label for="expPdfIncludeDefinitivos" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                            <input type="checkbox" id="expPdfIncludeDefinitivos" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Jugadores con pase definitivo</span>
+                                <span class="text-xs text-gray-500">Incluir pases definitivos hacia otros clubes</span>
+                            </span>
+                        </label>
+                        <button type="button" data-exp-info="definitivos" aria-label="Ver jugadores con pase definitivo" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                            <span class="exp-pdf-info-count">0</span>
+                        </button>
+                    </div>
 
-                    <label for="expPdfIncludePostTorneo" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                        <input type="checkbox" id="expPdfIncludePostTorneo" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                        <span class="text-sm leading-tight">
-                            <span class="font-medium text-gray-800 block">Vencen después del fin de campeonato</span>
-                            <span class="text-xs text-gray-500">Formativas: 24/12 · LUB/LDD: 30/06 · LFB: 15/10</span>
-                        </span>
-                    </label>
+                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <label for="expPdfIncludePostTorneo" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                            <input type="checkbox" id="expPdfIncludePostTorneo" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Vencen después del fin de campeonato</span>
+                                <span class="text-xs text-gray-500">Formativas: 24/12 · LUB/LDD: 30/06 · LFB: 15/10</span>
+                            </span>
+                        </label>
+                        <button type="button" data-exp-info="postTorneo" aria-label="Ver jugadores que vencen después del fin de campeonato" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                            <span class="exp-pdf-info-count">0</span>
+                        </button>
+                    </div>
 
-                    <label for="expPdfIncludeMas6Meses" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                        <input type="checkbox" id="expPdfIncludeMas6Meses" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                        <span class="text-sm leading-tight">
-                            <span class="font-medium text-gray-800 block">Ficha vencida anterior a 6 meses</span>
-                            <span class="text-xs text-gray-500">Vencimiento previo a los últimos 6 meses</span>
-                        </span>
-                    </label>
+                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <label for="expPdfIncludeMas6Meses" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                            <input type="checkbox" id="expPdfIncludeMas6Meses" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Ficha vencida anterior a 6 meses</span>
+                                <span class="text-xs text-gray-500">Vencimiento previo a los últimos 6 meses</span>
+                            </span>
+                        </label>
+                        <button type="button" data-exp-info="mas6Meses" aria-label="Ver jugadores con ficha vencida anterior a 6 meses" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                            <span class="exp-pdf-info-count">0</span>
+                        </button>
+                    </div>
 
-                    <label for="expPdfIncludeSinFicha" class="flex items-start gap-3 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                        <input type="checkbox" id="expPdfIncludeSinFicha" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
-                        <span class="text-sm leading-tight">
-                            <span class="font-medium text-gray-800 block">Jugadores Sin Ficha</span>
-                            <span class="text-xs text-gray-500">Sin fecha de ficha médica registrada</span>
-                        </span>
-                    </label>
+                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <label for="expPdfIncludeSinFicha" class="flex items-start gap-3 cursor-pointer flex-1 min-w-0">
+                            <input type="checkbox" id="expPdfIncludeSinFicha" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+                            <span class="text-sm leading-tight">
+                                <span class="font-medium text-gray-800 block">Jugadores Sin Ficha</span>
+                                <span class="text-xs text-gray-500">Sin fecha de ficha médica registrada</span>
+                            </span>
+                        </label>
+                        <button type="button" data-exp-info="sinFicha" aria-label="Ver jugadores Sin Ficha" class="exp-pdf-info-btn flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                            <span class="exp-pdf-info-count">0</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div id="expPdfPreviewCount" class="mt-4 py-2 px-3 rounded-lg bg-blue-50 text-blue-900 text-xs font-semibold text-center"></div>
@@ -323,6 +359,6 @@
         <script src="app.js"></script>
     </div>
 
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a4ea037edf72ccba',t:'MTc5MjY4Nzk1OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 
 </html>
